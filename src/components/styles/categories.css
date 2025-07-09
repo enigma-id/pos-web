@@ -1,0 +1,7 @@
+.categories {
+  @apply border-secondary hover:!border-primary hover:!text-primary !min-w-fit cursor-pointer rounded-full border bg-white px-4 py-1 text-sm hover:!bg-[var(--color-primary-shadow)];
+}
+
+.categories.active {
+  @apply !border-primary !text-primary !bg-[var(--color-primary-shadow)];
+}

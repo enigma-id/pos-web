@@ -1,0 +1,15 @@
+.nav-sb {
+  @apply !text-accent hover:!text-primary !flex !h-9 !min-w-fit !place-items-center !items-center !justify-center rounded-full !px-4 !text-[16px] hover:!bg-transparent active:!bg-[var(--color-primary-shadow)];
+}
+
+.nav-sb.active {
+  @apply !text-primary;
+}
+
+.dd-sb {
+  @apply active:border-primary active:!text-primary !text-accent hover:!text-primary hover:!border-primary border border-white hover:!bg-[var(--color-primary-shadow)] active:border active:!bg-[var(--color-primary-shadow)] active:font-medium;
+}
+
+.dd-sb.active {
+  @apply !border-primary !text-primary !bg-[var(--color-primary-shadow)] !font-medium;
+}

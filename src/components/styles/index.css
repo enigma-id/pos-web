@@ -1,0 +1,88 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap');
+@import 'tailwindcss';
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --font-poppins: 'Poppins', sans-serif;
+  --font-sans: var(--font-poppins);
+  --font-serif: var(--font-poppins);
+  --font-mono: var(--font-poppins);
+}
+
+@plugin "daisyui" {
+  themes:
+    light --default,
+    dark --prefersdark,
+    sukabread;
+  logs: true;
+  exclude: input, table;
+}
+
+@plugin "daisyui/theme" {
+  name: 'sukabread';
+  default: true;
+  prefersdark: false;
+  color-scheme: 'light';
+  --color-base-100: oklch(100% 0 0);
+  --color-base-200: oklch(100% 0 0);
+  --color-base-300: oklch(0.9825 0.0054 274.97);
+  --color-base-content: oklch(22.389% 0.031 278.072);
+  --color-primary: oklch(0.6837 0.212 40.59);
+  --color-primary-shadow: oklch(0.6837 0.212 40.59/0.15);
+  --color-primary-content: oklch(100% 0 0);
+  --color-secondary: oklch(0.9189 0 0);
+  --color-secondary-shadow: oklch(0.9189 0 0/0.15);
+  --color-secondary-content: oklch(100% 0 0);
+  --color-accent: oklch(0.6126 0.0051 258.33);
+  --color-accent-shadow: oklch(0.6126 0.0051 258.33/0.15);
+  --color-accent-content: oklch(100% 0 0);
+  --color-neutral: oklch(0% 0 0);
+  --color-neutral-shadow: oklch(0% 0 0/0.15);
+  --color-neutral-content: oklch(100% 0 0);
+  --color-info: oklch(60% 0.126 221.723);
+  --color-info-shadow: oklch(60% 0.126 221.723/0.15);
+  --color-info-content: oklch(100% 0 0);
+  --color-success: oklch(62% 0.194 149.214);
+  --color-success-shadow: oklch(62% 0.194 149.214/0.15);
+  --color-success-content: oklch(100% 0 0);
+  --color-warning: oklch(85% 0.199 91.936);
+  --color-warning-shadow: oklch(85% 0.199 91.936/0.15);
+  --color-warning-content: oklch(0% 0 0);
+  --color-error: oklch(70% 0.191 22.216);
+  --color-error-shadow: oklch(70% 0.191 22.216/0.15);
+  --color-error-content: oklch(0% 0 0);
+  --radius-selector: 1rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 1;
+}
+
+@import './input.css';
+@import './categories.css';
+@import './nav.css';
+@import './catalog.css';
+@import './table.css';
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  @apply bg-base-300 min-h-screen overflow-hidden;
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}

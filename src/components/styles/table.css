@@ -1,0 +1,161 @@
+table th:first-child,
+table td:first-child {
+  @apply !ps-3.5;
+}
+
+table th:last-child,
+table td:last-child {
+  @apply !pe-3.5;
+}
+
+.table {
+  @apply text-xs;
+}
+
+.table thead th {
+  @apply relative bg-white pt-3 pb-3 font-semibold tracking-wider text-gray-600 uppercase;
+}
+
+@media print {
+  .table thead th {
+    @apply bg-transparent;
+  }
+}
+
+.table thead th.sorting,
+.table thead th.sorting_asc,
+.table thead th.sorting_desc {
+  @apply cursor-pointer;
+}
+
+.table thead th.sorting::before,
+.table thead th.sorting_asc::before,
+.table thead th.sorting_desc::before {
+  content: '';
+  position: absolute;
+  z-index: 10;
+  top: 12px;
+  right: 8px;
+  border-width: 4px;
+  border-color: transparent;
+  border-style: solid;
+  border-bottom-color: theme('colors.gray.400');
+}
+
+.table thead th.sorting::after,
+.table thead th.sorting_asc::after,
+.table thead th.sorting_desc::after {
+  content: '';
+  position: absolute;
+  z-index: 10;
+  top: 22px;
+  right: 8px;
+  border-width: 4px;
+  border-color: transparent;
+  border-style: solid;
+  border-top-color: theme('colors.gray.400');
+}
+
+.table thead th.sorting_asc::before {
+  border-bottom-color: theme('colors.gray.800');
+}
+
+.table thead th.sorting_desc::after {
+  border-top-color: theme('colors.gray.800');
+}
+
+.table th.center,
+.table td.center {
+  @apply text-center;
+}
+
+.table td.action {
+  @apply pt-0 pb-0;
+}
+
+/* Hover effects */
+.table-hover tbody tr td,
+.table-hover tbody tr th {
+  @apply transition-colors duration-200;
+}
+
+.table-hover tbody tr:hover td,
+.table-hover tbody tr:hover th {
+  @apply cursor-pointer;
+}
+
+/* Striped */
+.table-striped tbody tr:nth-of-type(odd) {
+  @apply bg-base-300;
+}
+
+.table-striped tbody tr:nth-of-type(even) {
+  @apply bg-white;
+}
+
+/* Responsive */
+.table-responsive {
+  @apply mb-4;
+}
+
+.table-responsive .table {
+  @apply mb-0;
+}
+
+/* Transparent */
+.table-transparent thead th {
+  @apply bg-transparent;
+}
+
+/* No wrap */
+.table-nowrap > :not(caption) > * > * {
+  @apply whitespace-nowrap;
+}
+
+/* Vertically center */
+.table-vcenter > :not(caption) > * > * {
+  @apply align-middle;
+}
+
+/* Text center */
+.table-center > :not(caption) > * > * {
+  @apply text-center;
+}
+
+/* Truncate */
+.td-truncate {
+  @apply w-full max-w-[1px] truncate whitespace-nowrap;
+}
+
+/* Mobile Responsive Table */
+@media (max-width: 768px) {
+  .table-mobile {
+    display: block;
+  }
+
+  .table-mobile thead {
+    display: none;
+  }
+
+  .table-mobile tbody,
+  .table-mobile tr {
+    @apply flex flex-col;
+  }
+
+  .table-mobile td {
+    @apply block border-none px-4 py-3 text-gray-900;
+  }
+
+  .table-mobile td[data-label]::before {
+    content: attr(data-label);
+    @apply mb-1 block text-xs font-semibold tracking-wider text-gray-500 uppercase;
+  }
+
+  .table-mobile tr {
+    @apply border-b border-gray-200;
+  }
+
+  .table-mobile .btn {
+    @apply block;
+  }
+}

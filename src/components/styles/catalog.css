@@ -1,0 +1,19 @@
+.catalog-card {
+  @apply hover:border-primary flex min-h-[220px] cursor-pointer flex-col rounded-xl border border-white bg-white px-2 py-2 hover:border;
+}
+
+.catalog-img {
+  @apply h-[158px];
+}
+
+.payment-card {
+  @apply border-secondary hover:border-primary flex h-[96px] w-[120px] cursor-pointer flex-col place-content-center items-center rounded-xl border text-center;
+}
+
+.payment-card.active {
+  @apply !border-primary bg-[var(--color-primary-shadow)];
+
+  > div {
+    @apply !font-bold;
+  }
+}
