@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
-import { resetCart } from './slice';
+import { removeItem, resetCart } from './slice';
 import {
   useBillMutation,
   useCheckoutMutation,
@@ -97,6 +97,10 @@ const useCart = catalog_id => {
     }
   };
 
+  const remove = async v => {
+    dispatch(removeItem(v?.catalog_id));
+  };
+
   useEffect(() => {
     if (catalog_id) {
       triggerCatalogDetail({
@@ -122,6 +126,7 @@ const useCart = catalog_id => {
     cartItems,
     getTable,
     tableResult,
+    remove,
   };
 };
 

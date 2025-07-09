@@ -49,8 +49,17 @@ const cartSlice = createSlice({
       );
       state.count = state.items.length;
     },
+    removeItem: (state, action) => {
+      const id = action.payload;
+      state.items = state.items.filter(item => item.catalog_id !== id);
+      state.subtotal = state.items.reduce(
+        (sum, item) => sum + (item.quantity > 0 ? item.subtotal : 0),
+        0
+      );
+      state.count = state.items.length;
+    },
   },
 });
 
-export const { addItem, changeItem, resetCart } = cartSlice.actions;
+export const { addItem, changeItem, resetCart, removeItem } = cartSlice.actions;
 export const cartReducer = cartSlice.reducer;

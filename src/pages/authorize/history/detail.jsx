@@ -149,8 +149,9 @@ const DetailScreen = () => {
                         </div>
                         {item?.additionals?.map((addon, i) => (
                           <div key={i} className="text-xs">
-                            {addon?.catalog?.name} @{currencyFormat(addon?.unit_nett)} x{' '}
-                            {addon?.quantity}
+                            {addon?.catalog?.name}
+                            {addon?.unit_nett > 0 && `@${currencyFormat(addon?.unit_nett)}`}
+                            {addon?.quantity > 0 && ` x ${addon?.quantity}`}
                           </div>
                         ))}
                       </div>
