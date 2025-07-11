@@ -8,7 +8,7 @@ const Input = ({ id, label, required, error, value, type, disabled, onChange }) 
     return (
       label && (
         <label htmlFor={id} className="">
-          <span className="text-[10px] leading-[1.2] font-bold tracking-[.6px] uppercase">
+          <span className="text-[12px] leading-[1.2] tracking-[.6px] uppercase">
             {label} {required && <span className="text-error">*</span>}
           </span>
         </label>

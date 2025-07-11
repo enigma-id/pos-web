@@ -1,10 +1,10 @@
 import React from 'react';
-import { useSelector } from 'react-redux';
 import { FaArrowRight } from 'react-icons/fa';
+import { useSelector } from 'react-redux';
 
 import logo from '../../assets/logo.png';
-import useAuth from '../../services/auth/hook';
 import { Input } from '../../components/ui';
+import useAuth from '../../services/auth/hook';
 
 const SigninScreen = () => {
   const FormState = useSelector(state => state?.Form);

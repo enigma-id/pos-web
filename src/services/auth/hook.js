@@ -1,4 +1,5 @@
 import { useDispatch } from 'react-redux';
+
 import {
   useLoginMutation,
   useUpdateMutation,
@@ -6,9 +7,8 @@ import {
   $logout,
   useLazyGetUserQuery,
 } from './action';
-
-import { $failure } from '../form/action';
 import { login, session } from './slice';
+import { $failure } from '../form/action';
 
 const useAuth = () => {
   const dispatch = useDispatch();

@@ -1,24 +1,18 @@
 import { combineReducers } from '@reduxjs/toolkit';
 
 import { activityReducer } from './activity/slice';
-import { formReducer } from './form/slice';
-
-import { authReducer } from './auth/slice';
 import { authApi } from './auth/action';
-
+import { authReducer } from './auth/slice';
+import { cartApi } from './cart/action';
+import { cartReducer } from './cart/slice';
 import { catalogApi } from './catalog/action';
-
-import { sessionReducer } from './sales/session/slice';
-import { salesSessionApi } from './sales/session/action';
-
-import { salesOrderApi } from './sales/order/action';
-
+import { formReducer } from './form/slice';
+import { memberApi } from './membership/action';
 import { salesChannelApi } from './sales/channel/action';
 import { channelReducer } from './sales/channel/slice';
-
-import { cartReducer } from './cart/slice';
-import { cartApi } from './cart/action';
-
+import { salesOrderApi } from './sales/order/action';
+import { salesSessionApi } from './sales/session/action';
+import { sessionReducer } from './sales/session/slice';
 import { tableApi } from './table/action';
 import { tableReducer } from './table/slice';
 
@@ -30,6 +24,7 @@ const apiReducers = {
   [catalogApi.reducerPath]: catalogApi.reducer,
   [cartApi.reducerPath]: cartApi.reducer,
   [tableApi.reducerPath]: tableApi.reducer,
+  [memberApi.reducerPath]: memberApi.reducer,
 };
 
 const rootReducer = combineReducers({

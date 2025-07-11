@@ -1,7 +1,8 @@
 import React from 'react';
-import useTable from '../../../components/ui/table';
-import createTableConfig from './table.config';
 import { useNavigate } from 'react-router-dom';
+
+import createTableConfig from './table.config';
+import useTable from '../../../components/ui/table';
 
 const HistoryScreen = () => {
   const navigate = useNavigate();
@@ -11,13 +12,13 @@ const HistoryScreen = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { Tools, Render, Pagination } = useTable('history', tableConfig);
+  const Table = useTable('history', tableConfig);
 
   return (
     <div>
-      <Tools />
-      <Render />
-      <Pagination />
+      <Table.Tools />
+      <Table.Render />
+      <Table.Pagination />
     </div>
   );
 };

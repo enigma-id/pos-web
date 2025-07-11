@@ -1,6 +1,6 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
-import _ from 'underscore';
+
 import { currencyFormat } from '../../../utils/common';
 
 const TableRender = ({ name, columns = {}, onSorted, onRowClick }) => {

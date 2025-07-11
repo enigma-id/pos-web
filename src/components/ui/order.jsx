@@ -1,6 +1,6 @@
-import React from 'react';
-import { currencyFormat } from '../../utils/common';
 import { useSelector } from 'react-redux';
+
+import { currencyFormat } from '../../utils/common';
 
 const OrderSummary = ({ title, subtitle, data, onClose, onConfirm, isLoading }) => {
   const FormState = useSelector(state => state?.Form);
@@ -123,18 +123,18 @@ const OrderSummary = ({ title, subtitle, data, onClose, onConfirm, isLoading }) 
       </div>
 
       <div className="border-secondary flex place-content-between place-items-center border-t px-4 pt-4">
-        {data?.table && (
-          <div>
-            <div className="text-accent text-xs font-thin tracking-wide">Table No.</div>
-            <div className="text-primary text-sm font-bold tracking-wide">{data?.table?.name}</div>
-          </div>
-        )}
-
-        {data?.payment_method && (
+        {data?.payment_method ? (
           <div>
             <div className="text-accent text-xs font-thin tracking-wide">Payment Method</div>
             <div className="text-primary text-sm font-bold tracking-wide">
               {data?.payment_method?.name} {data?.payment_ref && `#${data?.payment_ref}`}
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div className="text-accent text-xs font-thin tracking-wide">Ticket Name.</div>
+            <div className="text-primary text-sm font-bold tracking-wide">
+              {data?.ticket || '-'}
             </div>
           </div>
         )}

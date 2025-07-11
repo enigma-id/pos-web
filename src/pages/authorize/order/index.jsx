@@ -1,8 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import useTable from '../../../components/ui/table';
 import createTableConfig from './table.config';
+import useTable from '../../../components/ui/table';
 
 const OrderScreen = () => {
   const navigate = useNavigate();
@@ -12,13 +12,13 @@ const OrderScreen = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { Tools, Render, Pagination } = useTable('orders', tableConfig);
+  const Table = useTable('orders', tableConfig);
 
   return (
     <div>
-      <Tools />
-      <Render />
-      <Pagination />
+      <Table.Tools />
+      <Table.Render />
+      <Table.Pagination />
     </div>
   );
 };

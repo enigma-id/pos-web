@@ -1,4 +1,5 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
+
 import { baseQuery } from '../baseQuery';
 
 export const cartApi = createApi({
@@ -33,13 +34,6 @@ export const cartApi = createApi({
     getMethod: builder.query({
       query: params => ({
         url: '/sales/payment',
-        method: 'GET',
-        params,
-      }),
-    }),
-    getTable: builder.query({
-      query: params => ({
-        url: '/sales/table',
         method: 'GET',
         params,
       }),

@@ -1,5 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useCallback, useEffect, useState } from 'react';
+import { useSelector } from 'react-redux';
+
 import {
   useLazyGetCatalogDetailQuery,
   useLazyGetCatalogPricingQuery,
@@ -12,7 +14,6 @@ import {
   getCatalogDetailCache,
   setCatalogDetailCache,
 } from '../../utils/cache';
-import { useSelector } from 'react-redux';
 
 const useCatalog = () => {
   const selectedChannel = useSelector(state => state.SalesChannel?.selectedChannel);
@@ -32,7 +33,7 @@ const useCatalog = () => {
     let result = rawCatalog;
 
     if (categoryId !== null) {
-      result = result.filter(item => item.category?.id === categoryId);
+      result = result.filter(item => item.category_id === categoryId);
     }
 
     if (search) {

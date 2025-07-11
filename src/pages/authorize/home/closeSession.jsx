@@ -1,8 +1,10 @@
 import React from 'react';
-import useSession from '../../../services/sales/session/hook';
+
 import { Input } from '../../../components/ui';
-import { currencyFormat, dateFormat } from '../../../utils/common';
+import { BackIcon } from '../../../components/ui/icon';
 import useSidebar from '../../../components/ui/sidebar/hook';
+import useSession from '../../../services/sales/session/hook';
+import { currencyFormat, dateFormat } from '../../../utils/common';
 
 const CloseSection = () => {
   const { summary, summaryResult, end, endResult } = useSession();
@@ -36,20 +38,7 @@ const CloseSection = () => {
     <div className="border-secondary flex h-[calc(100vh-116px)] flex-col border-t border-l bg-white">
       <div className="border-secondary flex h-[63px] items-center gap-4 border-b px-6">
         <div className="btn btn-md btn-outline btn-circle border-base-300" onClick={showCart}>
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 20 20"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M7.91664 5.41675L3.45116 9.88223C3.38607 9.94732 3.38607 10.0528 3.45116 10.1179L7.91664 14.5834M3.40234 10.0001H16.6666"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
+          <BackIcon />
         </div>
         <h2 className="text-xl font-bold">Sales Session</h2>
       </div>

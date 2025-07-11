@@ -1,4 +1,5 @@
 import { createSlice } from '@reduxjs/toolkit';
+
 import * as Action from './action';
 
 const defineInitialState = () => ({

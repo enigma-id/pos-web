@@ -2,15 +2,7 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
 
-const TableTool = ({
-  name,
-  onSearch,
-  children,
-  downloadable,
-  onDownload,
-  className,
-  isLoading,
-}) => {
+const TableTool = ({ name, onSearch, children, downloadable, onDownload }) => {
   const StateSearch = useSelector(state => state?.Table?.data[name]?.textSearch);
 
   const [searchTerm, setSearchTerm] = React.useState('');
@@ -39,7 +31,6 @@ const TableTool = ({
         className="ml-2 flex h-10 items-center justify-center rounded-md bg-gray-700 px-3 text-white hover:bg-gray-800"
         title="Download"
       >
-        {/* CloudDownload icon (Heroicon - outline) */}
         <svg
           xmlns="http://www.w3.org/2000/svg"
           className="h-5 w-5"
@@ -88,38 +79,8 @@ const TableTool = ({
           />
         </div>
       </div>
-      <div className="flex-1/2 overflow-x-auto"></div>
+      <div className="flex-1/2 overflow-x-auto">{children}</div>
     </div>
-    // <div className={`flex items-center justify-end space-x-2 ${className}`}>
-    //   <div className="relative">
-    //     {/* Search Icon */}
-    //     <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-    //       <svg
-    //         xmlns="http://www.w3.org/2000/svg"
-    //         className="h-5 w-5 text-gray-400"
-    //         fill="none"
-    //         viewBox="0 0 24 24"
-    //         stroke="currentColor"
-    //       >
-    //         <path
-    //           strokeLinecap="round"
-    //           strokeLinejoin="round"
-    //           strokeWidth={2}
-    //           d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 1116.65 16.65z"
-    //         />
-    //       </svg>
-    //     </div>
-    //     <input
-    //       type="text"
-    //       className="w-64 rounded-md border py-2 pr-4 pl-10 shadow-sm focus:border-blue-300 focus:ring focus:outline-none"
-    //       placeholder="Search ..."
-    //       value={searchTerm}
-    //       onChange={e => setSearchTerm(e.target.value)}
-    //     />
-    //   </div>
-    //   <Download />
-    //   {children}
-    // </div>
   );
 };
 

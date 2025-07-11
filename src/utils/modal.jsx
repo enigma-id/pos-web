@@ -1,19 +1,24 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 
 const useDialogModal = ({ onClose } = {}) => {
+  const [isOpen, setIsOpen] = useState(false);
+
   const dialogRef = useRef(null);
 
   const open = useCallback(() => {
+    setIsOpen(true);
     dialogRef.current?.showModal();
   }, []);
 
   const close = useCallback(() => {
+    setIsOpen(false);
     dialogRef.current?.close();
   }, []);
 
   const handleClose = useCallback(() => {
     // 🟢 Jalankan callback eksternal jika disediakan
     if (onClose) onClose();
+    setIsOpen(false);
   }, [onClose]);
 
   useEffect(() => {
@@ -28,6 +33,7 @@ const useDialogModal = ({ onClose } = {}) => {
     dialogRef,
     open,
     close,
+    isOpen,
   };
 };
 

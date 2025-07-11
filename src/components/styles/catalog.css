@@ -7,7 +7,7 @@
 }
 
 .payment-card {
-  @apply border-secondary hover:border-primary flex h-[96px] w-[120px] cursor-pointer flex-col place-content-center items-center rounded-xl border text-center;
+  @apply border-secondary hover:border-primary flex h-[96px] cursor-pointer flex-col place-content-center items-center rounded-xl border text-center;
 }
 
 .payment-card.active {

@@ -1,9 +1,16 @@
+import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import _ from 'underscore';
+
+import CardRender from './card';
+import TablePagination from './pagination';
+import TableRender from './table';
+import TableTool from './tools';
+import TableWrapper from './wrapper';
 import {
   useLazyDownloadTableDataQuery,
   useLazyGetTableDataQuery,
 } from '../../../services/table/action';
-
 import {
   initialized,
   setTable,
@@ -13,14 +20,6 @@ import {
   setSorting,
   setFilter,
 } from '../../../services/table/slice';
-
-import TableRender from './table';
-import CardRender from './card';
-import TablePagination from './pagination';
-import TableTools from './tools';
-import TableWrapper from './wrapper';
-import { useEffect } from 'react';
-import _ from 'underscore';
 
 const useTable = (name, config) => {
   const dispatch = useDispatch();
@@ -157,15 +156,13 @@ const useTable = (name, config) => {
     <TablePagination name={name} onChangePage={onPageChange} onChangeLimit={onLimitChange} />
   );
 
-  const Tools = ({ children, downloadable, printable, className }) => (
-    <TableTools
+  const Tools = ({ children, downloadable }) => (
+    <TableTool
       name={name}
       onSearch={onSearched}
       children={children}
       downloadable={downloadable}
-      printable={printable}
       onDownload={onDownload}
-      className={className}
     />
   );
 

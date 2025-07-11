@@ -1,6 +1,7 @@
 // services/sales/session/hook.js
 import { useEffect } from 'react';
 import { useDispatch } from 'react-redux';
+
 import {
   useStartMutation,
   useEndMutation,
@@ -8,13 +9,11 @@ import {
   useLazySessionQuery,
   useLazyShowSessionQuery,
 } from './action';
-
 import { checkSession, invalidateSession } from './slice';
-import { $failure } from '../../form/action';
-
 import { getOrFetchSales } from '../../../utils/cache';
 import { resetCart } from '../../cart/slice';
 import useCatalog from '../../catalog/hooks';
+import { $failure } from '../../form/action';
 
 const useSession = id => {
   const dispatch = useDispatch();

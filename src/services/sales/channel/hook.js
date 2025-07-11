@@ -1,10 +1,11 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+
 import { useLazyGetSalesChannelsQuery } from './action';
 import { clearSelectedChannel, setSelectedChannel } from './slice';
-import { resetCart } from '../../cart/slice';
 import { getOrFetchSales, getSalesCacheValue } from '../../../utils/cache'; // ✅ pakai cache grouped
+import { resetCart } from '../../cart/slice';
 
 const useSalesChannel = () => {
   const dispatch = useDispatch();

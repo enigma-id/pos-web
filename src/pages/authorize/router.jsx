@@ -1,5 +1,5 @@
-import React from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+
 import { Layout, SidebarProvider } from '../../components/ui';
 
 const pages = import.meta.glob('./**/*_subrouter.js', { eager: true });

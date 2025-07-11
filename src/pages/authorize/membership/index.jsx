@@ -1,44 +1,150 @@
 import React from 'react';
+
+import CardContent from './card.content';
+import CreateSection from './create';
+import DetailSession from './detail';
 import createTableConfig from './table.config';
+import { Drawer, NFCField } from '../../../components/ui';
+import { CardSearchIcon, CloseIcon, PlusIcon } from '../../../components/ui/icon';
 import useTable from '../../../components/ui/table';
+import useMembership from '../../../services/membership/hook';
 import useDrawer from '../../../utils/drawer';
+import useDialogModal from '../../../utils/modal';
 
 const MembershipScreen = () => {
-  const { drawerRef, open, close } = useDrawer();
+  const { drawerRef, open: openDrawer, close: closeDrawer, isOpen: drawerOpen } = useDrawer();
+
+  const {
+    dialogRef,
+    open: openModal,
+    close: closeModal,
+    isOpen,
+  } = useDialogModal({
+    onClose: () => {
+      setData(null);
+    },
+  });
+  const { checkSaldo, checkResult } = useMembership();
+
+  const [type, setType] = React.useState('detail');
+  const [data, setData] = React.useState(null);
 
   const tableConfig = React.useMemo(() => {
     return createTableConfig({
       onClick: v => {
-        console.log(v);
-        open();
+        setData(v);
+        setType('detail');
+        openDrawer();
       },
     });
   }, []);
 
-  const { Tools, Card, Pagination } = useTable('membership', tableConfig);
+  const Table = useTable('membership', tableConfig);
+
+  const handleRead = uid => {
+    const params = {
+      card_id: uid,
+    };
+
+    checkSaldo(params);
+  };
+
+  React.useEffect(() => {
+    console.log(checkResult);
+    if (checkResult?.isSuccess) {
+      setData(checkResult?.data?.data);
+    }
+  }, [checkResult]);
+
+  React.useEffect(() => {
+    if (!drawerOpen) {
+      setData(null);
+    }
+  }, [drawerOpen]);
 
   return (
-    <div>
-      <input id="drawer" type="checkbox" ref={drawerRef} className="peer hidden" />
+    <Drawer.Wrapper>
+      <div>
+        <Table.Tools>
+          <div className="me-6 flex h-full place-content-end place-items-center gap-4">
+            <div
+              className="btn btn-primary btn-sm btn-outline rounded-full px-6"
+              onClick={openModal}
+            >
+              <CardSearchIcon /> Scan Card
+            </div>
+            <div
+              className="btn btn-primary btn-sm rounded-full px-6"
+              onClick={() => {
+                setType('create');
+                openDrawer();
+              }}
+            >
+              <PlusIcon /> New Membership
+            </div>
+          </div>
+        </Table.Tools>
+        <Table.Card />
+        <Table.Pagination />
 
-      <div className="relative">
-        <div>
-          <Tools />
-          <Card />
-          <Pagination />
-        </div>
+        <dialog ref={dialogRef} className="modal">
+          <div className="w-md rounded-lg bg-white">
+            <div className="border-secondary flex place-content-between place-items-center border-b px-6 py-4">
+              <div className="text-[16px] font-semibold tracking-wide">
+                {data ? 'Membership Card' : 'Scan Membership Card'}
+              </div>
+              <div
+                className="btn btn-ghost btn-sm btn-circle"
+                onClick={() => {
+                  closeModal();
+                  setData(null);
+                }}
+              >
+                <CloseIcon />
+              </div>
+            </div>
 
-        <label
-          htmlFor="drawer"
-          className="bg-opacity-40 fixed inset-0 z-40 hidden bg-black peer-checked:block"
-          onClick={close}
-        />
-
-        <div className="fixed top-0 right-0 z-50 h-full w-[24rem] translate-x-full transform bg-white shadow-lg transition-transform peer-checked:translate-x-0">
-          <div className="p-6">halo</div>
-        </div>
+            {data ? (
+              <CardContent
+                data={data}
+                onClose={() => {
+                  closeModal();
+                  setData(null);
+                }}
+              />
+            ) : (
+              <NFCField onRead={handleRead} isOpen={isOpen} onClose={closeModal} />
+            )}
+          </div>
+        </dialog>
       </div>
-    </div>
+
+      <Drawer.Content
+        drawerRef={drawerRef}
+        title={type === 'create' ? 'Create New Member' : 'Membership Details'}
+        close={closeDrawer}
+      >
+        {type === 'create' && (
+          <CreateSection
+            onClose={() => {
+              closeDrawer();
+              Table.boot();
+            }}
+          />
+        )}
+
+        {type === 'detail' && data && (
+          <DetailSession
+            id={data?.id}
+            onClose={() => {
+              closeDrawer();
+              Table.boot();
+            }}
+            isOpen={drawerOpen}
+          />
+        )}
+      </Drawer.Content>
+    </Drawer.Wrapper>
   );
 };
 

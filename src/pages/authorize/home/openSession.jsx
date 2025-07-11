@@ -1,6 +1,7 @@
 import React from 'react';
-import useSession from '../../../services/sales/session/hook';
+
 import { Input } from '../../../components/ui';
+import useSession from '../../../services/sales/session/hook';
 
 const OpenSection = () => {
   const { start, startResult } = useSession();

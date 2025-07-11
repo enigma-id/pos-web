@@ -1,15 +1,15 @@
 import React from 'react';
 import { useDispatch } from 'react-redux';
 
-import useCart from '../../../services/cart/hook';
-import { currencyFormat } from '../../../utils/common';
 import { QuantityStepper } from '../../../components/ui';
+import useCart from '../../../services/cart/hook';
 import { addItem, changeItem } from '../../../services/cart/slice';
+import { currencyFormat } from '../../../utils/common';
 
-const DetailScreen = ({ catalog, onClose }) => {
+const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null }) => {
   const dispatch = useDispatch();
 
-  const { catalogDetail, isItemInCart, existingItem, existingIndex } = useCart(catalog?.id);
+  const { catalogDetail } = useCart(catalog?.id);
 
   const [catalogData, setCatalogData] = React.useState({});
   const [quantity, setQuantity] = React.useState(0);
@@ -18,33 +18,48 @@ const DetailScreen = ({ catalog, onClose }) => {
   React.useEffect(() => {
     if (!catalogDetail) return;
 
-    // ambil struktur lengkap dari katalog
+    const isEditMode = mode === 'edit';
+    const existingItem = isEditMode && typeof editKey === 'number' ? catalog : null;
+
     setCatalogData({
       ...catalogDetail,
       unit_price: catalogDetail.unit_price || catalog?.unit_price || 0,
     });
 
-    setQuantity(existingItem?.quantity || 0);
+    if (isEditMode && existingItem) {
+      setQuantity(existingItem?.quantity || 0);
 
-    const additions = (catalogDetail?.additionals || []).map(add => {
-      const cartAddon = existingItem?.additionals?.find(a => a.id === add.id);
+      const additions = (catalogDetail?.additionals || []).map(add => {
+        const cartAddon = existingItem?.additionals?.find(a => a.id === add.id);
 
-      return {
+        return {
+          ...add,
+          childs: (add?.childs || []).map(child => {
+            const cartChild = cartAddon?.childs?.find(c => c.id === child.id);
+
+            return {
+              ...child,
+              quantity: add.type === 'quantity' ? cartChild?.quantity || 0 : cartChild ? 1 : 0,
+              selected: add.type !== 'quantity' ? !!cartChild?.selected : false,
+            };
+          }),
+        };
+      });
+
+      setAdditionals(additions);
+    } else {
+      setQuantity(0);
+      const clearedAdditionals = (catalogDetail?.additionals || []).map(add => ({
         ...add,
-        childs: (add?.childs || []).map(child => {
-          const cartChild = cartAddon?.childs?.find(c => c.id === child.id);
-
-          return {
-            ...child,
-            quantity: add.type === 'quantity' ? cartChild?.quantity || 0 : cartChild ? 1 : 0,
-            selected: add.type !== 'quantity' ? !!cartChild?.selected : false,
-          };
-        }),
-      };
-    });
-
-    setAdditionals(additions);
-  }, [catalogDetail, existingItem, catalog]);
+        childs: (add?.childs || []).map(child => ({
+          ...child,
+          quantity: 0,
+          selected: false,
+        })),
+      }));
+      setAdditionals(clearedAdditionals);
+    }
+  }, [catalogDetail, catalog, mode]);
 
   const addToCart = () => {
     if (!catalogDetail) return;
@@ -56,8 +71,8 @@ const DetailScreen = ({ catalog, onClose }) => {
       subtotal: calculateSubtotal(),
     };
 
-    if (isItemInCart) {
-      dispatch(changeItem({ key: existingIndex, catalog: formattedItem }));
+    if (mode === 'edit') {
+      dispatch(changeItem({ key: editKey, catalog: formattedItem }));
     } else {
       dispatch(addItem(formattedItem));
     }
@@ -91,9 +106,7 @@ const DetailScreen = ({ catalog, onClose }) => {
           ...add,
           childs: (add?.childs || []).map(child => ({
             ...child,
-            selected: isAlreadySelected
-              ? false // toggle off jika sudah dipilih
-              : child.id === selectedChildId,
+            selected: isAlreadySelected ? false : child.id === selectedChildId,
             quantity: isAlreadySelected ? 0 : child.id === selectedChildId ? 1 : 0,
           })),
         };
@@ -251,7 +264,7 @@ const DetailScreen = ({ catalog, onClose }) => {
           <button className="btn btn-primary btn-block" onClick={addToCart}>
             {quantity > 0
               ? `Tambahkan (${currencyFormat(calculateSubtotal())})`
-              : isItemInCart
+              : mode === 'edit'
                 ? 'Hapus & Kembali'
                 : 'Kembali'}
           </button>

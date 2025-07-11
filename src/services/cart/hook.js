@@ -2,16 +2,10 @@
 import { useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
+import { useBillMutation, useCheckoutMutation, useLazyGetMethodQuery } from './action';
 import { removeItem, resetCart } from './slice';
-import {
-  useBillMutation,
-  useCheckoutMutation,
-  useLazyGetMethodQuery,
-  useLazyGetTableQuery,
-} from './action';
-
-import { $failure } from '../form/action';
 import { useLazyGetCatalogDetailQuery } from '../catalog/action';
+import { $failure } from '../form/action';
 
 const useCart = catalog_id => {
   const dispatch = useDispatch();
@@ -21,7 +15,6 @@ const useCart = catalog_id => {
   const [checkoutMutation, checkoutResult] = useCheckoutMutation();
   const [billMutation, billResult] = useBillMutation();
   const [triggerPaymentMethod] = useLazyGetMethodQuery();
-  const [triggerTable, tableResult] = useLazyGetTableQuery();
 
   // Get all items in cart
   const cartItems = useSelector(state => state?.Cart.items);
@@ -87,18 +80,8 @@ const useCart = catalog_id => {
     return [{ id: 0, name: 'Cash' }, ...data];
   };
 
-  const getTable = async () => {
-    try {
-      await triggerTable().unwrap();
-    } catch (err) {
-      if (import.meta.env.DEV) {
-        console.error('error:', err);
-      }
-    }
-  };
-
   const remove = async v => {
-    dispatch(removeItem(v?.catalog_id));
+    dispatch(removeItem(v));
   };
 
   useEffect(() => {
@@ -124,8 +107,6 @@ const useCart = catalog_id => {
     billResult,
     reset,
     cartItems,
-    getTable,
-    tableResult,
     remove,
   };
 };

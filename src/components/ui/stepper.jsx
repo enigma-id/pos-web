@@ -1,4 +1,3 @@
-import React from 'react';
 
 const QuantityStepper = ({ value, onChange, small }) => {
   const increment = () => onChange(value + 1);

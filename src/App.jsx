@@ -1,8 +1,8 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
 
-import UnauthorizeRouter from './pages/unauthorize/router.jsx';
 import AuthorizeRouter from './pages/authorize/router.jsx';
+import UnauthorizeRouter from './pages/unauthorize/router.jsx';
 import useAuth from './services/auth/hook.js';
 
 const App = () => {
