@@ -2,13 +2,21 @@
 import { useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
-import { useBillMutation, useCheckoutMutation, useLazyGetMethodQuery } from './action';
+import {
+  useBillMutation,
+  useCheckoutMutation,
+  useCloseBillMutation,
+  useLazyGetBillQuery,
+  useLazyGetMethodQuery,
+} from './action';
 import {
   customer,
   removeItem,
   resetCart,
   updateCategoryDiscount,
   updateCartDiscount,
+  selectedBill,
+  setBillItems,
 } from './slice';
 import { useLazyGetCatalogDetailQuery } from '../catalog/action';
 import { $failure } from '../form/action';
@@ -21,7 +29,9 @@ const useCart = catalog_id => {
   const [triggerCatalogDetail, catalogDetailResult] = useLazyGetCatalogDetailQuery();
   const [checkoutMutation, checkoutResult] = useCheckoutMutation();
   const [billMutation, billResult] = useBillMutation();
+  const [closeBillMutation, closeBillResult] = useCloseBillMutation();
   const [triggerPaymentMethod] = useLazyGetMethodQuery();
+  const [triggerCountBill, countResult] = useLazyGetBillQuery();
 
   // All cart items
   const cartItems = useSelector(state => state?.Cart?.items?.list || []);
@@ -57,6 +67,17 @@ const useCart = catalog_id => {
 
     try {
       const res = await billMutation(data).unwrap();
+      if (res?.status === 'success') dispatch(resetCart());
+    } catch (error) {
+      dispatch($failure(error));
+    } finally {
+      isBillRunning.current = false;
+    }
+  };
+
+  const closeBill = async (id, payload) => {
+    try {
+      const res = await closeBillMutation({ id, payload }).unwrap();
       if (res?.status === 'success') dispatch(resetCart());
     } catch (error) {
       dispatch($failure(error));
@@ -115,7 +136,9 @@ const useCart = catalog_id => {
     }
 
     if (discount_type === 'nominal') {
-      const item = CartState?.items?.list?.list?.find(i => i.category?.id === categoryId);
+      const allItems = [...(CartState?.items?.list ?? []), ...(CartState?.items?.bill ?? [])];
+      const item = allItems.find(i => i.category?.id === categoryId);
+
       if (item) parsed = Math.min(parsed, item.subtotal);
     }
 
@@ -170,6 +193,26 @@ const useCart = catalog_id => {
     );
   };
 
+  const onCount = async () => {
+    try {
+      await triggerCountBill().unwrap();
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('error:', error);
+      }
+    }
+  };
+
+  const onBillSelected = async data => {
+    if (!data) return;
+
+    dispatch(selectedBill(data));
+  };
+
+  const billItems = data => {
+    dispatch(setBillItems(data));
+  };
+
   useEffect(() => {
     if (catalog_id) {
       triggerCatalogDetail({
@@ -191,12 +234,18 @@ const useCart = catalog_id => {
     checkoutResult,
     openBill,
     billResult,
+    closeBill,
+    closeBillResult,
     reset,
     cartItems,
     remove,
     setCustomer,
     onChangeDiscount,
-    onChangeCartDiscount, // ✅ ditambahkan
+    onChangeCartDiscount,
+    onCount,
+    countResult,
+    onBillSelected,
+    billItems,
   };
 };
 

@@ -2,14 +2,16 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
 
-import { Dialog, EmptySection, Input } from '../../../components/ui';
+import { Dialog, EmptySection, Input, Kitchen } from '../../../components/ui';
 import { MoneysIcon, PrintIcon, SearchIcon, TrashIcon } from '../../../components/ui/icon';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 import useDialogModal from '../../../utils/modal';
+import { usePrintWindow } from '../../../utils/print';
 
 const BillScreen = () => {
   const FormState = useSelector(state => state?.Form);
+  const Session = useSelector(state => state?.Auth?.session);
 
   const [detail, setDetail] = React.useState(null);
   const [search, setSearch] = React.useState('');
@@ -27,6 +29,12 @@ const BillScreen = () => {
   } = useDialogModal({
     onClose: () => setPin(''),
   });
+
+  const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
+
+  const handleOpenPrint = () => {
+    open(<Kitchen data={detail} />);
+  };
 
   const onCancel = () => {
     const payload = {
@@ -155,17 +163,22 @@ const BillScreen = () => {
         <div className="h-full w-full">
           <div className="bg-base-100 h-16 w-full">
             <div className="flex h-full flex-1/2 place-content-end place-items-center">
-              <div className="bg-base-content text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize">
-                <PrintIcon />
-                print receipt
-              </div>
               <div
-                className="bg-error text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
-                onClick={openModal}
+                className="bg-base-content text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
+                onClick={handleOpenPrint}
               >
-                <TrashIcon />
-                refund
+                <PrintIcon />
+                print kitchen
               </div>
+              {Session?.user?.is_supervisor === 1 && (
+                <div
+                  className="bg-error text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
+                  onClick={openModal}
+                >
+                  <TrashIcon />
+                  refund
+                </div>
+              )}
             </div>
           </div>
 

@@ -21,6 +21,17 @@ export const dateFormat = (v, format = 'DD/MM/YYYY HH:mm', nullText = '-') => {
   return date.format(format);
 };
 
+export const duration = v => {
+  const start = moment(v);
+  const year = start.format('YYYY');
+
+  if (!start.isValid() || year === '0001' || year === '1970') {
+    return '-';
+  }
+
+  return start.fromNow(); // akan return dalam format relatif, seperti "2 hours ago"
+};
+
 const moneyList = [500, 1000, 2000, 5000, 10000, 20000, 50000, 100000];
 
 export const cashList = total => {

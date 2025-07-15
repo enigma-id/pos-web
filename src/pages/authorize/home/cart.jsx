@@ -4,10 +4,17 @@ import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 
 import { Dialog, Input } from '../../../components/ui';
-import { AddUserIcon, EditIcon, TrashIcon, UserIcon } from '../../../components/ui/icon';
+import {
+  AddUserIcon,
+  EditIcon,
+  SearchIcon,
+  TrashIcon,
+  UserIcon,
+} from '../../../components/ui/icon';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
-import { currencyFormat } from '../../../utils/common';
+import useOrder from '../../../services/sales/order/hook';
+import { currencyFormat, duration } from '../../../utils/common';
 import useDialogModal from '../../../utils/modal';
 
 const Cart = ({ onUpdate }) => {
@@ -24,9 +31,11 @@ const Cart = ({ onUpdate }) => {
     onClose: () => setTicket(''),
   });
 
-  const { openBill, billResult, reset, remove } = useCart();
+  const { openBill, billResult, reset, remove, onCount, countResult, onBillSelected } = useCart();
+  const { order, orderResult } = useOrder();
 
   const [ticket, setTicket] = React.useState('');
+  const [search, setSearch] = React.useState('');
 
   const flattenAdditionals = (additionals = []) => {
     const result = [];
@@ -77,7 +86,7 @@ const Cart = ({ onUpdate }) => {
     });
 
     const payload = {
-      ticket: ticket,
+      ticket: CartState?.bill ? CartState?.bill?.ticket : ticket,
       membership_id: CartState?.meta?.customer?.id,
       channel_id: Channel?.selectedChannel?.id,
       items: items,
@@ -124,8 +133,34 @@ const Cart = ({ onUpdate }) => {
     if (billResult?.isSuccess) {
       setTicket('');
       closeModal();
+      onCount();
     }
   }, [billResult]);
+
+  React.useEffect(() => {
+    onCount();
+  }, []);
+
+  const billCount = countResult?.data?.data;
+
+  const mode =
+    billCount > 0 && CartState?.items?.list?.length === 0 && CartState?.bill === null
+      ? 'open'
+      : 'create';
+
+  React.useEffect(() => {
+    if (mode === 'create') return;
+    const delayDebounceFn = setTimeout(
+      () => {
+        order({ status: 'pending', search });
+      },
+      search ? 1000 : 0
+    );
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [mode, search]);
+
+  const billData = orderResult?.data?.data || [];
 
   return (
     <div className="border-base-200 bg-base-100 flex h-screen flex-col border-t border-l">
@@ -133,7 +168,7 @@ const Cart = ({ onUpdate }) => {
         <div className="flex-2/3 place-content-center ps-4">
           <h2 className="text-lg font-bold">Order Details</h2>
         </div>
-        {CartState?.items?.count > 0 && (
+        {(CartState?.items?.count > 0 || CartState?.bill) && (
           <div className="bg-error cursor-pointer place-content-center px-6" onClick={reset}>
             <div className="flex place-items-center gap-2 text-center text-lg text-white">
               <TrashIcon className="h-5 w-5" /> Clear
@@ -145,7 +180,7 @@ const Cart = ({ onUpdate }) => {
       {CartState?.meta?.customer ? (
         <div
           className="border-base-200 bg-primary/10 text-primary flex h-[60px] cursor-pointer place-content-center place-items-center gap-2 border-b text-lg font-bold capitalize"
-          onClick={showCustomer}
+          onClick={CartState?.bill ? undefined : showCustomer}
         >
           <UserIcon /> {CartState?.meta?.customer?.name || '-'}
         </div>
@@ -155,6 +190,21 @@ const Cart = ({ onUpdate }) => {
           onClick={showCustomer}
         >
           <AddUserIcon /> Customers
+        </div>
+      )}
+
+      {CartState?.bill && (
+        <div className="border-base-200 border-b p-4">
+          <div className="flex place-content-between place-items-center">
+            <div>Bill name: </div>
+            <div className="text-base-content font-semibold">{CartState?.bill?.ticket}</div>
+          </div>
+          <div className="flex place-content-between place-items-center">
+            <div>Total bill: </div>
+            <div className="text-base-content font-semibold">
+              {currencyFormat(CartState?.bill?.total_bill)}
+            </div>
+          </div>
         </div>
       )}
 
@@ -212,60 +262,121 @@ const Cart = ({ onUpdate }) => {
         <div className="mb-3 flex place-content-between place-items-center">
           <div className="text-base">Total</div>
           <div className="text-primary text-xl font-bold">
-            {currencyFormat(CartState?.meta?.subtotal)}
+            {currencyFormat(CartState?.meta?.subtotal_list)}
           </div>
         </div>
 
+        {/* {CartState?.bill && (
+          <div className="mb-3 flex place-content-between place-items-center">
+            <div className="text-base">Total Bill</div>
+            <div className="text-primary text-xl font-bold">
+              {currencyFormat(CartState?.meta?.subtotal)}
+            </div>
+          </div>
+        )} */}
+
         <div className="mb-4 flex place-items-center gap-1">
-          <button
-            className={`btn btn-xl btn-primary w-1/2 rounded-none font-thin uppercase ${
-              CartState?.items?.list?.length > 0 ? '' : 'btn-disabled'
-            }`}
-            onClick={openModal}
-          >
-            Save Bill
-          </button>
+          {mode === 'open' ? (
+            <button
+              className={`btn btn-xl btn-primary w-1/2 rounded-none text-lg font-thin uppercase`}
+              onClick={openModal}
+            >
+              Open Bill ({billCount})
+            </button>
+          ) : (
+            <button
+              className={`btn btn-xl btn-primary w-1/2 rounded-none text-lg font-thin uppercase ${
+                CartState?.items?.list?.length > 0 ? '' : 'btn-disabled'
+              }`}
+              onClick={CartState?.bill ? onBillCreate : openModal}
+            >
+              Save Bill
+            </button>
+          )}
 
           <button
-            className={`btn btn-xl btn-primary w-1/2 rounded-none font-thin uppercase ${
-              CartState?.items?.list?.length > 0 ? '' : 'btn-disabled'
+            className={`btn btn-xl btn-primary w-1/2 rounded-none text-lg font-thin uppercase ${
+              CartState?.items?.list?.length > 0 || CartState?.bill ? '' : 'btn-disabled'
             }`}
-            onClick={() => navigate('/checkout', { is_bill: false })}
+            onClick={() =>
+              navigate('/checkout', {
+                state: {
+                  is_bill: CartState?.bill ? true : false,
+                },
+              })
+            }
           >
             Pay
           </button>
         </div>
 
-        <Dialog.Wrapper ref={dialogRef} className="w-md">
+        <Dialog.Wrapper ref={dialogRef} className={`${mode === 'open' ? 'w-lg' : 'w-md'}`}>
           <Dialog.Header onClose={closeModal}>
-            <div className="text-lg font-semibold">Save bills</div>
+            <div className="text-lg font-semibold">
+              {mode === 'open' ? `Open Bills (${billCount})` : 'Save Bills'}
+            </div>
           </Dialog.Header>
-          <Dialog.Body>
-            <div className="mb-3 py-4">
-              <Input label="bill name" value={ticket} onChange={e => setTicket(e?.target?.value)} />
-            </div>
-          </Dialog.Body>
-          <Dialog.Footer>
-            <div
-              className={`btn btn-block btn-primary btn-lg ${billResult?.isLoading ? 'btn-disabled' : ''}`}
-              onClick={onBillCreate}
-            >
-              Save Bill
-              {billResult?.isLoading && (
-                <span className="loading loading-spinner loading-sm"></span>
-              )}
-            </div>
-          </Dialog.Footer>
-        </Dialog.Wrapper>
+          <Dialog.Body full={mode === 'open'}>
+            {mode === 'open' ? (
+              <div>
+                <div className="border-base-200 h-16 w-full border-b">
+                  <div className="relative flex h-full w-full items-center">
+                    <div className="absolute left-4">
+                      <SearchIcon />
+                    </div>
 
-        {/* <OrderSummary
-            title="Bill confirmation"
-            subtitle="Please review the order below before saving it as a bill"
-            data={{ ...CartState, ticket }}
-            onClose={closeModal}
-            onConfirm={onBillCreate}
-            isLoading={billResult?.isLoading}
-          /> */}
+                    <input
+                      name="search"
+                      placeholder="Search..."
+                      value={search}
+                      onChange={e => {
+                        setSearch(e.target.value);
+                      }}
+                      className="h-full w-full pl-15 focus-visible:!outline-none"
+                    />
+                  </div>
+                </div>
+                {billData?.map((bill, idx) => (
+                  <div
+                    key={idx}
+                    className="border-base-200 flex cursor-pointer place-content-between place-items-center border-b p-4"
+                    onClick={() => {
+                      onBillSelected(bill);
+                      closeModal();
+                    }}
+                  >
+                    <div>
+                      <div className="font-semibold">{bill?.ticket}</div>
+                      <div className="text-xs">{duration(bill?.ordered_at)}</div>
+                    </div>
+                    <div className="font-semibold">{currencyFormat(bill?.total_charges)}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mb-3 py-4">
+                <Input
+                  label="bill name"
+                  value={ticket}
+                  onChange={e => setTicket(e?.target?.value)}
+                />
+              </div>
+            )}
+          </Dialog.Body>
+          {mode === 'open' ? null : (
+            <Dialog.Footer>
+              <div
+                className={`btn btn-block btn-primary btn-lg ${billResult?.isLoading ? 'btn-disabled' : ''}`}
+                onClick={onBillCreate}
+              >
+                Save Bill
+                {billResult?.isLoading && (
+                  <span className="loading loading-spinner loading-sm"></span>
+                )}
+              </div>
+            </Dialog.Footer>
+          )}
+        </Dialog.Wrapper>
       </div>
     </div>
   );

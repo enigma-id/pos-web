@@ -14,7 +14,9 @@ const createTableConfig = ({ onClick, filter = {} }) => ({
     },
     reff_code: {
       component: row => (
-        <div className="text-accent mt-2 text-[16px] font-thin tracking-wide">{row?.reff_code}</div>
+        <div className="text-base-300 mt-2 text-[16px] font-thin tracking-wide">
+          {row?.reff_code}
+        </div>
       ),
     },
     saldo: {

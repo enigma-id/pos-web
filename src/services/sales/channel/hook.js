@@ -11,7 +11,7 @@ const useSalesChannel = () => {
   const dispatch = useDispatch();
   const selectedChannel = useSelector(state => state?.SalesChannel?.selectedChannel);
 
-  const [trigger] = useLazyGetSalesChannelsQuery();
+  const [trigger, result] = useLazyGetSalesChannelsQuery();
 
   const selectChannel = channel => {
     dispatch(setSelectedChannel(channel));
@@ -31,6 +31,14 @@ const useSalesChannel = () => {
     }
   };
 
+  const getChannel = async () => {
+    try {
+      await trigger().unwrap();
+    } catch (err) {
+      console.log('error', err);
+    }
+  };
+
   // 🧠 Auto-trigger saat hook dipakai
   useEffect(() => {
     loadChannels();
@@ -41,6 +49,8 @@ const useSalesChannel = () => {
     resetChannel,
     loadChannels,
     channels: getSalesCacheValue('sales_channels') || [],
+    getChannel,
+    result,
   };
 };
 

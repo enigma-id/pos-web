@@ -24,6 +24,13 @@ export const cartApi = createApi({
         };
       },
     }),
+    closeBill: builder.mutation({
+      query: ({ id, payload }) => ({
+        url: `/sales/order/${id}/close-bill`,
+        method: 'PUT',
+        body: payload,
+      }),
+    }),
     update: builder.mutation({
       query: ({ id, ...payload }) => ({
         url: `/sales/order/${id}`,
@@ -38,13 +45,21 @@ export const cartApi = createApi({
         params,
       }),
     }),
+    getBill: builder.query({
+      query: params => ({
+        url: '/sales/order/open-bill',
+        method: 'GET',
+        params,
+      }),
+    }),
   }),
 });
 
 export const {
   useCheckoutMutation,
   useBillMutation,
+  useCloseBillMutation,
   useUpdateMutation,
   useLazyGetMethodQuery,
-  useLazyGetTableQuery,
+  useLazyGetBillQuery,
 } = cartApi;

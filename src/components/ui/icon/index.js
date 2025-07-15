@@ -19,6 +19,7 @@ export { default as PaypassIcon } from './paypass.svg?react';
 export { default as PlusIcon } from './plus.svg?react';
 export { default as PrintIcon } from './print.svg?react';
 export { default as ReceiptIcon } from './receipt.svg?react';
+export { default as RefreshIcon } from './refresh.svg?react';
 export { default as SearchIcon } from './search.svg?react';
 export { default as SuccessIcon } from './success.svg?react';
 export { default as TrashIcon } from './trash.svg?react';

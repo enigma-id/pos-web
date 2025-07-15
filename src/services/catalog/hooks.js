@@ -1,8 +1,9 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useCallback, useEffect, useState } from 'react';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 
 import {
+  useCreateMutation,
   useLazyGetCatalogDetailQuery,
   useLazyGetCatalogPricingQuery,
   useLazyGetCategoriesQuery,
@@ -14,10 +15,13 @@ import {
   getCatalogDetailCache,
   setCatalogDetailCache,
 } from '../../utils/cache';
+import { $failure } from '../form/action';
 
 const useCatalog = () => {
+  const dispatch = useDispatch();
   const selectedChannel = useSelector(state => state.SalesChannel?.selectedChannel);
 
+  const [createCatalog, createResult] = useCreateMutation();
   const [allCatalog, setAllCatalog] = useState([]);
   const [categories, setCategories] = useState([]);
   const [filteredCatalog, setFilteredCatalog] = useState([]);
@@ -26,8 +30,16 @@ const useCatalog = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   const [triggerPricing] = useLazyGetCatalogPricingQuery();
-  const [triggerCategories] = useLazyGetCategoriesQuery();
+  const [triggerCategories, categoriesResult] = useLazyGetCategoriesQuery();
   const [triggerCatalogDetail] = useLazyGetCatalogDetailQuery();
+
+  const create = async payload => {
+    try {
+      await createCatalog(payload).unwrap();
+    } catch (err) {
+      dispatch($failure(err));
+    }
+  };
 
   const applyFilter = useCallback((rawCatalog, category, search) => {
     let result = rawCatalog;
@@ -166,6 +178,14 @@ const useCatalog = () => {
     setIsLoading(false);
   }, [selectedChannel, triggerPricing, triggerCategories]);
 
+  const getCategory = async () => {
+    try {
+      await triggerCategories().unwrap();
+    } catch (error) {
+      console.log('Error fetching:', error);
+    }
+  };
+
   useEffect(() => {
     if (selectedChannel?.id) {
       loadCatalogAndCategory();
@@ -182,7 +202,11 @@ const useCatalog = () => {
     onSearch,
     isLoading,
     getDetail,
+    getCategory,
+    categoriesResult,
     refreshCatalog,
+    create,
+    createResult,
   };
 };
 

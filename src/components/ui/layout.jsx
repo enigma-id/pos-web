@@ -175,13 +175,15 @@ const Navbar = () => {
           <small>Member</small>
         </div>
 
-        <div
-          className={`nav-items mb-3 ${expand ? 'expand' : 'place-items-center'} ${isActive(splitLocation[1], 'shifts')}`}
-          onClick={() => navigate('/shifts')}
-        >
-          <ListIcon />
-          <small>Shifts</small>
-        </div>
+        {User?.is_supervisor === 1 && (
+          <div
+            className={`nav-items mb-3 ${expand ? 'expand' : 'place-items-center'} ${isActive(splitLocation[1], 'shifts')}`}
+            onClick={() => navigate('/shifts')}
+          >
+            <ListIcon />
+            <small>Shifts</small>
+          </div>
+        )}
 
         <div
           className={`nav-items mb-3 ${expand ? 'expand' : 'place-items-center'} ${isActive(splitLocation[1], 'history')}`}

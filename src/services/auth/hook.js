@@ -1,14 +1,13 @@
 import { useDispatch } from 'react-redux';
 
-import {
-  useLoginMutation,
-  useUpdateMutation,
-  $reset,
-  $logout,
-  useLazyGetUserQuery,
-} from './action';
-import { login, session } from './slice';
+import { useLoginMutation, useUpdateMutation, useLazyGetUserQuery } from './action';
+import { login, logout, session } from './slice';
+import { clearCatalogCache, clearSalesCache } from '../../utils/cache';
+import { resetCart } from '../cart/slice';
 import { $failure } from '../form/action';
+import { clearSelectedChannel } from '../sales/channel/slice';
+import { invalidateSession } from '../sales/session/slice';
+import { $reset } from '../table/action';
 
 const useAuth = () => {
   const dispatch = useDispatch();
@@ -44,8 +43,15 @@ const useAuth = () => {
     }
   };
 
-  const resetAuth = () => dispatch($reset());
-  const logout = () => dispatch($logout());
+  const onLogout = () => {
+    clearCatalogCache();
+    clearSalesCache();
+    dispatch(resetCart());
+    dispatch($reset());
+    dispatch(clearSelectedChannel());
+    dispatch(invalidateSession());
+    dispatch(logout());
+  };
 
   return {
     signin,
@@ -54,8 +60,7 @@ const useAuth = () => {
     getUserResult,
     update,
     updateResult,
-    resetAuth,
-    logout,
+    onLogout,
   };
 };
 

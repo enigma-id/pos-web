@@ -1,9 +1,9 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
 import { useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
-import { Dialog, Input, NFCField } from '../../../components/ui';
+import { Dialog, Input, Kitchen, NFCField, Receipt } from '../../../components/ui';
 import {
   BackIcon,
   CardIcon,
@@ -15,20 +15,36 @@ import {
 import Keypad from '../../../components/ui/keypad';
 import useCart from '../../../services/cart/hook';
 import useMembership from '../../../services/membership/hook';
+import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
 import useDialogModal from '../../../utils/modal';
+import { usePrintWindow } from '../../../utils/print';
 
 const CheckoutScreen = () => {
+  const location = useLocation();
+  const isBill = location.state?.is_bill;
+
   const navigate = useNavigate();
   const CartState = useSelector(state => state?.Cart);
   const Channel = useSelector(state => state?.SalesChannel);
 
   const dropdownRef = React.useRef(null);
 
-  const { getPaymentMethod, onChangeDiscount, onChangeCartDiscount, checkout, checkoutResult } =
-    useCart();
+  const {
+    getPaymentMethod,
+    onChangeDiscount,
+    onChangeCartDiscount,
+    checkout,
+    checkoutResult,
+    billItems,
+    closeBill,
+    closeBillResult,
+  } = useCart();
+  const { show, showResult } = useOrder();
+
   const { checkSaldo, checkResult } = useMembership();
   const { dialogRef, open: openModal, close: closeModal } = useDialogModal();
+  const { open: openPrint } = usePrintWindow({ title: 'Print Preview', autoClose: true });
 
   const [isOpen, setIsOpen] = React.useState(false);
   const [paymentMethod, setPaymentMethod] = React.useState([]);
@@ -37,6 +53,8 @@ const CheckoutScreen = () => {
   const [discountInputs, setDiscountInputs] = React.useState({});
 
   const [selectedMethod, setSelectedMethod] = React.useState(null);
+  const [orderDetail, setOrderDetail] = React.useState({});
+  const [billID, setBillID] = React.useState(null);
 
   const renderAdditionals = item => {
     return (item?.additionals || [])
@@ -121,7 +139,12 @@ const CheckoutScreen = () => {
       }
     }
 
-    await checkout(payload);
+    if (isBill) {
+      setBillID(CartState?.bill?.id);
+      await closeBill(CartState?.bill?.id, payload);
+    } else {
+      await checkout(payload);
+    }
   };
 
   const handleRead = uid => {
@@ -132,6 +155,14 @@ const CheckoutScreen = () => {
     };
 
     checkSaldo(params);
+  };
+
+  const handleOpenPrint = () => {
+    openPrint(<Receipt data={orderDetail} />);
+  };
+
+  const handleOpenPrintKitchen = () => {
+    openPrint(<Kitchen data={orderDetail} />);
   };
 
   React.useEffect(() => {
@@ -146,9 +177,16 @@ const CheckoutScreen = () => {
 
   React.useEffect(() => {
     if (checkoutResult?.isSuccess) {
+      show(checkoutResult?.data?.data?.id);
       openModal();
     }
   }, [checkoutResult]);
+
+  React.useEffect(() => {
+    if (isBill && !billID) return;
+    console.log('orderDetail', orderDetail);
+    setOrderDetail(showResult?.data?.data);
+  }, [isBill, billID, showResult]);
 
   React.useEffect(() => {
     const inputs = {};
@@ -169,6 +207,26 @@ const CheckoutScreen = () => {
 
     setDiscountInputs(inputs);
   }, []);
+
+  React.useEffect(() => {
+    if (!isBill) return;
+    show(CartState?.bill?.id);
+  }, [isBill]);
+
+  React.useEffect(() => {
+    if (!isBill) return;
+    if (showResult?.isSuccess) {
+      billItems(showResult?.data?.data?.items);
+    }
+  }, [showResult, isBill]);
+
+  React.useEffect(() => {
+    if (!isBill) return;
+    if (closeBillResult?.isSuccess) {
+      show(billID);
+      openModal();
+    }
+  }, [closeBillResult, isBill]);
 
   return (
     <div className="flex h-screen flex-col">
@@ -191,6 +249,40 @@ const CheckoutScreen = () => {
           <div className="py-4 text-base font-semibold">Order details</div>
 
           <div className="flex-1 overflow-y-auto">
+            {CartState?.bill ? (
+              <div className="bg-accent mb-5 p-4">
+                {CartState?.items?.bill?.map((item, i) => (
+                  <div key={i} className="border-base-200 border-b py-2">
+                    <div className="flex place-content-between place-items-center text-base font-semibold">
+                      <div>{item?.name}</div>
+                      <div>
+                        {item?.discount_amount > 0 ? (
+                          <div className="text-base">
+                            <span className="me-2 text-xs !font-thin line-through">
+                              {currencyFormat(item?.subtotal)}
+                            </span>
+                            {currencyFormat(item?.final_total)}
+                          </div>
+                        ) : (
+                          currencyFormat(item?.subtotal)
+                        )}
+                      </div>
+                    </div>
+                    <div className="pb-2 text-xs">
+                      {item?.quantity} x {currencyFormat(item?.unit_price)}
+                    </div>
+                    <div>
+                      {renderAdditionals(item).map((line, idx) => (
+                        <div key={idx} className="pb-2">
+                          {line}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
             <div className="bg-accent p-4">
               {CartState?.items?.list?.map((item, i) => (
                 <div key={i} className="border-base-200 border-b py-2">
@@ -484,25 +576,33 @@ const CheckoutScreen = () => {
             <div className="flex h-16 place-items-center">
               <div className="flex flex-1 flex-col place-content-center place-items-center">
                 <div className="text-xl font-semibold">
-                  {currencyFormat(checkoutResult?.data?.data?.total_payment)}
+                  {currencyFormat(orderDetail?.total_payment)}
                 </div>
                 <div className="text-base-300 text-base font-thin capitalize">total paid</div>
               </div>
               {selectedMethod?.id === 0 && (
                 <div className="border-base-200 flex flex-1 flex-col place-content-center place-items-center border-l">
                   <div className="text-xl font-semibold">
-                    {currencyFormat(
-                      checkoutResult?.data?.data?.total_payment -
-                        checkoutResult?.data?.data?.total_charges
-                    )}
+                    {currencyFormat(orderDetail?.total_payment - orderDetail?.total_charges)}
                   </div>
                   <div className="text-base-300 text-base font-thin capitalize">change</div>
                 </div>
               )}
             </div>
             <div className="mt-4">
-              <div className="btn btn-block btn-lg btn-soft btn-primary mb-3">
-                <PrintIcon /> Print Receipt
+              <div className="flex h-16">
+                <div
+                  className="btn btn-lg btn-soft btn-primary mb-3 flex-1 rounded-none"
+                  onClick={handleOpenPrint}
+                >
+                  <PrintIcon /> Print Receipt
+                </div>
+                <div
+                  className="btn btn-lg btn-soft btn-primary mb-3 flex-1 rounded-none"
+                  onClick={handleOpenPrintKitchen}
+                >
+                  <PrintIcon /> Print Kitchen
+                </div>
               </div>
 
               <div className="btn btn-block btn-lg btn-primary mb-3" onClick={() => navigate('/')}>

@@ -8,3 +8,6 @@ export { default as OrderSummary } from './order';
 export { default as Drawer } from './drawer';
 export { default as NFCField } from './nfc';
 export { default as Dialog } from './dialog';
+export { default as Receipt } from './receipt';
+export { default as Summary } from './summary';
+export { default as Kitchen } from './kitchen';

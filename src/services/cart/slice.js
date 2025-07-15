@@ -28,8 +28,10 @@ function flattenAdditionals(additionals = []) {
 
 function extractUniqueCategories(items) {
   const map = new Map();
+
   items.forEach(item => {
-    const cat = item.category;
+    const cat = item.category ?? item.catalog?.category;
+
     if (cat?.id != null && !map.has(cat.id)) {
       map.set(cat.id, {
         ...cat,
@@ -38,11 +40,12 @@ function extractUniqueCategories(items) {
       });
     }
   });
+
   return Array.from(map.values());
 }
 
 function getCategoryDiscount(item, itemCategories) {
-  const cat = item.category;
+  const cat = item.category ?? item.catalog.category;
   const found = itemCategories.find(c => c.id === cat?.id);
   if (!found) return 0;
 
@@ -74,10 +77,56 @@ function calculateCartLevelDiscount(subtotal, type, value) {
   return 0;
 }
 
+function getAllItems(state) {
+  return [...state.items.list, ...state.items.bill];
+}
+
+function recalculateTotals(state) {
+  const allItems = getAllItems(state);
+
+  const itemWithDiscounts = allItems.map(item => {
+    const discount = getCategoryDiscount(item, state.discount.category);
+    return {
+      ...item,
+      discount_amount: discount,
+      final_total: Math.max(0, item.subtotal - discount),
+    };
+  });
+
+  // Hitung ulang items.list & items.bill berdasarkan hasil diskon
+  const updatedList = itemWithDiscounts.filter(item =>
+    state.items.list.some(i => i.catalog_id === item.catalog_id && i.quantity === item.quantity)
+  );
+
+  const updatedBill = itemWithDiscounts.filter(item =>
+    state.items.bill.some(i => i.catalog_id === item.catalog_id && i.quantity === item.quantity)
+  );
+
+  state.items.list = updatedList;
+  state.items.bill = updatedBill;
+
+  const subtotalList = updatedList.reduce((sum, item) => sum + item.final_total, 0);
+  const subtotalAll = updatedList
+    .concat(updatedBill)
+    .reduce((sum, item) => sum + item.final_total, 0);
+
+  const cartDiscount = calculateCartLevelDiscount(
+    subtotalAll,
+    state.discount.cart.type,
+    state.discount.cart.value
+  );
+
+  state.meta.subtotal_list = subtotalList;
+  state.meta.subtotal = subtotalAll;
+  state.discount.cart.amount = cartDiscount;
+  state.meta.grand_total = Math.max(0, subtotalAll - cartDiscount);
+}
+
 // Initial State
 const defineInitialState = () => ({
   items: {
     list: [],
+    bill: [],
     count: 0,
   },
   discount: {
@@ -91,8 +140,10 @@ const defineInitialState = () => ({
   meta: {
     subtotal: 0,
     grand_total: 0,
+    subtotal_list: 0,
     customer: null,
   },
+  bill: null,
 });
 
 // Slice
@@ -138,36 +189,17 @@ const cartSlice = createSlice({
       state.items.list = removingZero(state.items.list);
       state.items.count = state.items.list.length;
 
-      // Update category reference
-      state.discount.category = extractUniqueCategories(state.items.list);
+      const allItems = [...state.items.list, ...state.items.bill];
+      state.discount.category = extractUniqueCategories(allItems);
 
-      // Hitung ulang subtotal & diskon
-      const itemWithDiscounts = state.items.list.map(item => {
-        const discount = getCategoryDiscount(item, state.discount.category);
-        return {
-          ...item,
-          discount_amount: discount,
-          final_total: Math.max(0, item.subtotal - discount),
-        };
-      });
-
-      const subtotal = itemWithDiscounts.reduce((sum, item) => sum + item.final_total, 0);
-      const cartDiscount = calculateCartLevelDiscount(
-        subtotal,
-        state.discount.cart.type,
-        state.discount.cart.value
-      );
-
-      state.items.list = itemWithDiscounts;
-      state.meta.subtotal = subtotal;
-      state.discount.cart.amount = cartDiscount;
-      state.meta.grand_total = Math.max(0, subtotal - cartDiscount);
+      recalculateTotals(state);
     },
 
     changeItem: (state, action) => {
       const { key, catalog } = action.payload;
+
       if (state.items.list[key]) {
-        const updated = {
+        state.items.list[key] = {
           ...state.items.list[key],
           name: catalog.name,
           quantity: catalog.quantity,
@@ -176,97 +208,44 @@ const cartSlice = createSlice({
           additionals_flat: flattenAdditionals(catalog.additionals),
           subtotal: catalog.subtotal,
         };
-        state.items.list[key] = updated;
       }
 
-      // Clean up
+      // Clean up + reprocess
       state.items.list = removingZero(state.items.list);
       state.items.count = state.items.list.length;
-      state.discount.category = extractUniqueCategories(state.items.list);
 
-      const itemWithDiscounts = state.items.list.map(item => {
-        const discount = getCategoryDiscount(item, state.discount.category);
-        return {
-          ...item,
-          discount_amount: discount,
-          final_total: Math.max(0, item.subtotal - discount),
-        };
-      });
+      const allItems = [...state.items.list, ...state.items.bill];
+      state.discount.category = extractUniqueCategories(allItems);
 
-      const subtotal = itemWithDiscounts.reduce((sum, item) => sum + item.final_total, 0);
-      const cartDiscount = calculateCartLevelDiscount(
-        subtotal,
-        state.discount.cart.type,
-        state.discount.cart.value
-      );
-
-      state.items.list = itemWithDiscounts;
-      state.meta.subtotal = subtotal;
-      state.discount.cart.amount = cartDiscount;
-      state.meta.grand_total = Math.max(0, subtotal - cartDiscount);
+      recalculateTotals(state);
     },
 
     removeItem: (state, action) => {
       const index = action.payload;
+
       if (typeof index === 'number' && state.items.list[index]) {
         state.items.list.splice(index, 1);
       }
 
       state.items.list = removingZero(state.items.list);
       state.items.count = state.items.list.length;
-      state.discount.category = extractUniqueCategories(state.items.list);
 
-      const itemWithDiscounts = state.items.list.map(item => {
-        const discount = getCategoryDiscount(item, state.discount.category);
-        return {
-          ...item,
-          discount_amount: discount,
-          final_total: Math.max(0, item.subtotal - discount),
-        };
-      });
+      const allItems = [...state.items.list, ...state.items.bill];
+      state.discount.category = extractUniqueCategories(allItems);
 
-      const subtotal = itemWithDiscounts.reduce((sum, item) => sum + item.final_total, 0);
-      const cartDiscount = calculateCartLevelDiscount(
-        subtotal,
-        state.discount.cart.type,
-        state.discount.cart.value
-      );
-
-      state.items.list = itemWithDiscounts;
-      state.meta.subtotal = subtotal;
-      state.discount.cart.amount = cartDiscount;
-      state.meta.grand_total = Math.max(0, subtotal - cartDiscount);
+      recalculateTotals(state);
     },
 
     updateCategoryDiscount: (state, action) => {
       const { id, discount_type, discount_value } = action.payload;
+
       const cat = state.discount.category.find(c => c.id === id);
       if (cat) {
         cat.discount_type = discount_type;
         cat.discount_value = discount_value;
       }
 
-      // Recalculate all items
-      const itemWithDiscounts = state.items.list.map(item => {
-        const discount = getCategoryDiscount(item, state.discount.category);
-        return {
-          ...item,
-          discount_amount: discount,
-          final_total: Math.max(0, item.subtotal - discount),
-        };
-      });
-
-      const subtotal = itemWithDiscounts.reduce((sum, item) => sum + item.final_total, 0);
-      const cartDiscount = calculateCartLevelDiscount(
-        subtotal,
-        state.discount.cart.type,
-        state.discount.cart.value
-      );
-
-      state.items.list = itemWithDiscounts;
-      state.meta.subtotal = subtotal;
-      state.discount.cart.amount = cartDiscount;
-      state.meta.grand_total = Math.max(0, subtotal - cartDiscount);
+      recalculateTotals(state);
     },
 
     updateCartDiscount: (state, action) => {
@@ -275,26 +254,60 @@ const cartSlice = createSlice({
       state.discount.cart.type = discount_type;
       state.discount.cart.value = discount_value;
 
-      const itemWithDiscounts = state.items.list.map(item => {
-        const discount = getCategoryDiscount(item, state.discount.category);
-        return {
-          ...item,
-          discount_amount: discount,
-          final_total: Math.max(0, item.subtotal - discount),
-        };
-      });
-
-      const subtotal = itemWithDiscounts.reduce((sum, item) => sum + item.final_total, 0);
-      const cartDiscount = calculateCartLevelDiscount(subtotal, discount_type, discount_value);
-
-      state.items.list = itemWithDiscounts;
-      state.meta.subtotal = subtotal;
-      state.discount.cart.amount = cartDiscount;
-      state.meta.grand_total = Math.max(0, subtotal - cartDiscount);
+      recalculateTotals(state);
     },
 
     customer: (state, action) => {
       state.meta.customer = action.payload;
+    },
+
+    selectedBill: (state, action) => {
+      const bill = action.payload;
+
+      state.bill = bill;
+      state.meta.customer = bill?.membership ?? null;
+      state.meta.subtotal = bill?.total_bill ?? 0;
+    },
+
+    setBillItems: (state, action) => {
+      const items = action.payload;
+
+      state.items.bill = items.map(item => {
+        const rawAdd = item.additionals || [];
+
+        const childs = rawAdd.map(add => ({
+          id: add.catalog.id,
+          name: add.catalog.name,
+          quantity: add.quantity,
+          selected: add.quantity > 0,
+          unit_price: add.unit_nett,
+        }));
+
+        const additional = [
+          {
+            id: 0,
+            name: 'addon',
+            type: '',
+            childs,
+          },
+        ];
+
+        return {
+          ...item,
+          catalog_id: item.catalog_id ?? item.id,
+          name: item.name ?? item.catalog.name,
+          unit_price: item.unit_price ?? item.unit_nett,
+          category_id: item.category?.id ?? item.catalog?.category?.id ?? 0,
+          subtotal: item.subtotal ?? item.unit_price ?? item.unit_nett * item.quantity,
+          final_total: item.subtotal ?? item.unit_price ?? item.unit_nett * item.quantity,
+          discount_amount: 0,
+          additionals: additional,
+        };
+      });
+
+      const allItems = [...state.items.list, ...state.items.bill];
+      state.discount.category = extractUniqueCategories(allItems);
+      recalculateTotals(state);
     },
   },
 });
@@ -307,6 +320,8 @@ export const {
   customer,
   updateCategoryDiscount,
   updateCartDiscount,
+  selectedBill,
+  setBillItems,
 } = cartSlice.actions;
 
 export const cartReducer = cartSlice.reducer;

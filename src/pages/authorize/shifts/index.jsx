@@ -2,7 +2,7 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
 
-import { Dialog, Drawer, EmptySection, Input } from '../../../components/ui';
+import { Dialog, Drawer, EmptySection, Input, Receipt, Summary } from '../../../components/ui';
 import {
   ArrowRightIcon,
   MoneysIcon,
@@ -16,6 +16,7 @@ import useSession from '../../../services/sales/session/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 import useDrawer from '../../../utils/drawer';
 import useDialogModal from '../../../utils/modal';
+import { usePrintWindow } from '../../../utils/print';
 
 const ShiftScreen = () => {
   const FormState = useSelector(state => state?.Form);
@@ -34,15 +35,17 @@ const ShiftScreen = () => {
 
   const { drawerRef, open: openDrawer, close: closeDrawer } = useDrawer();
 
-  const {
-    dialogRef,
-    open: openModal,
-    close: closeModal,
-  } = useDialogModal({
-    onClose: () => {
-      setOrderDetail(null);
-    },
-  });
+  const { dialogRef, open: openModal, close: closeModal } = useDialogModal();
+
+  const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
+
+  const handleOpenPrint = () => {
+    open(<Receipt data={orderDetail} />);
+  };
+
+  const handleOpenPrintSummary = () => {
+    open(<Summary data={detail} />);
+  };
 
   const handleOpen = async v => {
     openDrawer();
@@ -189,7 +192,10 @@ const ShiftScreen = () => {
           <div className="h-full w-full">
             <div className="bg-base-100 h-16 w-full">
               <div className="flex h-full flex-1/2 place-content-end place-items-center">
-                <div className="bg-base-content text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize">
+                <div
+                  className="bg-base-content text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
+                  onClick={handleOpenPrintSummary}
+                >
                   <PrintIcon />
                   print summary
                 </div>
@@ -204,8 +210,8 @@ const ShiftScreen = () => {
                   </div>
                   <div className="mb-2 text-sm">
                     <span className="font-semibold">Session time :</span>{' '}
-                    {dateFormat(detail?.started_at, 'DD MMM YYYY')} -{' '}
-                    {dateFormat(detail?.finished_at, 'DD MMM YYYY', '(ongoing)')}
+                    {dateFormat(detail?.started_at, 'DD MMM YYYY HH:mm')} -{' '}
+                    {dateFormat(detail?.finished_at, 'DD MMM YYYY HH:mm', '(ongoing)')}
                   </div>
                   <div className="mb-2 text-sm capitalize">
                     <span className="font-semibold">Outlet :</span> {detail?.outlet?.alias || '-'}
@@ -213,7 +219,7 @@ const ShiftScreen = () => {
                 </div>
 
                 <div className="border-base-200 border-b pt-4 pb-2">
-                  <div className="mb-2 text-sm font-semibold">Catalog Solds :</div>
+                  <div className="mb-2 text-sm font-semibold">Catalog Sold :</div>
                   {detail?.catalog_solds?.map((item, i) => (
                     <div key={i} className="flex place-content-between place-items-center py-2">
                       <div>
@@ -467,7 +473,10 @@ const ShiftScreen = () => {
         </div>
 
         <div className="border-base-200 bg-base-100 mt-3 flex min-h-15 border-t">
-          <div className="bg-base-content text-base-100 flex flex-1 cursor-pointer place-content-center place-items-center gap-2 px-4 text-sm capitalize">
+          <div
+            className="bg-base-content text-base-100 flex flex-1 cursor-pointer place-content-center place-items-center gap-2 px-4 text-sm capitalize"
+            onClick={handleOpenPrint}
+          >
             <PrintIcon />
             print receipt
           </div>

@@ -26,8 +26,8 @@ const Header = ({ onClose, children }) => {
   );
 };
 
-const Body = ({ children }) => {
-  return <div className="px-4">{children}</div>;
+const Body = ({ children, full }) => {
+  return <div className={full ? '' : 'px-4'}>{children}</div>;
 };
 
 const Footer = ({ children }) => {

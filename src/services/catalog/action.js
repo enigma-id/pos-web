@@ -6,6 +6,14 @@ export const catalogApi = createApi({
   reducerPath: 'catalogApi',
   baseQuery: baseQuery,
   endpoints: builder => ({
+    create: builder.mutation({
+      query: payload => ({
+        url: '/catalog',
+        method: 'POST',
+        body: payload,
+      }),
+    }),
+
     getCatalogPricing: builder.query({
       query: ({ page = 1, limit = 10000000, ...params }) => ({
         url: '/catalog/pricing',
@@ -38,6 +46,7 @@ export const catalogApi = createApi({
 });
 
 export const {
+  useCreateMutation,
   useLazyGetCatalogPricingQuery,
   useLazyGetCategoriesQuery,
   useLazyGetCatalogDetailQuery,
