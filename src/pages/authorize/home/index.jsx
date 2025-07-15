@@ -63,7 +63,7 @@ const CatalogScreen = () => {
   React.useEffect(() => {
     const handleClickOutside2 = event => {
       if (dropdownRefs.current && !dropdownRefs.current.contains(event.target)) {
-        setIsOpen(false);
+        setIsOpens(false);
       }
     };
 
