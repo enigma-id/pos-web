@@ -1,13 +1,14 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
 import { useSelector } from 'react-redux';
 
-import { Dialog, Input } from '../../../components/ui';
+import { Dialog, EmptySection, Input } from '../../../components/ui';
 import { MoneysIcon, PrintIcon, SearchIcon, TrashIcon } from '../../../components/ui/icon';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 import useDialogModal from '../../../utils/modal';
 
-export default function HistoryScreen() {
+const HistoryScreen = () => {
   const FormState = useSelector(state => state?.Form);
 
   const [detail, setDetail] = React.useState(null);
@@ -35,20 +36,24 @@ export default function HistoryScreen() {
     cancel({ id: detail?.id, payload });
   };
 
-  // Fetch data when search changes
   React.useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      order({ search });
-    }, 1000);
-
-    return () => clearTimeout(delayDebounceFn);
+    setCurrentPage(1);
   }, [search]);
 
-  // Reset to first item on new data
+  React.useEffect(() => {
+    const delayDebounceFn = setTimeout(
+      () => {
+        order({ status: 'completed', search, page: currentPage, limit: itemsPerPage });
+      },
+      search ? 1000 : 0
+    );
+    return () => clearTimeout(delayDebounceFn);
+  }, [search, currentPage]);
+
   React.useEffect(() => {
     if (orderResult?.isSuccess) {
       setSelectedIndex(0);
-      setCurrentPage(1);
+      setDetail(null);
     }
   }, [orderResult]);
 
@@ -66,16 +71,15 @@ export default function HistoryScreen() {
 
   React.useEffect(() => {
     if (cancelResult?.isSuccess) {
-      order();
+      order({ status: 'completed', search, page: currentPage, limit: itemsPerPage });
       closeModal();
       setPin('');
     }
   }, [cancelResult]);
 
   const data = orderResult?.data?.data || [];
-  const selected = data[selectedIndex];
-  const totalPages = Math.ceil(data?.length / itemsPerPage);
-  const paginatedData = data.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const total = orderResult?.data?.total || 0;
+  const totalPages = Math.ceil(total / itemsPerPage);
 
   return (
     <div className="flex h-screen">
@@ -89,7 +93,7 @@ export default function HistoryScreen() {
 
             <input
               name="search"
-              placeholder="Search menu ..."
+              placeholder="Search..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="h-full w-full pl-15 focus-visible:!outline-none"
@@ -98,38 +102,30 @@ export default function HistoryScreen() {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {paginatedData?.map((item, index) => {
-            const globalIndex = (currentPage - 1) * itemsPerPage + index;
-
-            return (
-              <div
-                key={item.id}
-                onClick={() => setSelectedIndex(globalIndex)}
-                className={`border-base-200 cursor-pointer border-b p-4 ${
-                  selectedIndex === globalIndex ? 'bg-gray-100' : 'hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex place-content-between">
-                  <div className="flex place-items-center gap-4">
-                    <div
-                      className={`text-base ${selectedIndex === globalIndex ? 'text-primary' : ''}`}
-                    >
-                      <MoneysIcon />
-                    </div>
-                    <div>
-                      <div
-                        className={`text-base ${selectedIndex === globalIndex ? 'text-primary' : ''}`}
-                      >
-                        {currencyFormat(item?.total_charges)}
-                      </div>
-                      <div className="text-base-300 text-xs">{dateFormat(item?.ordered_at)}</div>
-                    </div>
+          {data?.map((item, index) => (
+            <div
+              key={item.id}
+              onClick={() => setSelectedIndex(index)}
+              className={`border-base-200 cursor-pointer border-b p-4 ${
+                selectedIndex === index ? 'bg-gray-100' : 'hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex place-content-between">
+                <div className="flex place-items-center gap-4">
+                  <div className={`text-base ${selectedIndex === index ? 'text-primary' : ''}`}>
+                    <MoneysIcon />
                   </div>
-                  <div className="text-base-300 text-base">{item?.code}</div>
+                  <div>
+                    <div className={`text-base ${selectedIndex === index ? 'text-primary' : ''}`}>
+                      {currencyFormat(item?.total_charges)}
+                    </div>
+                    <div className="text-base-300 text-xs">{dateFormat(item?.ordered_at)}</div>
+                  </div>
                 </div>
+                <div className="text-base-300 text-base">{item?.code}</div>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
 
         <div className="border-base-200 flex justify-end gap-4 border-t p-4">
@@ -142,7 +138,7 @@ export default function HistoryScreen() {
           </button>
           <button
             onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-            disabled={currentPage === totalPages}
+            disabled={currentPage === totalPages || data?.length === 0}
             className="disabled:btn-disabled btn"
           >
             Next
@@ -151,42 +147,110 @@ export default function HistoryScreen() {
       </div>
 
       {/* Detail View */}
-      <div className="w-full">
-        <div className="bg-base-100 h-16 w-full">
-          <div className="flex h-full flex-1/2 place-content-end place-items-center">
-            <div className="bg-base-content text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize">
-              <PrintIcon />
-              print receipt
+      {detail ? (
+        <div className="h-full w-full">
+          <div className="bg-base-100 h-16 w-full">
+            <div className="flex h-full flex-1/2 place-content-end place-items-center">
+              <div className="bg-base-content text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize">
+                <PrintIcon />
+                print receipt
+              </div>
+              <div
+                className="bg-error text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
+                onClick={openModal}
+              >
+                <TrashIcon />
+                refund
+              </div>
             </div>
-            <div
-              className="bg-error text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
-              onClick={openModal}
-            >
-              <TrashIcon />
-              refund
+          </div>
+
+          <div className="flex h-[calc(100vh-64px)] w-full place-content-center overflow-x-auto py-20">
+            <div className="h-fit w-2/4 rounded-xl bg-white p-6 shadow">
+              <div className="border-base-200 border-b">
+                <h2 className="mb-4 text-center text-4xl font-bold">
+                  {currencyFormat(detail?.total_charges)}
+                </h2>
+              </div>
+
+              <div className="border-base-200 border-b py-4">
+                <div className="mb-2 text-sm">
+                  <span className="font-semibold">Bills name :</span> {detail?.ticket || '-'}
+                </div>
+                <div className="mb-2 text-sm">
+                  <span className="font-semibold">Cashier :</span>{' '}
+                  {detail?.session?.cashier?.name || '-'}
+                </div>
+                <div className="mb-2 text-sm">
+                  <span className="font-semibold">Session time :</span>{' '}
+                  {dateFormat(detail?.session?.started_at, 'DD MMM YYYY')} -{' '}
+                  {dateFormat(detail?.session?.finished_at, 'DD MMM YYYY', '(ongoing)')}
+                </div>
+                <div className="mb-2 text-sm capitalize">
+                  <span className="font-semibold">Customer :</span>{' '}
+                  {detail?.membership?.name || '-'}
+                </div>
+              </div>
+
+              <div className="border-base-200 border-b pt-4 pb-2">
+                {detail?.items?.map((item, i) => (
+                  <div key={i} className="pb-2">
+                    <div className="flex place-content-between place-items-center text-base">
+                      <div>{item?.catalog?.name}</div>
+                      <div>{currencyFormat(item?.unit_nett * item?.quantity)}</div>
+                    </div>
+                    <div className="pb-2 text-xs">
+                      {item?.quantity} x {currencyFormat(item?.unit_nett)}
+                    </div>
+                    <div>
+                      {item?.additionals?.map((addon, i) => (
+                        <div className="text-base-300 text-xs font-thin" key={i}>
+                          <span>
+                            + {addon?.catalog?.name} (
+                            {addon?.quantity > 0 && `${addon?.quantity} x `}
+                            {`${addon?.unit_nett > 0 ? currencyFormat(addon?.unit_nett) : 'Free'}`})
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="border-base-200 border-b py-4">
+                <div className="flex place-content-between place-items-center text-base font-semibold">
+                  <div>Total: </div>
+                  <div>{currencyFormat(detail?.total_charges)}</div>
+                </div>
+                <div className="flex place-content-between place-items-center text-base">
+                  <div className="capitalize">{detail?.payment_method?.name || 'Cash'}: </div>
+                  <div>{currencyFormat(detail?.total_payment)}</div>
+                </div>
+                {detail?.total_payment - detail?.total_charges > 0 && (
+                  <div className="flex place-content-between place-items-center text-base">
+                    <div>Total Change: </div>
+                    <div>{currencyFormat(detail?.total_payment - detail?.total_charges)}</div>
+                  </div>
+                )}
+                {detail?.payment_ref !== '' && (
+                  <div className="flex place-content-between place-items-center text-base">
+                    <div>Ref: </div>
+                    <div>{detail?.payment_ref}</div>
+                  </div>
+                )}
+              </div>
+
+              <div className="text-base-300 flex place-content-between place-items-center py-4 text-base">
+                <div>{dateFormat(detail?.ordered_at)}</div>
+                <div>{detail?.code}</div>
+              </div>
             </div>
           </div>
         </div>
-
-        {detail ? (
-          <div className="flex h-full w-full place-content-center py-20">
-            <div className="h-fit w-2/4 rounded-xl bg-white p-6 shadow">
-              <h2 className="mb-4 text-2xl font-bold">{currencyFormat(detail?.total_charges)}</h2>
-              <div className="mb-2 text-sm text-gray-700">Bills name: {selected.total}</div>
-              <div className="mb-2 text-sm text-gray-700">Cashier: </div>
-              <div className="mb-2 text-sm text-gray-700">Session time:</div>
-              <div className="mb-4 text-sm text-gray-700">Customer: </div>
-
-              <div className="mt-4 font-bold">Total: {selected.total}</div>
-              <div>Cash: {selected.total}</div>
-              <div className="mt-4 text-xs text-gray-400">{selected.date}</div>
-              <div className="text-xs text-gray-400">{selected.id}</div>
-            </div>
-          </div>
-        ) : (
-          <div className="text-gray-500">No data found.</div>
-        )}
-      </div>
+      ) : (
+        <div className="h-full w-full">
+          <EmptySection />
+        </div>
+      )}
 
       <Dialog.Wrapper ref={dialogRef} className="w-md">
         <Dialog.Header onClose={closeModal}>
@@ -223,4 +287,6 @@ export default function HistoryScreen() {
       </Dialog.Wrapper>
     </div>
   );
-}
+};
+
+export default HistoryScreen;

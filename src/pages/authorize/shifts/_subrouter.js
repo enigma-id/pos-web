@@ -1,14 +1,9 @@
-import OrderScreen from '.';
-import DetailScreen from './detail';
+import ShiftScreen from '.';
 
 const routes = [
   {
     path: '/shifts',
-    element: OrderScreen,
-  },
-  {
-    path: '/shifts/:id',
-    element: DetailScreen,
+    element: ShiftScreen,
   },
 ];
 

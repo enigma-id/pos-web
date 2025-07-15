@@ -1,7 +1,9 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
 
 import CardMockup from '../../../assets/card-mockup.jpg';
-import { CloseIcon, PaypassIcon } from '../../../components/ui/icon';
+import { Dialog } from '../../../components/ui';
+import { PaypassIcon } from '../../../components/ui/icon';
 import Input from '../../../components/ui/input';
 import useMembership from '../../../services/membership/hook';
 import { currencyFormat } from '../../../utils/common';
@@ -99,7 +101,7 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
           </div>
         </div>
 
-        <div className="py-4">
+        <div className="px-6 py-4">
           <fieldset className="fieldset">
             <label className="flex place-content-between place-items-center text-[14px] font-semibold tracking-wide uppercase">
               Update Member
@@ -129,41 +131,37 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
           </div>
         </div>
       </div>
-      <div className="border-base-200 flex min-h-15 place-content-center place-items-center gap-2 border-t pt-3">
+      <div className="border-base-200 flex min-h-15 place-content-center place-items-center border-t">
         <button
-          className={`btn btn-md btn-primary w-2/3 rounded-l-full ${edit && !updateResult?.isLoading ? '' : 'btn-disabled'}`}
+          className={`btn btn-primary h-full flex-1 rounded-none ${edit && !updateResult?.isLoading ? '' : 'btn-disabled'}`}
           onClick={onSave}
         >
           Save
         </button>
 
-        <div className="btn btn-error w-1/3 rounded-r-full text-white" onClick={openModal}>
+        <div className="btn btn-error h-full flex-1 rounded-none text-white" onClick={openModal}>
           Remove
         </div>
       </div>
 
-      <dialog ref={dialogRef} className="modal">
-        <div className="bg-base-100 w-md rounded-lg">
-          <div className="border-base-200 flex place-content-between place-items-center border-b px-6 py-4">
-            <div className="text-[16px] font-semibold tracking-wide">Remove</div>
-            <div className="btn btn-ghost btn-sm btn-circle" onClick={closeModal}>
-              <CloseIcon />
-            </div>
-          </div>
-
+      <Dialog.Wrapper ref={dialogRef}>
+        <Dialog.Header onClose={closeModal}>
+          <div className="text-[16px] font-semibold tracking-wide">Remove</div>
+        </Dialog.Header>
+        <Dialog.Body>
           <div className="p-6 text-center">
             <div className="mb-4 text-[16px] font-semibold tracking-wide">Are you sure ?</div>
             <div className="flex place-content-center place-items-center gap-4">
-              <div className="btn btn-error btn-sm rounded-full px-6 text-white" onClick={onDelete}>
+              <div className="btn btn-error btn-lg px-6 text-white" onClick={onDelete}>
                 Yes
               </div>
-              <div className="btn btn-outline btn-sm rounded-full px-6" onClick={closeModal}>
+              <div className="btn btn-outline btn-lg px-6" onClick={closeModal}>
                 Cancel
               </div>
             </div>
           </div>
-        </div>
-      </dialog>
+        </Dialog.Body>
+      </Dialog.Wrapper>
     </div>
   );
 };

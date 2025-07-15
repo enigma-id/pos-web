@@ -28,7 +28,7 @@ export const salesSessionApi = createApi({
       }),
     }),
     session: builder.query({
-      query: ({ page = 1, limit = 10, ...params }) => ({
+      query: ({ page = 1, limit = 25, ...params }) => ({
         url: '/sales/session',
         method: 'GET',
         params: {

@@ -91,7 +91,7 @@ const CheckoutScreen = () => {
       return base;
     });
 
-    const discount_categories = CartState?.items?.category
+    const discount_categories = CartState?.discount?.category
       ?.filter(
         cat => cat?.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
       )
@@ -110,6 +110,16 @@ const CheckoutScreen = () => {
       items,
       discount_categories,
     };
+
+    if (CartState?.discount?.cart?.type) {
+      if (CartState?.discount?.cart?.type === 'percentage') {
+        payload.discount_percentage = CartState?.discount?.cart?.value;
+      }
+
+      if (CartState?.discount?.cart?.type === 'nominal') {
+        payload.discount_value = CartState?.discount?.cart?.value;
+      }
+    }
 
     await checkout(payload);
   };

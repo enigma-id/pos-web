@@ -1,11 +1,12 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
 
 import CardContent from './card.content';
 import CreateSection from './create';
 import DetailSession from './detail';
 import createTableConfig from './table.config';
-import { Drawer, NFCField } from '../../../components/ui';
-import { CardSearchIcon, CloseIcon, PlusIcon } from '../../../components/ui/icon';
+import { Dialog, Drawer, NFCField } from '../../../components/ui';
+import { CardSearchIcon, PlusIcon } from '../../../components/ui/icon';
 import useTable from '../../../components/ui/table';
 import useMembership from '../../../services/membership/hook';
 import useDrawer from '../../../utils/drawer';
@@ -51,7 +52,6 @@ const MembershipScreen = () => {
   };
 
   React.useEffect(() => {
-    console.log(checkResult);
     if (checkResult?.isSuccess) {
       setData(checkResult?.data?.data);
     }
@@ -67,15 +67,15 @@ const MembershipScreen = () => {
     <Drawer.Wrapper>
       <div>
         <Table.Tools>
-          <div className="me-6 flex h-full place-content-end place-items-center gap-4">
+          <div className="flex h-full place-content-end place-items-center">
             <div
-              className="btn btn-primary btn-sm btn-outline rounded-full px-6"
+              className="btn bg-primary/15 text-primary h-full rounded-none border-0 px-6"
               onClick={openModal}
             >
               <CardSearchIcon /> Scan Card
             </div>
             <div
-              className="btn btn-primary btn-sm rounded-full px-6"
+              className="btn btn-primary h-full rounded-none border-0 px-6"
               onClick={() => {
                 setType('create');
                 openDrawer();
@@ -88,23 +88,18 @@ const MembershipScreen = () => {
         <Table.Card />
         <Table.Pagination />
 
-        <dialog ref={dialogRef} className="modal">
-          <div className="bg-base-100 w-md rounded-lg">
-            <div className="border-base-200 flex place-content-between place-items-center border-b px-6 py-4">
-              <div className="text-[16px] font-semibold tracking-wide">
-                {data ? 'Membership Card' : 'Scan Membership Card'}
-              </div>
-              <div
-                className="btn btn-ghost btn-sm btn-circle"
-                onClick={() => {
-                  closeModal();
-                  setData(null);
-                }}
-              >
-                <CloseIcon />
-              </div>
+        <Dialog.Wrapper ref={dialogRef}>
+          <Dialog.Header
+            onClose={() => {
+              closeModal();
+              setData(null);
+            }}
+          >
+            <div className="text-[16px] font-semibold tracking-wide">
+              {data ? 'Membership Card' : 'Scan Membership Card'}
             </div>
-
+          </Dialog.Header>
+          <Dialog.Body>
             {data ? (
               <CardContent
                 data={data}
@@ -116,8 +111,8 @@ const MembershipScreen = () => {
             ) : (
               <NFCField onRead={handleRead} isOpen={isOpen} onClose={closeModal} />
             )}
-          </div>
-        </dialog>
+          </Dialog.Body>
+        </Dialog.Wrapper>
       </div>
 
       <Drawer.Content

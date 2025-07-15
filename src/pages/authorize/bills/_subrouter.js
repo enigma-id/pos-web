@@ -1,14 +1,9 @@
-import HistoryScreen from '.';
-import DetailScreen from './detail';
+import BillScreen from '.';
 
 const routes = [
   {
     path: '/bills',
-    element: HistoryScreen,
-  },
-  {
-    path: `/bills/:id`,
-    element: DetailScreen,
+    element: BillScreen,
   },
 ];
 

@@ -8,7 +8,7 @@ const Wrapper = ({ children }) => {
   return <div className="relative">{children}</div>;
 };
 
-const Content = ({ title, children, drawerRef, close }) => {
+const Content = ({ title, children, drawerRef, close, className }) => {
   return (
     <div>
       <input
@@ -25,9 +25,11 @@ const Content = ({ title, children, drawerRef, close }) => {
         className="fixed inset-0 z-40 hidden bg-black/20 peer-checked:block"
       />
 
-      <div className="bg-base-100 fixed top-0 right-0 z-50 h-full min-w-[24rem] translate-x-full transform shadow-lg transition-transform peer-checked:translate-x-0">
-        <div className="flex min-h-full flex-col p-6">
-          <div className="border-base-200 mb-3 flex place-content-between place-items-center border-b pb-3">
+      <div
+        className={`bg-base-100 fixed top-0 right-0 z-50 h-full min-w-[24rem] translate-x-full transform shadow-lg transition-transform peer-checked:translate-x-0 ${className}`}
+      >
+        <div className="flex h-screen flex-col">
+          <div className="border-base-200 !bg-base-100 mb-3 flex place-content-between place-items-center border-b p-6 pb-3">
             <div className="text-[16px] font-semibold tracking-wide uppercase">{title}</div>
             <div className="btn btn-ghost btn-sm btn-circle" onClick={close}>
               <CloseIcon />

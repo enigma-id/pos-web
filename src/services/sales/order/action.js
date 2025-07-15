@@ -7,7 +7,7 @@ export const salesOrderApi = createApi({
   baseQuery: baseQuery,
   endpoints: builder => ({
     order: builder.query({
-      query: ({ page = 1, limit = 10, ...params }) => ({
+      query: ({ page = 1, limit = 25, ...params }) => ({
         url: '/sales/order',
         method: 'GET',
         params: {

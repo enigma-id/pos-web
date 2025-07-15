@@ -9,7 +9,6 @@ import {
   useLazyShowSessionQuery,
 } from './action';
 import { checkSession, invalidateSession } from './slice';
-import { getOrFetchSales } from '../../../utils/cache';
 import { resetCart } from '../../cart/slice';
 import useCatalog from '../../catalog/hooks';
 import { $failure } from '../../form/action';
@@ -66,13 +65,24 @@ const useSession = () => {
     }
   };
 
-  const session = async params => {
-    const res = await getOrFetchSales('session', async () => {
-      const res = await triggerSession(params).unwrap();
-      return res?.data || {};
-    });
+  const session = async (params = {}) => {
+    try {
+      await triggerSession(params).unwrap();
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('error:', error);
+      }
+    }
+  };
 
-    return res;
+  const show = async id => {
+    try {
+      await triggerShow({ id }).unwrap();
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('error:', error);
+      }
+    }
   };
 
   return {
@@ -84,7 +94,7 @@ const useSession = () => {
     summaryResult,
     session,
     sessionResult,
-    triggerShow,
+    show,
     showResult,
   };
 };

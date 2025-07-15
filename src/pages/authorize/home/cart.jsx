@@ -4,14 +4,7 @@ import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 
 import { Dialog, Input } from '../../../components/ui';
-import {
-  AddUserIcon,
-  CardSearchIcon,
-  EditIcon,
-  SearchIcon,
-  TrashIcon,
-  UserIcon,
-} from '../../../components/ui/icon';
+import { AddUserIcon, EditIcon, TrashIcon, UserIcon } from '../../../components/ui/icon';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
 import { currencyFormat } from '../../../utils/common';

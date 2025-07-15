@@ -1,7 +1,8 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
 
-import { Input, NFCField } from '../../../components/ui';
-import { CloseIcon, PlusIcon } from '../../../components/ui/icon';
+import { Dialog, Input, NFCField } from '../../../components/ui';
+import { PlusIcon } from '../../../components/ui/icon';
 import useMembership from '../../../services/membership/hook';
 import useDialogModal from '../../../utils/modal';
 
@@ -30,7 +31,7 @@ const CreateSection = ({ onClose }) => {
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto p-6">
         <div className="mb-3">
           <div className="text-sm">Member name</div>
           <Input value={name} onChange={e => setName(e?.target?.value)} />
@@ -41,29 +42,25 @@ const CreateSection = ({ onClose }) => {
         </div>
       </div>
 
-      <div className="border-base-200 min-h-15 border-t pt-3">
-        <div className="btn btn-primary btn-block rounded-full" onClick={openModal}>
+      <div className="border-base-200 min-h-15 border-t">
+        <div className="btn btn-primary btn-block h-full rounded-none border-0" onClick={openModal}>
           <PlusIcon /> Create new membership
         </div>
       </div>
 
-      <dialog ref={dialogRef} className="modal">
-        <div className="bg-base-100 w-lg rounded-lg">
-          <div className="border-base-200 flex place-content-between place-items-center border-b px-6 py-4">
-            <div className="text-[16px] font-semibold tracking-wide">Scan NFC</div>
-            <div className="btn btn-ghost btn-sm btn-circle" onClick={closeModal}>
-              <CloseIcon />
-            </div>
-          </div>
-
+      <Dialog.Wrapper ref={dialogRef}>
+        <Dialog.Header onClose={closeModal}>
+          <div className="text-[16px] font-semibold tracking-wide">Scan NFC</div>
+        </Dialog.Header>
+        <Dialog.Body>
           <NFCField
             onRead={handleRead}
             isOpen={isOpen}
             onClose={closeModal}
             result={createResult}
           />
-        </div>
-      </dialog>
+        </Dialog.Body>
+      </Dialog.Wrapper>
     </div>
   );
 };
