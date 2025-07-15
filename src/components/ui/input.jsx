@@ -1,7 +1,18 @@
 import React from 'react';
 import { FaRegEye, FaRegEyeSlash } from 'react-icons/fa';
 
-const Input = ({ id, label, required, error, value, type, disabled, onChange }) => {
+const Input = ({
+  id,
+  label,
+  required,
+  error,
+  value,
+  type,
+  disabled,
+  onChange,
+  className,
+  inputMode,
+}) => {
   const [secured, setSecured] = React.useState('password');
 
   const renderLabel = () => {
@@ -28,11 +39,12 @@ const Input = ({ id, label, required, error, value, type, disabled, onChange }) 
       <div className="relative">
         <input
           id={id}
-          className={`input ${error ? `input-error !border-error` : `input-neutral`}`}
+          className={`input ${error ? `input-error !border-error` : `input-neutral`} ${className} `}
           type={type === 'password' ? secured : type}
           value={value}
           disabled={disabled}
           onChange={onChange}
+          inputMode={inputMode}
         />
 
         {type === 'password' && (

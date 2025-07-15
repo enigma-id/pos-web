@@ -7,3 +7,4 @@ export { default as EmptySection } from './empty';
 export { default as OrderSummary } from './order';
 export { default as Drawer } from './drawer';
 export { default as NFCField } from './nfc';
+export { default as Dialog } from './dialog';

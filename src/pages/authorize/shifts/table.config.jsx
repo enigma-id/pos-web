@@ -118,7 +118,7 @@ const createTableConfig = (navigate, filter = {}) => ({
     },
   },
   onRowClick: row => {
-    navigate(`/order/${row?.id}`);
+    navigate(`/shifts/${row?.id}`);
   },
 });
 

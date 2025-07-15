@@ -8,12 +8,13 @@ const SidebarProvider = ({ children }) => {
   const [mode, setMode] = useState('open_session');
 
   useEffect(() => {
-    if (!SalesSession?.hasSession) {
-      setMode('open_session');
-    } else {
-      setMode(prev => (prev === 'summary' ? 'summary' : 'cart'));
-    }
-  }, [SalesSession]);
+    setMode(prev => {
+      if (!SalesSession?.hasSession) return 'open_session';
+
+      if (prev === 'open_session') return 'cart';
+      return prev;
+    });
+  }, [SalesSession?.hasSession]);
 
   const showCart = () => {
     if (SalesSession?.hasSession) setMode('cart');
@@ -25,6 +26,10 @@ const SidebarProvider = ({ children }) => {
 
   const showOpenSession = () => setMode('open_session');
 
+  const showCustomer = () => setMode('bill_customer');
+
+  const showBill = () => setMode('bill_show');
+
   return (
     <SidebarContext.Provider
       value={{
@@ -32,6 +37,8 @@ const SidebarProvider = ({ children }) => {
         showCart,
         showSummary,
         showOpenSession,
+        showCustomer,
+        showBill,
       }}
     >
       {children}

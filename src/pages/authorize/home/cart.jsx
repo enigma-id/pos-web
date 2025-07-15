@@ -1,18 +1,27 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
 import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 
-import PaymentSection from './payment';
-import { Drawer, Input, OrderSummary } from '../../../components/ui';
-import { EditIcon, TrashIcon } from '../../../components/ui/icon';
+import { Dialog, Input } from '../../../components/ui';
+import {
+  AddUserIcon,
+  CardSearchIcon,
+  EditIcon,
+  SearchIcon,
+  TrashIcon,
+  UserIcon,
+} from '../../../components/ui/icon';
+import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
 import { currencyFormat } from '../../../utils/common';
-import useDrawer from '../../../utils/drawer';
 import useDialogModal from '../../../utils/modal';
 
 const Cart = ({ onUpdate }) => {
+  const navigate = useNavigate();
   const CartState = useSelector(state => state?.Cart);
   const Channel = useSelector(state => state?.SalesChannel);
-  const { drawerRef, open: openDrawer, close: closeDrawer } = useDrawer();
+  const { showCustomer } = useSidebar();
 
   const {
     dialogRef,
@@ -24,7 +33,6 @@ const Cart = ({ onUpdate }) => {
 
   const { openBill, billResult, reset, remove } = useCart();
 
-  const [selected, setSelected] = React.useState('buy');
   const [ticket, setTicket] = React.useState('');
 
   const flattenAdditionals = (additionals = []) => {
@@ -55,11 +63,16 @@ const Cart = ({ onUpdate }) => {
   };
 
   const onBillCreate = async () => {
-    const items = CartState?.items?.map(item => {
+    const items = CartState?.items?.list?.map(item => {
       const base = {
         catalog_id: item.id,
         quantity: item.quantity,
       };
+
+      if (item?.is_custom === 1) {
+        base.description = item?.name;
+        base.unit_price = item?.unit_price;
+      }
 
       const flattened = flattenAdditionals(item?.additionals);
 
@@ -72,6 +85,7 @@ const Cart = ({ onUpdate }) => {
 
     const payload = {
       ticket: ticket,
+      membership_id: CartState?.meta?.customer?.id,
       channel_id: Channel?.selectedChannel?.id,
       items: items,
     };
@@ -88,16 +102,25 @@ const Cart = ({ onUpdate }) => {
 
         if (selectedChilds.length === 0) return null;
 
-        const childNames = selectedChilds
-          .map(child => {
-            const suffix = add?.type === 'quantity' ? ` x ${child?.quantity}` : '';
-            return `${child.name}${suffix}`;
-          })
-          .join(', ');
+        const childNames = selectedChilds.map(child => {
+          const suffix =
+            add?.type === 'quantity'
+              ? `(${child?.quantity} x ${currencyFormat(child?.unit_price, undefined, 'Free')})`
+              : '';
+          return (
+            <div className="text-base-300 flex place-content-between text-xs font-thin">
+              <span>
+                + {child?.name} {suffix}
+              </span>
+              <span>{currencyFormat(child?.quantity * child?.unit_price, undefined, 'Free')}</span>
+            </div>
+          );
+        });
 
         return (
           <div key={add.id} className="text-sm">
-            {add.name}: <span className="font-semibold">{childNames}</span>
+            <div className="text-base-300 text-xs font-semibold uppercase">{add.name}</div>
+            <div>{childNames}</div>
           </div>
         );
       })
@@ -112,135 +135,146 @@ const Cart = ({ onUpdate }) => {
   }, [billResult]);
 
   return (
-    <Drawer.Wrapper>
-      <div className="border-secondary flex h-[calc(100vh-116px)] flex-col border-t border-l bg-white py-4 ps-6">
-        <div className="mb-5 place-items-center pe-4">
-          <div className="flex w-fit rounded-full bg-[#f9fafe] p-1">
-            <button
-              onClick={() => {
-                setTicket('');
-                setSelected('buy');
-              }}
-              className={`min-w-40 cursor-pointer rounded-full px-6 py-2 transition-all ${
-                selected === 'buy' ? 'bg-white font-semibold text-black shadow-sm' : 'text-gray-500'
-              }`}
-            >
-              Close Bill
-            </button>
-            <button
-              onClick={() => {
-                setTicket('');
-                setSelected('bills');
-              }}
-              className={`min-w-40 cursor-pointer rounded-full px-6 py-2 transition-all ${
-                selected === 'bills'
-                  ? 'bg-white font-semibold text-black shadow-sm'
-                  : 'text-gray-500'
-              }`}
-            >
-              Open Bill
-            </button>
-          </div>
+    <div className="border-base-200 bg-base-100 flex h-screen flex-col border-t border-l">
+      <div className="border-base-200 flex h-16 place-content-between border-b">
+        <div className="flex-2/3 place-content-center ps-4">
+          <h2 className="text-lg font-bold">Order Details</h2>
         </div>
-
-        {selected === 'bills' && (
-          <div className="border-secondary me-4 mb-2 border-b pb-2">
-            <h2 className="mb-2 text-xl font-bold">Ticket Name</h2>
-
-            <Input value={ticket} onChange={e => setTicket(e?.target?.value)} />
+        {CartState?.items?.count > 0 && (
+          <div className="bg-error cursor-pointer place-content-center px-6" onClick={reset}>
+            <div className="flex place-items-center gap-2 text-center text-lg text-white">
+              <TrashIcon className="h-5 w-5" /> Clear
+            </div>
           </div>
         )}
-
-        <h2 className="text-xl font-bold">Order Details</h2>
-        <div className="mt-4 flex-1 overflow-y-auto pe-4">
-          {CartState?.items?.map((item, i) => (
-            <div key={i} className="border-secondary border-b py-4">
-              <div className="flex">
-                <div className="w-20">
-                  <div className="h-[80px] w-[80px]">
-                    <img
-                      src={item?.image}
-                      alt={item?.name}
-                      className="bg-secondary h-full w-full rounded-md object-cover"
-                    />
-                  </div>
-                </div>
-                <div className="ps-2">
-                  <p className="text-[16px] font-semibold">{item?.name}</p>
-                  {renderAdditionals(item).map((line, idx) => (
-                    <div key={idx} className="text-sm text-gray-700">
-                      {line}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="mt-2 flex place-content-between place-items-center">
-                <div className="flex place-items-center gap-2">
-                  <div
-                    className="btn btn-sm btn-error btn-circle btn-outline hover:!text-white"
-                    onClick={() => remove(i)}
-                  >
-                    <TrashIcon />
-                  </div>
-                  <div
-                    className="btn btn-sm btn-primary btn-circle btn-outline"
-                    onClick={() => onUpdate(item, i)}
-                  >
-                    <EditIcon />
-                  </div>
-                </div>
-
-                <div className="text-primary text-lg font-bold">
-                  x{item?.quantity} ({currencyFormat(item?.subtotal)})
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Footer */}
-        <div className="border-secondary me-4 mb-4 min-h-15 border-t pt-3">
-          <div className="mb-3 flex place-content-between place-items-center">
-            <div className="text-accent">Total</div>
-            <div className="text-primary text-xl font-bold">
-              {currencyFormat(CartState?.subtotal)}
-            </div>
-          </div>
-
-          <div className="mb-4 flex place-items-center gap-1">
-            <button
-              className={`btn btn-md btn-primary w-2/3 rounded-l-full ${
-                (selected === 'buy' && CartState?.items?.length > 0) ||
-                (selected === 'bills' && CartState?.items?.length > 0)
-                  ? ''
-                  : 'btn-disabled'
-              }`}
-              onClick={selected === 'buy' ? openDrawer : openModal}
-            >
-              {selected === 'buy' ? 'Pay Now' : 'Save'}
-            </button>
-
-            <div className="btn btn-error w-1/3 rounded-r-full text-white" onClick={reset}>
-              Clear
-            </div>
-          </div>
-
-          <dialog ref={dialogRef} className="modal">
-            <OrderSummary
-              title="Bill confirmation"
-              subtitle="Please review the order below before saving it as a bill"
-              data={{ ...CartState, ticket }}
-              onClose={closeModal}
-              onConfirm={onBillCreate}
-              isLoading={billResult?.isLoading}
-            />
-          </dialog>
-        </div>
       </div>
-      <Drawer.Content drawerRef={drawerRef} title="Order Payment" close={closeDrawer}>
-        <PaymentSection data={CartState} onClose={closeDrawer} />
-      </Drawer.Content>
-    </Drawer.Wrapper>
+
+      {CartState?.meta?.customer ? (
+        <div
+          className="border-base-200 bg-primary/10 text-primary flex h-[60px] cursor-pointer place-content-center place-items-center gap-2 border-b text-lg font-bold capitalize"
+          onClick={showCustomer}
+        >
+          <UserIcon /> {CartState?.meta?.customer?.name || '-'}
+        </div>
+      ) : (
+        <div
+          className="border-base-200 flex h-[60px] cursor-pointer place-content-center place-items-center gap-2 border-b text-lg font-bold"
+          onClick={showCustomer}
+        >
+          <AddUserIcon /> Customers
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto px-6 py-4">
+        {CartState?.items?.list?.map((item, i) => (
+          <div key={i} className="border-base-200 border-b py-4">
+            <div className="flex place-content-between place-items-center">
+              <div>
+                <span className="bg-base-content rounded-lg px-3 py-1 text-white">
+                  {item?.quantity}
+                </span>
+                <span className="ps-2 text-base font-semibold uppercase">{item?.name}</span>
+              </div>
+              <span className="text-base-300 text-xs">
+                {currencyFormat(item?.unit_price, undefined, 'Free')}
+              </span>
+            </div>
+
+            {item?.additionals_flat?.length > 0 && (
+              <div className="border-base-200 ms-3.5 border-s py-2 ps-6">
+                {renderAdditionals(item).map((line, idx) => (
+                  <div key={idx} className="mb-2">
+                    {line}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-2 flex place-content-between place-items-center">
+              <div className="flex place-items-center gap-2">
+                <div
+                  className="btn btn-sm btn-error btn-circle btn-outline hover:!text-white"
+                  onClick={() => remove(i)}
+                >
+                  <TrashIcon />
+                </div>
+                <div
+                  className="btn btn-sm btn-primary btn-circle btn-outline"
+                  onClick={() => onUpdate(item, i)}
+                >
+                  <EditIcon />
+                </div>
+              </div>
+
+              <div className="text-primary text-lg font-bold">
+                {currencyFormat(item?.subtotal, undefined, 'Free')}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div className="border-base-200 border-t p-4">
+        <div className="mb-3 flex place-content-between place-items-center">
+          <div className="text-base">Total</div>
+          <div className="text-primary text-xl font-bold">
+            {currencyFormat(CartState?.meta?.subtotal)}
+          </div>
+        </div>
+
+        <div className="mb-4 flex place-items-center gap-1">
+          <button
+            className={`btn btn-xl btn-primary w-1/2 rounded-none font-thin uppercase ${
+              CartState?.items?.list?.length > 0 ? '' : 'btn-disabled'
+            }`}
+            onClick={openModal}
+          >
+            Save Bill
+          </button>
+
+          <button
+            className={`btn btn-xl btn-primary w-1/2 rounded-none font-thin uppercase ${
+              CartState?.items?.list?.length > 0 ? '' : 'btn-disabled'
+            }`}
+            onClick={() => navigate('/checkout', { is_bill: false })}
+          >
+            Pay
+          </button>
+        </div>
+
+        <Dialog.Wrapper ref={dialogRef} className="w-md">
+          <Dialog.Header onClose={closeModal}>
+            <div className="text-lg font-semibold">Save bills</div>
+          </Dialog.Header>
+          <Dialog.Body>
+            <div className="mb-3 py-4">
+              <Input label="bill name" value={ticket} onChange={e => setTicket(e?.target?.value)} />
+            </div>
+          </Dialog.Body>
+          <Dialog.Footer>
+            <div
+              className={`btn btn-block btn-primary btn-lg ${billResult?.isLoading ? 'btn-disabled' : ''}`}
+              onClick={onBillCreate}
+            >
+              Save Bill
+              {billResult?.isLoading && (
+                <span className="loading loading-spinner loading-sm"></span>
+              )}
+            </div>
+          </Dialog.Footer>
+        </Dialog.Wrapper>
+
+        {/* <OrderSummary
+            title="Bill confirmation"
+            subtitle="Please review the order below before saving it as a bill"
+            data={{ ...CartState, ticket }}
+            onClose={closeModal}
+            onConfirm={onBillCreate}
+            isLoading={billResult?.isLoading}
+          /> */}
+      </div>
+    </div>
   );
 };
 

@@ -98,8 +98,8 @@ const PaymentSection = ({ data, onClose }) => {
   }, [checkoutResult]);
 
   return (
-    <div className="menu text-base-content min-h-full w-120 bg-white p-4">
-      <div className="bg-base-300 mt-4 mb-4 flex place-content-between place-items-center rounded-xl p-4">
+    <div className="menu text-base-content bg-base-100 min-h-full w-120 p-4">
+      <div className="bg-base-100 mt-4 mb-4 flex place-content-between place-items-center rounded-xl p-4">
         <div className="text-[16px]">Total Amount</div>
         <div className="text-primary text-xl font-semibold">{currencyFormat(data?.subtotal)}</div>
       </div>

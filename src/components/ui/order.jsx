@@ -34,7 +34,7 @@ const OrderSummary = ({ title, subtitle, data, onClose, onConfirm, isLoading }) 
   };
 
   return (
-    <div className="w-1/2 rounded bg-white px-4 py-6">
+    <div className="bg-base-100 w-1/2 rounded px-4 py-6">
       <div className="mb-4 pb-3 text-center">
         <div className="text-lg font-semibold tracking-wide uppercase">{title}</div>
         <div className="text-accent text-sm">{subtitle}</div>
@@ -43,7 +43,7 @@ const OrderSummary = ({ title, subtitle, data, onClose, onConfirm, isLoading }) 
       <div className="mb-4">
         <table className="w-full">
           <thead>
-            <tr className="border-secondary border-b uppercase">
+            <tr className="border-base-200 border-b uppercase">
               <th className="text-accent px-2 py-3 text-start text-xs font-thin">item name</th>
               <th className="text-accent w-15 px-2 py-3 text-center text-xs font-thin">qty</th>
               <th className="text-accent w-40 px-2 py-3 text-end text-xs font-thin">price</th>
@@ -52,7 +52,7 @@ const OrderSummary = ({ title, subtitle, data, onClose, onConfirm, isLoading }) 
           </thead>
           <tbody>
             {data?.items?.map((item, i) => (
-              <tr className="border-secondary border-b" key={i}>
+              <tr className="border-base-200 border-b" key={i}>
                 <td className="px-2 py-3 text-start text-sm capitalize">
                   <div className="font-semibold">{item?.name}</div>
                   {renderAdditionals(item).map((line, idx) => (
@@ -80,7 +80,7 @@ const OrderSummary = ({ title, subtitle, data, onClose, onConfirm, isLoading }) 
             <tr>
               <td colSpan={2} rowSpan={4} className="px-2 pt-5 text-start">
                 {data?.note && (
-                  <div className="bg-base-300 w-full p-3">
+                  <div className="bg-base-100 w-full p-3">
                     <div className="text-sm font-semibold tracking-wide uppercase">notes</div>
                     <div className="pt-3 text-xs tracking-wide">{data?.note}</div>
                   </div>
@@ -122,7 +122,7 @@ const OrderSummary = ({ title, subtitle, data, onClose, onConfirm, isLoading }) 
         )}
       </div>
 
-      <div className="border-secondary flex place-content-between place-items-center border-t px-4 pt-4">
+      <div className="border-base-200 flex place-content-between place-items-center border-t px-4 pt-4">
         {data?.payment_method ? (
           <div>
             <div className="text-accent text-xs font-thin tracking-wide">Payment Method</div>

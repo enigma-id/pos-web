@@ -3,11 +3,11 @@ import DetailScreen from './detail';
 
 const routes = [
   {
-    path: '/order',
+    path: '/shifts',
     element: OrderScreen,
   },
   {
-    path: '/order/:id',
+    path: '/shifts/:id',
     element: DetailScreen,
   },
 ];

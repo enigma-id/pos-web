@@ -1,7 +1,11 @@
 import moment from 'moment';
 
-export const currencyFormat = (value, usingText = true) => {
-  let txt = usingText ? 'Rp ' : '';
+export const currencyFormat = (value, usingText = true, nullText = '-') => {
+  let txt = usingText ? 'Rp' : '';
+
+  if (isNaN(value)) {
+    return nullText;
+  }
 
   return `${txt}${new Intl.NumberFormat('de-DE').format(value)}`;
 };

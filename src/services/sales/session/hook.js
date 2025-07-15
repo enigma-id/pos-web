@@ -1,5 +1,4 @@
 // services/sales/session/hook.js
-import { useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 
 import {
@@ -15,7 +14,7 @@ import { resetCart } from '../../cart/slice';
 import useCatalog from '../../catalog/hooks';
 import { $failure } from '../../form/action';
 
-const useSession = id => {
+const useSession = () => {
   const dispatch = useDispatch();
 
   const [startMutation, startResult] = useStartMutation();
@@ -76,13 +75,6 @@ const useSession = id => {
     return res;
   };
 
-  useEffect(() => {
-    if (id) {
-      triggerShow({ id });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-
   return {
     start,
     startResult,
@@ -92,6 +84,7 @@ const useSession = id => {
     summaryResult,
     session,
     sessionResult,
+    triggerShow,
     showResult,
   };
 };

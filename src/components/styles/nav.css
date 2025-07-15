@@ -1,15 +1,27 @@
-.nav-sb {
-  @apply !text-accent hover:!text-primary !flex !h-9 !min-w-fit !place-items-center !items-center !justify-center rounded-full !px-4 !text-[16px] hover:!bg-transparent active:!bg-[var(--color-primary-shadow)];
+.nav-container {
+  @apply bg-base-100 w-18;
 }
 
-.nav-sb.active {
-  @apply !text-primary;
+.nav-container.expand {
+  @apply !w-32;
 }
 
-.dd-sb {
-  @apply active:border-primary active:!text-primary !text-accent hover:!text-primary hover:!border-primary border border-white hover:!bg-[var(--color-primary-shadow)] active:border active:!bg-[var(--color-primary-shadow)] active:font-medium;
+.nav-items {
+  @apply hover:text-primary border-base-100 flex h-16 w-full cursor-pointer flex-col place-content-center border px-4;
+
+  > small {
+    @apply text-center;
+  }
 }
 
-.dd-sb.active {
-  @apply !border-primary !text-primary !bg-[var(--color-primary-shadow)] !font-medium;
+.nav-items.expand {
+  @apply !flex-row !place-content-start place-items-center gap-2;
+
+  > small {
+    @apply !text-start;
+  }
+}
+
+.nav-items.active {
+  @apply bg-primary/10 hover:text-base-100 !text-primary hover:!border-primary border-primary/5;
 }

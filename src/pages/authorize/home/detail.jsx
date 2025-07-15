@@ -1,7 +1,8 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
 import { useDispatch } from 'react-redux';
 
-import { QuantityStepper } from '../../../components/ui';
+import { Input, QuantityStepper } from '../../../components/ui';
 import useCart from '../../../services/cart/hook';
 import { addItem, changeItem } from '../../../services/cart/slice';
 import { currencyFormat } from '../../../utils/common';
@@ -23,6 +24,7 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null }) => {
 
     setCatalogData({
       ...catalogDetail,
+      name: catalogDetail.name || catalog?.name || '',
       unit_price: catalogDetail.unit_price || catalog?.unit_price || 0,
     });
 
@@ -136,7 +138,7 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null }) => {
   };
 
   const calculateSubtotal = () => {
-    let total = quantity * (catalogDetail?.unit_price || 0);
+    let total = quantity * (catalogData?.unit_price || 0);
 
     additionals.forEach(add => {
       add.childs?.forEach(child => {
@@ -155,28 +157,70 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null }) => {
 
   return (
     <div className="card card-side bg-base-100 min-h-1/3 shadow-sm">
-      <figure className="bg-secondary w-90">
-        <img src={catalogData?.image} alt={catalogData?.name} />
-      </figure>
       <div className="card-body min-w-120 justify-between">
         <div>
-          <div className="border-secondary mb-3 border-b border-dashed pb-3">
-            <h2 className="card-title">{catalogData?.name}</h2>
-            <p className="text-primary text-end text-xl font-semibold">
-              {currencyFormat(catalogData?.unit_price)}
-            </p>
+          <div className="border-base-200 mb-3 flex place-content-between border-b border-dashed pb-3">
+            {catalogDetail?.is_custom !== 1 && (
+              <>
+                <h2 className="card-title !text-xl">{catalogData?.name}</h2>
+                <p className="text-primary text-end text-xl font-semibold">
+                  {currencyFormat(catalogData?.unit_price)}
+                </p>
+              </>
+            )}
           </div>
 
           <div>
+            {catalogDetail?.is_custom === 1 && (
+              <div>
+                <div className="mb-3">
+                  <Input
+                    label="Catalog Name"
+                    value={catalogData?.name || ''}
+                    onChange={e => setCatalogData(prev => ({ ...prev, name: e.target.value }))}
+                  />
+                </div>
+                <div className="mb-3">
+                  <Input
+                    label="Catalog Price"
+                    value={catalogData?.unit_price || ''}
+                    onChange={e =>
+                      setCatalogData(prev => ({
+                        ...prev,
+                        unit_price: parseInt(e.target.value || 0),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            )}
             {additionals.map(
               add =>
                 add?.childs?.length > 0 && (
-                  <div key={add?.id} className="border-secondary mb-4 border-b border-dashed pb-3">
-                    <p className="mb-2 font-semibold">{add?.name}</p>
+                  <div key={add?.id} className="border-base-200 mb-4 border-b border-dashed pb-3">
+                    <p className="mb-2 text-base font-semibold uppercase">
+                      {add?.name}{' '}
+                      {add?.type === 'quantity' ? (
+                        <span className="text-base-content text-sm !font-thin !capitalize">
+                          (set quantity for each option)
+                        </span>
+                      ) : add?.type === 'options' ? (
+                        <span className="text-base-content text-sm !font-thin !capitalize">
+                          (choose one)
+                        </span>
+                      ) : add?.type === 'checkbox' ? (
+                        <span className="text-base-content text-sm !font-thin !capitalize">
+                          (choose one or more)
+                        </span>
+                      ) : null}
+                    </p>
 
                     {add?.type === 'quantity' &&
                       add?.childs?.map(child => (
-                        <div key={child?.id} className="mb-2 flex items-center justify-between">
+                        <div
+                          key={child?.id}
+                          className="mb-2 flex items-center justify-between text-sm"
+                        >
                           <span>{child?.name}</span>
 
                           <div className="flex items-center">
@@ -202,7 +246,7 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null }) => {
                           <label
                             key={child?.id}
                             htmlFor={inputId}
-                            className="mb-2 flex cursor-pointer items-center justify-between"
+                            className="mb-2 flex cursor-pointer items-center justify-between text-sm"
                           >
                             <span>{child?.name}</span>
 
@@ -233,7 +277,7 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null }) => {
                           <label
                             key={child?.id}
                             htmlFor={inputId}
-                            className="mb-2 flex cursor-pointer items-center justify-between"
+                            className="mb-2 flex cursor-pointer items-center justify-between text-sm"
                           >
                             <span>{child?.name}</span>
                             <div>
@@ -261,12 +305,12 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null }) => {
 
         <div className="card-actions">
           <QuantityStepper value={quantity} onChange={setQuantity} />
-          <button className="btn btn-primary btn-block" onClick={addToCart}>
+          <button className="btn btn-primary btn-block btn-lg" onClick={addToCart}>
             {quantity > 0
-              ? `Tambahkan (${currencyFormat(calculateSubtotal())})`
+              ? `Add (${currencyFormat(calculateSubtotal(), undefined, 'Free')})`
               : mode === 'edit'
-                ? 'Hapus & Kembali'
-                : 'Kembali'}
+                ? 'Remove & Back'
+                : 'Back'}
           </button>
         </div>
       </div>

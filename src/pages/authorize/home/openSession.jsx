@@ -16,13 +16,13 @@ const OpenSection = () => {
   };
 
   return (
-    <div className="border-secondary flex h-[calc(100vh-116px)] flex-col border-t border-l bg-white">
-      <div className="border-secondary flex h-[63px] items-center gap-4 border-b px-6">
+    <div className="border-base-200 bg-base-100 flex h-screen flex-col border-t border-l">
+      <div className="border-base-200 flex h-[62px] items-center gap-4 border-b px-6">
         <h2 className="text-xl font-bold">Open Sales Session</h2>
       </div>
 
       <div className="mt-4 flex-1 overflow-y-auto px-6 py-4">
-        <div className="bg-base-300 mb-3 rounded-md p-4 text-[16px]">
+        <div className="bg-accent mb-3 rounded-md p-4 text-[16px]">
           You are about to start a sales session. All transactions made will be grouped into this
           session, making it easier to manage and track your cash flow.
         </div>
@@ -33,13 +33,13 @@ const OpenSection = () => {
         </small>
       </div>
 
-      <div className="border-secondary me-4 min-h-15 border-t px-6 py-4 pt-3">
+      <div className="border-base-200 me-4 min-h-15 border-t px-6 py-4 pt-3">
         <button
-          className={`btn btn-block btn-md btn-primary rounded-full ${startResult?.isLoading ? 'btn-disabled' : ''}`}
+          className={`btn btn-block btn-xl btn-primary rounded-none ${startResult?.isLoading ? 'btn-disabled' : ''}`}
           onClick={onSubmit}
         >
-          {startResult?.isLoading && <span className="loading loading-spinner"></span>}
           Start Session
+          {startResult?.isLoading && <span className="loading loading-spinner"></span>}
         </button>
       </div>
     </div>

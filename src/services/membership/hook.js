@@ -8,6 +8,7 @@ import {
   useLazyShowQuery,
   useLazyCheckSaldoQuery,
   useTopupMutation,
+  useLazyGetQuery,
 } from './action';
 import { $failure } from '../form/action';
 
@@ -17,9 +18,18 @@ const useMembership = id => {
   const [createMember, createResult] = useCreateMutation();
   const [updateMember, updateResult] = useUpdateMutation();
   const [removeMember, removeResult] = useDeleteMutation();
+  const [triggerGet, getMemberResult] = useLazyGetQuery();
   const [triggerShow, showResult] = useLazyShowQuery();
   const [triggerCheck, checkResult] = useLazyCheckSaldoQuery();
   const [topupBalance, topupResult] = useTopupMutation();
+
+  const getMember = async params => {
+    try {
+      await triggerGet(params).unwrap();
+    } catch (err) {
+      dispatch($failure(err));
+    }
+  };
 
   const create = async payload => {
     try {
@@ -29,9 +39,9 @@ const useMembership = id => {
     }
   };
 
-  const update = async payload => {
+  const update = async ({ id, payload }) => {
     try {
-      await updateMember(payload).unwrap();
+      await updateMember({ id, payload }).unwrap();
     } catch (err) {
       dispatch($failure(err));
     }
@@ -62,7 +72,6 @@ const useMembership = id => {
   };
 
   useEffect(() => {
-    console.log('ids', id);
     if (id) {
       triggerShow(id);
     }
@@ -70,6 +79,8 @@ const useMembership = id => {
   }, [id]);
 
   return {
+    getMember,
+    getMemberResult,
     create,
     createResult,
     update,

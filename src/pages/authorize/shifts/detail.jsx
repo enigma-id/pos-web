@@ -15,7 +15,7 @@ const DetailScreen = () => {
   const data = showResult?.data?.data;
 
   const ListItem = ({ title, value }) => (
-    <div className="border-secondary mb-3 flex place-content-between place-items-center border-b pb-2">
+    <div className="border-base-200 mb-3 flex place-content-between place-items-center border-b pb-2">
       <div className="text-sm">{title}</div>
       <div
         className={`text-sm font-semibold ${value === 'completed' || value === 'finished' ? 'bg-success w-fit rounded-full px-4 py-1 !text-[11px] text-white uppercase' : value === 'pending' || value === 'active' ? 'bg-accent w-fit rounded-full px-4 py-1 !text-[11px] text-white uppercase' : ''}`}
@@ -27,19 +27,19 @@ const DetailScreen = () => {
 
   return (
     <div>
-      <div className="border-secondary flex h-[62px] flex-1 place-content-between place-items-center gap-4 border-t border-b bg-white px-4">
+      <div className="border-base-200 bg-base-100 flex h-[62px] flex-1 place-content-between place-items-center gap-4 border-t border-b px-4">
         <div className="flex place-items-center">
           <div
-            className="btn btn-md btn-outline btn-circle border-base-300"
+            className="btn btn-md btn-outline btn-circle border-base-200"
             onClick={() => navigate(-1)}
           >
             <BackIcon />
           </div>
-          <h2 className="border-secondary border-s ps-4 text-xl font-bold">Session Details</h2>
+          <h2 className="border-base-200 border-s ps-4 text-xl font-bold">Session Details</h2>
         </div>
       </div>
 
-      <div className="flex flex-1 flex-row bg-white p-4">
+      <div className="bg-base-100 flex flex-1 flex-row p-4">
         <div className="flex-1/2 pe-4">
           <div className="text-accent pb-3 text-xs tracking-wide">SESSION OVERVIEW</div>
           <ListItem title="Status" value={data?.status} />
@@ -73,7 +73,7 @@ const DetailScreen = () => {
           <div className="table-responsive m-0 flex h-[calc(45vh)] flex-col">
             <div className="flex-1 overflow-auto">
               <table className="table-hover table-vcenter card-table datatable table-striped table w-full">
-                <thead className="border-secondary sticky top-0 z-10 border-b bg-white">
+                <thead className="border-base-200 bg-base-100 sticky top-0 z-10 border-b">
                   <tr>
                     <th className="px-4 py-4 text-left text-sm font-semibold tracking-wide text-black uppercase select-none">
                       Code

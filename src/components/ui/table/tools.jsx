@@ -50,8 +50,8 @@ const TableTool = ({ name, onSearch, children, downloadable, onDownload }) => {
   };
 
   return (
-    <div className="border-secondary flex h-[62px] border-t border-b bg-white">
-      <div className="border-secondary flex-1/2 border-r">
+    <div className="border-base-200 bg-base-100 flex h-[62px] border-t border-b">
+      <div className="border-base-200 flex-1 border-r">
         <div className="relative flex h-full w-full items-center">
           <div className="absolute left-4">
             <svg
@@ -79,7 +79,7 @@ const TableTool = ({ name, onSearch, children, downloadable, onDownload }) => {
           />
         </div>
       </div>
-      <div className="flex-1/2 overflow-x-auto">{children}</div>
+      {children && <div className="flex-1 overflow-x-auto">{children}</div>}
     </div>
   );
 };

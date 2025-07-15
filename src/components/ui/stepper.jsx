@@ -1,4 +1,3 @@
-
 const QuantityStepper = ({ value, onChange, small }) => {
   const increment = () => onChange(value + 1);
   const decrement = () => {
@@ -10,18 +9,16 @@ const QuantityStepper = ({ value, onChange, small }) => {
   };
 
   return (
-    <div
-      className={`border-secondary flex items-center justify-between rounded-full border ${small ? 'w-25' : 'w-full'}`}
-    >
+    <div className={`flex items-center justify-between rounded-full ${small ? 'w-25' : 'w-full'}`}>
       <div
-        className={`btn btn-circle btn-primary ${isDisabled()} ${small ? 'btn-sm' : ''}`}
+        className={`btn btn-primary ${isDisabled()} ${small ? 'btn-sm' : 'btn-lg'}`}
         disabled={value === 0}
         onClick={decrement}
       >
         -
       </div>
-      <div className={`${small ? 'text-sm' : 'text-lg'} font-medium`}>{value}</div>
-      <div className={`btn btn-circle btn-primary ${small ? 'btn-sm' : ''}`} onClick={increment}>
+      <div className={`${small ? 'text-sm' : 'text-lg'} font-semibold`}>{value}</div>
+      <div className={`btn btn-primary ${small ? 'btn-sm' : 'btn-lg'}`} onClick={increment}>
         +
       </div>
     </div>

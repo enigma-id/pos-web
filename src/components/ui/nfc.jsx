@@ -1,8 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 
-import { FailedIcon, SuccessIcon, TapIcon } from './icon';
-
 const NFCField = ({ onRead, isOpen, onClose, result }) => {
   const FormState = useSelector(state => state?.Form);
   const ref = useRef();
@@ -16,6 +14,7 @@ const NFCField = ({ onRead, isOpen, onClose, result }) => {
       e.target.value = '';
     }
   };
+
   useEffect(() => {
     if (!isOpen) return;
     const el = ref.current;
@@ -27,7 +26,7 @@ const NFCField = ({ onRead, isOpen, onClose, result }) => {
     }, 200);
 
     return () => clearTimeout(timeout);
-  }, [onRead, isOpen]);
+  }, [isOpen]);
 
   useEffect(() => {
     if (result?.isSuccess) {
@@ -35,7 +34,7 @@ const NFCField = ({ onRead, isOpen, onClose, result }) => {
       const timeout = setTimeout(() => {
         onClose();
         setStatus('idle');
-      }, 1500);
+      }, 3000);
 
       return () => clearTimeout(timeout);
     }
@@ -44,14 +43,14 @@ const NFCField = ({ onRead, isOpen, onClose, result }) => {
   useEffect(() => {
     if (result?.isError) {
       setStatus('failed');
-      const timeout = setTimeout(() => {
-        const isFocused = document.activeElement === ref.current;
-        setStatus(isFocused ? 'scanning' : 'idle');
-      }, 1500);
+      // const timeout = setTimeout(() => {
+      //   const isFocused = document.activeElement === ref.current;
+      //   setStatus(isFocused ? 'scanning' : 'idle');
+      // }, 1500);
 
-      return () => {
-        clearTimeout(timeout);
-      };
+      // return () => {
+      //   clearTimeout(timeout);
+      // };
     }
   }, [result?.isError]);
 
@@ -75,11 +74,11 @@ const NFCField = ({ onRead, isOpen, onClose, result }) => {
   return (
     <div className="relative flex flex-col place-items-center space-y-1 px-6 py-4 text-center">
       {status === 'success' ? (
-        <SuccessIcon />
-      ) : status === 'failed' ? (
-        <FailedIcon />
+        <img src={'/success.png'} className="h-50 w-50 object-contain" />
       ) : (
-        <TapIcon
+        <img
+          src={'/scan.png'}
+          className="h-50 w-50 cursor-pointer object-contain"
           onClick={() => {
             ref?.current.focus();
             setStatus('scanning');
@@ -88,8 +87,8 @@ const NFCField = ({ onRead, isOpen, onClose, result }) => {
       )}
       <h2 className="text-lg font-semibold text-gray-800">{getTitle()}</h2>
       <p className="text-sm text-gray-600">{getSubtitle()}</p>
-
       <small className="text-error">{FormState?.errors?.card_id}</small>
+      <small className="text-error">{FormState?.errors?.saldo}</small>
       <input
         id="nfc"
         ref={ref}

@@ -12,8 +12,17 @@ const useOrder = id => {
 
   const order = async (params = {}) => {
     try {
-      const res = await triggerOrder(params).unwrap();
-      return res;
+      await triggerOrder(params).unwrap();
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('error:', error);
+      }
+    }
+  };
+
+  const show = async id => {
+    try {
+      await triggerShow({ id }).unwrap();
     } catch (error) {
       if (import.meta.env.DEV) {
         console.error('error:', error);
@@ -41,6 +50,7 @@ const useOrder = id => {
   return {
     order,
     orderResult,
+    show,
     showResult,
     cancel,
     cancelResult,

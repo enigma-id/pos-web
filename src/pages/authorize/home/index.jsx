@@ -1,16 +1,23 @@
 import React from 'react';
+import { useSelector } from 'react-redux';
 
 import Cart from './cart';
 import CloseSection from './closeSession';
+import CustomerSection from './customer';
 import DetailScreen from './detail';
 import OpenSection from './openSession';
-import { CardSearchIcon, SearchIcon } from '../../../components/ui/icon';
+import { CardSearchIcon, ChevronDownIcon, SearchIcon } from '../../../components/ui/icon';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCatalog from '../../../services/catalog/hooks';
+import useSalesChannel from '../../../services/sales/channel/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
 import useDialogModal from '../../../utils/modal';
 
 const CatalogScreen = () => {
+  const dropdownRef = React.useRef(null);
+  const dropdownRefs = React.useRef(null);
+  const selectedChannel = useSelector(state => state?.SalesChannel?.selectedChannel);
+
   const {
     refreshCatalog,
     catalog,
@@ -21,9 +28,11 @@ const CatalogScreen = () => {
     searchTerm,
   } = useCatalog();
   const { mode } = useSidebar();
-
+  const { channels, selectChannel } = useSalesChannel();
   const [catalogSelected, setCatalogSelected] = React.useState(null);
   const [editKey, setEditKey] = React.useState(null);
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [isOpens, setIsOpens] = React.useState(false);
 
   const { dialogRef, open, close } = useDialogModal({
     onClose: () => {
@@ -38,12 +47,68 @@ const CatalogScreen = () => {
     open();
   };
 
+  React.useEffect(() => {
+    const handleClickOutside = event => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const handleClickOutside2 = event => {
+      if (dropdownRefs.current && !dropdownRefs.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside2);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside2);
+    };
+  }, []);
+
   return (
     <div className="flex">
       <div className="relative flex-1">
         {/* Header Search & Categories */}
-        <div className="border-secondary flex h-[62px] border-t border-b bg-white">
-          <div className="border-secondary flex-1/2 border-r">
+        <div className="border-base-200 bg-base-100 flex h-16 border-t border-b">
+          <div
+            ref={dropdownRefs}
+            tabIndex={0}
+            className="dropdown dropdown-end w-3xs cursor-pointer place-content-center"
+          >
+            <div className="hover:text-primary flex" onClick={() => setIsOpens(prev => !prev)}>
+              <img src="/rabbit.png" className="h-12 w-auto object-contain" />
+              <div className="flex flex-col place-content-center">
+                <div className="text-left !text-lg font-semibold">{selectedChannel?.name}</div>
+                <small className="text-xs font-thin">Suka Bread</small>
+              </div>
+            </div>
+            {isOpens && (
+              <ul className="menu dropdown-content rounded-box bg-base-100 z-1 w-full p-2 shadow-sm">
+                {channels?.map(channel => (
+                  <li key={channel.id}>
+                    <a
+                      className={`category ${isActive(selectedChannel?.id, channels?.id)}`}
+                      onClick={() => {
+                        selectChannel(channel);
+                        setIsOpens(false);
+                      }}
+                    >
+                      {channel?.name}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="border-base-200 flex-3/4 border-r border-l">
             <div className="relative flex h-full w-full items-center">
               <div className="absolute left-4">
                 <SearchIcon />
@@ -58,29 +123,42 @@ const CatalogScreen = () => {
               />
             </div>
           </div>
-          <div className="flex-1/2 overflow-x-auto overflow-y-hidden">
-            <div className="flex items-center gap-5 px-6 py-4">
-              <div
-                className={`categories ${isActive(selectedCategory, null)}`}
-                onClick={() => onSelectCategory(null)}
-              >
-                All
-              </div>
-              {categories?.map(category => (
-                <div
-                  key={category?.id}
-                  className={`categories ${isActive(selectedCategory, category?.id)}`}
-                  onClick={() => onSelectCategory(category?.id)}
-                >
-                  {category?.name}
-                </div>
-              ))}
+          <div
+            ref={dropdownRef}
+            tabIndex={0}
+            className="dropdown dropdown-end flex-1/4 cursor-pointer place-content-center px-4"
+          >
+            <div
+              className="hover:text-primary flex place-content-between"
+              onClick={() => setIsOpen(prev => !prev)}
+            >
+              <div className="text-left !text-lg font-semibold">{selectedCategory?.name}</div>
+              <ChevronDownIcon
+                className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : 'rotate-0'}`}
+              />
             </div>
+            {isOpen && (
+              <ul className="menu dropdown-content rounded-box bg-base-100 z-1 mt-4 w-full p-2 shadow-sm">
+                {categories?.map(category => (
+                  <li key={category.id}>
+                    <a
+                      className={`category ${isActive(selectedCategory?.id, category?.id)}`}
+                      onClick={() => {
+                        onSelectCategory(category);
+                        setIsOpen(false);
+                      }}
+                    >
+                      {category?.name}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 
         {/* Catalog List */}
-        <div className="flex h-[calc(100vh-178px)] flex-col">
+        <div className="flex h-[calc(100vh-64px)] w-full flex-col">
           <div className="flex-1 overflow-auto">
             <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {catalog?.map(cat => (
@@ -98,10 +176,14 @@ const CatalogScreen = () => {
                   </div>
                   <div className="py-2">
                     <div className="overflow-hidden text-center font-semibold text-ellipsis">
-                      {cat?.name}
+                      {cat?.name || '{custom catalog}'}
                     </div>
                     <div className="text-primary text-center text-[16px] font-semibold">
-                      {currencyFormat(cat?.unit_price || 0)}
+                      {currencyFormat(
+                        cat?.unit_price,
+                        undefined,
+                        cat?.is_custom === 1 ? '{custom price}' : 'Free'
+                      )}
                     </div>
                   </div>
                 </div>
@@ -122,7 +204,7 @@ const CatalogScreen = () => {
 
         <div className="absolute bottom-5 left-5">
           <div
-            className="btn btn-circle btn-xl btn-info btn-outline hover:!text-info bg-white shadow-lg"
+            className="btn btn-circle btn-xl btn-info btn-outline hover:!text-info bg-base-100 shadow-lg"
             onClick={() => refreshCatalog()}
           >
             <CardSearchIcon />
@@ -130,10 +212,13 @@ const CatalogScreen = () => {
         </div>
       </div>
 
-      <div className="w-100">
-        {mode === 'cart' && <Cart onUpdate={(item, index) => onShow(item, index)} />}
-        {mode === 'summary' && <CloseSection />}
-        {mode === 'open_session' && <OpenSection />}
+      <div className="w-100 transition-all duration-300 ease-in-out">
+        <div key={mode} className="animate-fade-slide">
+          {mode === 'cart' && <Cart onUpdate={(item, index) => onShow(item, index)} />}
+          {mode === 'summary' && <CloseSection />}
+          {mode === 'open_session' && <OpenSection />}
+          {mode === 'bill_customer' && <CustomerSection />}
+        </div>
       </div>
     </div>
   );

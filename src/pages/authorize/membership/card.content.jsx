@@ -70,7 +70,7 @@ const CardContent = ({ data, onClose }) => {
           <input
             type="text"
             inputMode="decimal"
-            className={`border-secondary text-primary bg-base-300 focus:!border-primary min-h-15 w-full rounded-2xl border px-4 py-3 text-center text-xl font-bold focus:!outline-none ${
+            className={`border-base-200 text-primary bg-base-100 focus:!border-primary min-h-15 w-full rounded-2xl border px-4 py-3 text-center text-xl font-bold focus:!outline-none ${
               FormState?.errors?.nominal
                 ? '!border-error !text-error !bg-[var(--color-error-shadow)]'
                 : ''
@@ -90,7 +90,7 @@ const CardContent = ({ data, onClose }) => {
             {['cash', 'transfer'].map(m => (
               <div
                 key={m}
-                className={`border-secondary hover:border-primary hover:text-primary cursor-pointer rounded border p-2 text-center text-sm font-medium tracking-wide uppercase ${
+                className={`border-base-200 hover:border-primary hover:text-primary cursor-pointer rounded border p-2 text-center text-sm font-medium tracking-wide uppercase ${
                   method === m ? '!border-primary !text-primary' : ''
                 } ${FormState?.errors?.payment_type ? '!border-error !text-error' : ''}`}
                 onClick={() => setMethod(m)}
@@ -102,7 +102,7 @@ const CardContent = ({ data, onClose }) => {
           <small className="text-error">{FormState?.errors?.payment_type}</small>
         </div>
 
-        <div className="border-secondary mt-4 border-t pt-4">
+        <div className="border-base-200 mt-4 border-t pt-4">
           <div
             className={`btn btn-primary btn-block btn-sm rounded-full ${
               topupResult?.isLoading ? 'btn-disabled' : ''

@@ -13,7 +13,7 @@ table td:last-child {
 }
 
 .table thead th {
-  @apply relative bg-white pt-3 pb-3 font-semibold tracking-wider text-gray-600 uppercase;
+  @apply bg-base-100 relative pt-3 pb-3 font-semibold tracking-wider text-gray-600 uppercase;
 }
 
 @media print {
@@ -86,11 +86,11 @@ table td:last-child {
 
 /* Striped */
 .table-striped tbody tr:nth-of-type(odd) {
-  @apply bg-base-300;
+  @apply bg-base-100;
 }
 
 .table-striped tbody tr:nth-of-type(even) {
-  @apply bg-white;
+  @apply bg-base-300/20;
 }
 
 /* Responsive */

@@ -6,6 +6,13 @@ export const memberApi = createApi({
   reducerPath: 'memberApi',
   baseQuery: baseQuery,
   endpoints: builder => ({
+    get: builder.query({
+      query: params => ({
+        url: '/membership',
+        method: 'GET',
+        params,
+      }),
+    }),
     create: builder.mutation({
       query: payload => ({
         url: '/membership',
@@ -14,7 +21,7 @@ export const memberApi = createApi({
       }),
     }),
     update: builder.mutation({
-      query: ({ id, ...payload }) => ({
+      query: ({ id, payload }) => ({
         url: `/membership/${id}`,
         method: 'PUT',
         body: payload,
@@ -50,6 +57,7 @@ export const memberApi = createApi({
 });
 
 export const {
+  useLazyGetQuery,
   useCreateMutation,
   useUpdateMutation,
   useDeleteMutation,

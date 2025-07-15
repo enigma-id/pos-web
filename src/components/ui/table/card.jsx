@@ -8,7 +8,7 @@ const CardRender = ({ name, columns = {}, onClick }) => {
   const rows = Array.isArray(StateTable) ? StateTable : [];
 
   const EmptyData = () => (
-    <div className="h-[calc(100vh-260px)] w-full py-20 text-center">
+    <div className="h-[calc(100vh-160px)] w-full py-20 text-center">
       <h3 className="text-lg font-semibold">Hasil tidak ditemukan</h3>
       <p className="text-sm text-gray-500">
         Coba sesuaikan pencarian atau filter Anda untuk menemukan apa yang Anda cari.
@@ -22,13 +22,13 @@ const CardRender = ({ name, columns = {}, onClick }) => {
     if (StateEmpty) return <EmptyData />;
 
     return (
-      <div className="flex h-[calc(100vh-260px)] flex-col">
+      <div className="flex h-[calc(100vh-160px)] flex-col">
         <div className="flex-1 overflow-auto">
           <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {rows?.map((row, rowIndex) => (
               <div
                 key={rowIndex}
-                className={`${onClick === 'function' ? 'hover:!border-primary' : ''} border-secondary h-50 cursor-pointer overflow-auto rounded-xl border bg-white p-4`}
+                className={`${onClick === 'function' ? 'hover:!border-primary' : ''} border-base-200 bg-base-100 h-50 cursor-pointer overflow-auto rounded-xl border p-4`}
                 onClick={() => {
                   if (typeof onClick === 'function') {
                     onClick(row);
@@ -42,7 +42,7 @@ const CardRender = ({ name, columns = {}, onClick }) => {
               </div>
             ))}
             {/* {Array.from({ length: 30 }).map((_, i) => (
-              <div key={i} className="h-40 rounded-xl bg-white p-4 shadow">
+              <div key={i} className="h-40 rounded-xl bg-base-100 p-4 shadow">
                 Card {i + 1}
               </div>
             ))} */}

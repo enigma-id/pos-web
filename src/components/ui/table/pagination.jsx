@@ -72,7 +72,7 @@ const TablePagination = ({ name, onChangePage, onChangeLimit, pageLimit = [25, 5
   }, [name, StateLimit, StateTotal, StateCurrentPage]);
 
   return (
-    <div className="border-secondary mt-4 flex min-h-[62px] w-full shrink-0 flex-col items-center justify-between gap-4 border-t bg-white p-4 md:flex-row">
+    <div className="border-base-200 bg-base-100 mt-4 flex min-h-[62px] w-full shrink-0 flex-col items-center justify-between gap-4 border-t p-4 md:flex-row">
       <div className="text-sm text-gray-500">
         Showing <span className="font-semibold">{range()}</span> of{' '}
         <span className="font-semibold">{StateTotal}</span> results
@@ -133,7 +133,7 @@ const TablePagination = ({ name, onChangePage, onChangeLimit, pageLimit = [25, 5
           <div
             tabIndex={0}
             role="button"
-            className="btn btn-outline border-secondary text-sm font-thin"
+            className="btn btn-outline border-base-200 text-sm font-thin"
           >
             {StateLimit} / page
           </div>

@@ -1,5 +1,5 @@
 .catalog-card {
-  @apply hover:border-primary flex min-h-[220px] cursor-pointer flex-col rounded-xl border border-white bg-white px-2 py-2 hover:border;
+  @apply hover:border-primary bg-base-100 border-base-100 flex min-h-[220px] cursor-pointer flex-col rounded-xl border px-2 py-2 hover:border;
 }
 
 .catalog-img {
@@ -7,13 +7,21 @@
 }
 
 .payment-card {
-  @apply border-secondary hover:border-primary flex h-[96px] cursor-pointer flex-col place-content-center items-center rounded-xl border text-center;
+  @apply border-base-200 hover:border-primary flex h-[96px] cursor-pointer flex-col place-content-center items-center rounded-xl border text-center;
+
+  &.active {
+    @apply !border-primary bg-[var(--color-primary-shadow)];
+
+    > div {
+      @apply !font-bold;
+    }
+  }
 }
 
-.payment-card.active {
-  @apply !border-primary bg-[var(--color-primary-shadow)];
+.category {
+  @apply border-base-200 hover:bg-primary/10 hover:text-primary flex h-12 place-items-center rounded-none border-b;
 
-  > div {
-    @apply !font-bold;
+  &.active {
+    @apply bg-primary/10 text-primary border-primary;
   }
 }

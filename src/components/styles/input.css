@@ -1,9 +1,9 @@
 .input {
-  @apply border-secondary textarea-md min-h-[48px] w-full rounded-md border bg-[var(--color-base-300)] p-[12px_14px] font-normal text-[var(--input-color)] transition-colors duration-200 ease-linear hover:border-(--input-color) focus:border-(--input-color) focus:shadow-[0_0_0_4px] focus:outline-none;
+  @apply border-base-200 textarea-md bg-accent min-h-[48px] w-full rounded-md border p-[12px_14px] font-normal text-[var(--input-color)] transition-colors duration-200 ease-linear hover:border-(--input-color) focus:border-(--input-color) focus:shadow-[0_0_0_4px] focus:outline-none;
 }
 
 input[disabled] {
-  @apply !border-base-300 !cursor-not-allowed !text-gray-400;
+  @apply !border-base-200 !cursor-not-allowed !text-gray-400;
 }
 
 .input-xs {

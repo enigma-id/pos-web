@@ -7,9 +7,9 @@ import useMembership from '../../../services/membership/hook';
 import { currencyFormat } from '../../../utils/common';
 import useDialogModal from '../../../utils/modal';
 
-const DetailSession = ({ id, onClose, isOpen }) => {
+const DetailSession = ({ id, onClose, isOpen, reboot }) => {
   const { dialogRef, open: openModal, close: closeModal } = useDialogModal();
-  const { showResult, remove, removeResult } = useMembership(id);
+  const { showResult, remove, removeResult, update, updateResult } = useMembership(id);
 
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
@@ -17,6 +17,16 @@ const DetailSession = ({ id, onClose, isOpen }) => {
 
   const onDelete = async () => {
     remove(id);
+  };
+
+  const onSave = async () => {
+    const payload = {
+      name,
+      reff_code: phone,
+      card_id: showResult?.data?.data?.card_id,
+    };
+
+    update({ id, payload });
   };
 
   React.useEffect(() => {
@@ -41,9 +51,17 @@ const DetailSession = ({ id, onClose, isOpen }) => {
     }
   }, [showResult]);
 
+  React.useEffect(() => {
+    if (updateResult?.isSuccess) {
+      setName(updateResult?.data?.data?.name);
+      setPhone(updateResult?.data?.data?.reff_code);
+      reboot?.();
+    }
+  }, [updateResult]);
+
   if (showResult?.isLoading) return <div>loading...</div>;
 
-  const data = showResult?.data?.data;
+  const data = updateResult?.isSuccess ? updateResult?.data?.data : showResult?.data?.data;
 
   return (
     <div className="flex h-full w-md flex-1 flex-col">
@@ -111,9 +129,10 @@ const DetailSession = ({ id, onClose, isOpen }) => {
           </div>
         </div>
       </div>
-      <div className="border-secondary flex min-h-15 place-content-center place-items-center gap-2 border-t pt-3">
+      <div className="border-base-200 flex min-h-15 place-content-center place-items-center gap-2 border-t pt-3">
         <button
-          className={`btn btn-md btn-primary w-2/3 rounded-l-full ${edit ? '' : 'btn-disabled'}`}
+          className={`btn btn-md btn-primary w-2/3 rounded-l-full ${edit && !updateResult?.isLoading ? '' : 'btn-disabled'}`}
+          onClick={onSave}
         >
           Save
         </button>
@@ -124,8 +143,8 @@ const DetailSession = ({ id, onClose, isOpen }) => {
       </div>
 
       <dialog ref={dialogRef} className="modal">
-        <div className="w-md rounded-lg bg-white">
-          <div className="border-secondary flex place-content-between place-items-center border-b px-6 py-4">
+        <div className="bg-base-100 w-md rounded-lg">
+          <div className="border-base-200 flex place-content-between place-items-center border-b px-6 py-4">
             <div className="text-[16px] font-semibold tracking-wide">Remove</div>
             <div className="btn btn-ghost btn-sm btn-circle" onClick={closeModal}>
               <CloseIcon />

@@ -3,7 +3,9 @@ import { useDispatch, useSelector } from 'react-redux';
 import _ from 'underscore';
 
 import CardRender from './card';
+import CardList from './list';
 import TablePagination from './pagination';
+import TablePaginationLite from './pagination-lite';
 import TableRender from './table';
 import TableTool from './tools';
 import TableWrapper from './wrapper';
@@ -152,9 +154,26 @@ const useTable = (name, config) => {
     );
   };
 
+  const Carding = ({ onSelected, selected }) => {
+    if (!tableState) return null;
+
+    return (
+      <TableWrapper name={name}>
+        <CardList
+          name={name}
+          onSelected={onSelected}
+          selected={selected}
+          onRowClick={config?.onRowClick}
+        />
+      </TableWrapper>
+    );
+  };
+
   const Pagination = () => (
     <TablePagination name={name} onChangePage={onPageChange} onChangeLimit={onLimitChange} />
   );
+
+  const PaginationLite = () => <TablePaginationLite name={name} onChangePage={onPageChange} />;
 
   const Tools = ({ children, downloadable }) => (
     <TableTool
@@ -169,8 +188,10 @@ const useTable = (name, config) => {
   return {
     Render,
     Card,
+    Carding,
     Tools,
     Pagination,
+    PaginationLite,
     filter: onFilter,
     boot,
     State: tableState,

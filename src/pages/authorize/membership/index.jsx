@@ -24,6 +24,7 @@ const MembershipScreen = () => {
       setData(null);
     },
   });
+
   const { checkSaldo, checkResult } = useMembership();
 
   const [type, setType] = React.useState('detail');
@@ -88,8 +89,8 @@ const MembershipScreen = () => {
         <Table.Pagination />
 
         <dialog ref={dialogRef} className="modal">
-          <div className="w-md rounded-lg bg-white">
-            <div className="border-secondary flex place-content-between place-items-center border-b px-6 py-4">
+          <div className="bg-base-100 w-md rounded-lg">
+            <div className="border-base-200 flex place-content-between place-items-center border-b px-6 py-4">
               <div className="text-[16px] font-semibold tracking-wide">
                 {data ? 'Membership Card' : 'Scan Membership Card'}
               </div>
@@ -138,6 +139,9 @@ const MembershipScreen = () => {
             id={data?.id}
             onClose={() => {
               closeDrawer();
+              Table.boot();
+            }}
+            reboot={() => {
               Table.boot();
             }}
             isOpen={drawerOpen}

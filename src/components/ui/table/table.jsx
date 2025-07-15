@@ -120,13 +120,13 @@ const TableRender = ({ name, columns = {}, onSorted, onRowClick }) => {
     if (StateEmpty) return <EmptyData />;
 
     return (
-      <div className="table-responsive m-0 flex h-[calc(100vh-260px)] flex-col">
+      <div className="table-responsive m-0 flex h-[calc(100vh-160px)] flex-col">
         <div className="flex-1 overflow-auto">
           <table
             className="table-hover table-vcenter card-table datatable table-striped table"
             width="100%"
           >
-            <thead className="border-secondary sticky top-0 z-10 border-b bg-white">
+            <thead className="border-base-200 bg-base-100 sticky top-0 z-10 border-b">
               <tr>
                 {Object.keys(columns).map(key => (
                   <Th key={key} field={key} column={columns[key]} />

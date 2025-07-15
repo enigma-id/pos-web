@@ -29,11 +29,11 @@ const useCatalog = () => {
   const [triggerCategories] = useLazyGetCategoriesQuery();
   const [triggerCatalogDetail] = useLazyGetCatalogDetailQuery();
 
-  const applyFilter = useCallback((rawCatalog, categoryId, search) => {
+  const applyFilter = useCallback((rawCatalog, category, search) => {
     let result = rawCatalog;
 
-    if (categoryId !== null) {
-      result = result.filter(item => item.category_id === categoryId);
+    if (category !== null && category.id !== 0) {
+      result = result.filter(item => item.category_id === category.id);
     }
 
     if (search) {
@@ -60,7 +60,8 @@ const useCatalog = () => {
 
     const categoryData = await getOrFetchCatalog(categoryKey, async () => {
       const res = await triggerCategories().unwrap();
-      return res?.data || [];
+      const data = res?.data || [];
+      return [{ id: 0, name: 'All Category' }, ...data];
     });
 
     setAllCatalog(catalogData);
@@ -70,22 +71,25 @@ const useCatalog = () => {
     const cachedCategory = getCatalogCacheValue('selected_category');
     const cachedSearch = getCatalogCacheValue('search_term') || '';
 
-    const filtered = applyFilter(catalogData, cachedCategory ?? null, cachedSearch);
+    const fallbackCategory = categoryData.find(cat => cat.id === 0) || null;
+    const activeCategory = cachedCategory ?? fallbackCategory;
+
+    const filtered = applyFilter(catalogData, activeCategory, cachedSearch);
 
     setAllCatalog(catalogData);
     setCategories(categoryData);
-    setSelectedCategory(cachedCategory ?? null);
+    setSelectedCategory(activeCategory);
     setSearchTerm(cachedSearch);
     setFilteredCatalog(filtered);
     setIsLoading(false);
   }, [selectedChannel, triggerPricing, triggerCategories, applyFilter]);
 
   const onSelectCategory = useCallback(
-    categoryId => {
-      setSelectedCategory(categoryId);
-      setCatalogCacheValue('selected_category', categoryId);
+    category => {
+      setSelectedCategory(category);
+      setCatalogCacheValue('selected_category', category);
 
-      const filtered = applyFilter(allCatalog, categoryId, searchTerm);
+      const filtered = applyFilter(allCatalog, category, searchTerm);
       setFilteredCatalog(filtered);
     },
     [allCatalog, searchTerm, applyFilter]
@@ -136,19 +140,21 @@ const useCatalog = () => {
     try {
       const resCatalog = await triggerPricing({ channel_id: selectedChannel.id }).unwrap();
       const resCategory = await triggerCategories().unwrap();
-
+      const d = resCategory?.data || [];
       const catalogData = resCatalog?.data || [];
-      const categoryData = resCategory?.data || [];
+      const categoryData = [{ id: 0, name: 'All Category' }, ...d];
 
       // Simpan ke cache
       setCatalogCacheValue(`catalog_pricing_${selectedChannel.id}`, catalogData);
       setCatalogCacheValue(`categories`, categoryData);
 
       // ✅ Reset filter ke default (hapus selectedCategory dan searchTerm)
-      setCatalogCacheValue('selected_category', null);
+      const fallbackCategory = categoryData.find(cat => cat.id === 0) || null;
+
+      setCatalogCacheValue('selected_category', fallbackCategory);
       setCatalogCacheValue('search_term', '');
 
-      setSelectedCategory(null);
+      setSelectedCategory(fallbackCategory);
       setSearchTerm('');
       setAllCatalog(catalogData);
       setCategories(categoryData);

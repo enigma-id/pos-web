@@ -27,7 +27,7 @@ const CloseSection = () => {
 
   const List = ({ title, value }) => {
     return (
-      <div className="border-secondary mb-3 flex items-center justify-between border-b py-1">
+      <div className="border-base-200 mb-3 flex items-center justify-between border-b py-1">
         <div className="text-sm font-thin">{title} :</div>
         <div className="text-sm font-semibold">{value}</div>
       </div>
@@ -35,9 +35,9 @@ const CloseSection = () => {
   };
 
   return (
-    <div className="border-secondary flex h-[calc(100vh-116px)] flex-col border-t border-l bg-white">
-      <div className="border-secondary flex h-[63px] items-center gap-4 border-b px-6">
-        <div className="btn btn-md btn-outline btn-circle border-base-300" onClick={showCart}>
+    <div className="border-base-200 bg-base-100 flex h-screen flex-col">
+      <div className="border-base-200 flex h-16 items-center gap-4 border-b px-6">
+        <div className="btn btn-md btn-outline btn-circle border-base-200" onClick={showCart}>
           <BackIcon />
         </div>
         <h2 className="text-xl font-bold">Sales Session</h2>
@@ -54,7 +54,7 @@ const CloseSection = () => {
           value={currencyFormat(summaryResult?.data?.data?.subtotal_order || 0)}
         />
 
-        <div className="bg-base-300 mb-3 rounded-md p-4">
+        <div className="bg-base-300/30 mb-3 rounded-md p-3">
           {summaryResult?.data?.data?.cash_payments?.map((pm, i) => (
             <List
               key={i}
@@ -81,20 +81,20 @@ const CloseSection = () => {
         </div>
 
         {cash > 0 && diff !== 0 && (
-          <div className="border-secondary mb-3 flex items-center justify-between border-b py-1">
+          <div className="border-base-200 mb-3 flex items-center justify-between border-b py-1">
             <div className="text-sm font-thin">Difference:</div>
             <div className="text-error text-sm font-semibold">{currencyFormat(diff)}</div>
           </div>
         )}
       </div>
 
-      <div className="border-secondary min-h-15 border-t px-6 py-4">
+      <div className="border-base-200 min-h-15 border-t px-6 py-4">
         <button
-          className={`btn btn-block btn-md btn-primary rounded-full ${endResult?.isLoading ? 'btn-disabled' : ''}`}
+          className={`btn btn-block btn-xl btn-primary rounded-none ${endResult?.isLoading ? 'btn-disabled' : ''}`}
           onClick={onSubmit}
         >
-          {endResult?.isLoading && <span className="loading loading-spinner"></span>}
           End Session
+          {endResult?.isLoading && <span className="loading loading-spinner"></span>}
         </button>
       </div>
     </div>

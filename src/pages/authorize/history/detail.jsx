@@ -43,7 +43,7 @@ const DetailScreen = () => {
   let data = showResult?.data?.data;
 
   const ListItem = ({ title, value }) => (
-    <div className="border-secondary mb-3 flex place-content-between place-items-center border-b pb-2">
+    <div className="border-base-200 mb-3 flex place-content-between place-items-center border-b pb-2">
       <div className="text-sm">{title}</div>
       <div
         className={`text-sm font-semibold ${value === 'completed' ? 'bg-success w-fit rounded-full px-4 py-1 !text-[11px] text-white uppercase' : value === 'pending' ? 'bg-accent w-fit rounded-full px-4 py-1 !text-[11px] text-white uppercase' : ''}`}
@@ -55,15 +55,15 @@ const DetailScreen = () => {
 
   return (
     <div>
-      <div className="border-secondary flex h-[62px] flex-1 place-content-between place-items-center gap-4 border-t border-b bg-white px-4">
+      <div className="border-base-200 bg-base-100 flex h-[62px] flex-1 place-content-between place-items-center gap-4 border-t border-b px-4">
         <div className="flex place-items-center">
           <div
-            className="btn btn-md btn-outline btn-circle border-base-300"
+            className="btn btn-md btn-outline btn-circle border-base-200"
             onClick={() => navigate(-1)}
           >
             <BackIcon />
           </div>
-          <h2 className="border-secondary border-s ps-4 text-xl font-bold">Order {data?.code}</h2>
+          <h2 className="border-base-200 border-s ps-4 text-xl font-bold">Order {data?.code}</h2>
         </div>
 
         <div className="flex place-items-center gap-4">
@@ -76,7 +76,7 @@ const DetailScreen = () => {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-row bg-white p-4">
+      <div className="bg-base-100 flex flex-1 flex-row p-4">
         <div className="flex-1/2 pe-4">
           <div className="text-accent pb-3 text-xs tracking-wide uppercase">Transaction Info</div>
           <ListItem title="Transaction Date" value={dateFormat(data?.ordered_at)} />
@@ -90,8 +90,8 @@ const DetailScreen = () => {
         <div className="flex-1/2 ps-4">
           <div className="text-accent pb-3 text-xs tracking-wide uppercase">Item Info</div>
 
-          <table className="border-secondary table-striped table w-full border">
-            <thead className="border-secondary border">
+          <table className="border-base-200 table-striped table w-full border">
+            <thead className="border-base-200 border">
               <tr>
                 <th className="w-8 px-4 py-2 text-left">no</th>
                 <th className="px-4 py-2 text-left">Item Name</th>
@@ -132,8 +132,8 @@ const DetailScreen = () => {
       </div>
 
       <dialog ref={dialogRef} className="modal">
-        <div className="w-1/3 rounded bg-white px-4 py-6">
-          <div className="border-secondary text-error mb-4 border-b pb-3 text-center text-lg font-semibold tracking-wide uppercase">
+        <div className="bg-base-100 w-1/3 rounded px-4 py-6">
+          <div className="border-base-200 text-error mb-4 border-b pb-3 text-center text-lg font-semibold tracking-wide uppercase">
             Cancel Order
           </div>
           <div className="mb-4 text-center text-sm">
@@ -149,7 +149,7 @@ const DetailScreen = () => {
             />
           </div>
 
-          <div className="border-secondary flex place-content-end place-items-center gap-3 border-t pt-3">
+          <div className="border-base-200 flex place-content-end place-items-center gap-3 border-t pt-3">
             <div className="btn btn-md px-10" onClick={close}>
               Cancel
             </div>

@@ -41,15 +41,15 @@ const CreateSection = ({ onClose }) => {
         </div>
       </div>
 
-      <div className="border-secondary min-h-15 border-t pt-3">
+      <div className="border-base-200 min-h-15 border-t pt-3">
         <div className="btn btn-primary btn-block rounded-full" onClick={openModal}>
           <PlusIcon /> Create new membership
         </div>
       </div>
 
       <dialog ref={dialogRef} className="modal">
-        <div className="w-lg rounded-lg bg-white">
-          <div className="border-secondary flex place-content-between place-items-center border-b px-6 py-4">
+        <div className="bg-base-100 w-lg rounded-lg">
+          <div className="border-base-200 flex place-content-between place-items-center border-b px-6 py-4">
             <div className="text-[16px] font-semibold tracking-wide">Scan NFC</div>
             <div className="btn btn-ghost btn-sm btn-circle" onClick={closeModal}>
               <CloseIcon />
