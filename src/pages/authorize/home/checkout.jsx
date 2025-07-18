@@ -3,21 +3,24 @@ import React from 'react';
 import { useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { Dialog, Input, Kitchen, NFCField, Receipt } from '../../../components/ui';
+import DetailScreen from './detail';
+import { Input, Kitchen, Modal, NFCField, Receipt } from '../../../components/ui';
 import {
   BackIcon,
   CardIcon,
   ChevronDownIcon,
+  EditIcon,
   MoneyIcon,
   PrintIcon,
+  TrashIcon,
   UserCircleIcon,
 } from '../../../components/ui/icon';
 import Keypad from '../../../components/ui/keypad';
+import useModal from '../../../components/ui/modal/hook';
 import useCart from '../../../services/cart/hook';
 import useMembership from '../../../services/membership/hook';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
-import useDialogModal from '../../../utils/modal';
 import { usePrintWindow } from '../../../utils/print';
 
 const CheckoutScreen = () => {
@@ -36,25 +39,24 @@ const CheckoutScreen = () => {
     onChangeCartDiscount,
     checkout,
     checkoutResult,
-    billItems,
     closeBill,
     closeBillResult,
+    remove,
   } = useCart();
   const { show, showResult } = useOrder();
 
   const { checkSaldo, checkResult } = useMembership();
-  const { dialogRef, open: openModal, close: closeModal } = useDialogModal();
   const { open: openPrint } = usePrintWindow({ title: 'Print Preview', autoClose: true });
+  const { openModal, closeModal } = useModal();
 
   const [isOpen, setIsOpen] = React.useState(false);
   const [paymentMethod, setPaymentMethod] = React.useState([]);
   const [paymentRef, setPaymentRef] = React.useState('');
   const [pay, setPay] = React.useState(0);
   const [discountInputs, setDiscountInputs] = React.useState({});
+  const [billID, setBillID] = React.useState(null);
 
   const [selectedMethod, setSelectedMethod] = React.useState(null);
-  const [orderDetail, setOrderDetail] = React.useState({});
-  const [billID, setBillID] = React.useState(null);
 
   const renderAdditionals = item => {
     return (item?.additionals || [])
@@ -90,8 +92,26 @@ const CheckoutScreen = () => {
       .filter(Boolean);
   };
 
-  const handleSubmit = async () => {
-    const items = CartState?.items?.list?.map(item => {
+  const onShow = (data, index = null, type) => {
+    handleModal({ catalog: data, key: index, type });
+  };
+
+  const handleModal = ({ catalog, key, type }) => {
+    openModal(
+      <DetailScreen
+        catalog={catalog}
+        mode={'edit'}
+        editKey={key}
+        onClose={closeModal}
+        type={type}
+      />
+    );
+  };
+
+  const handleSubmit = async (card_id, ref) => {
+    const allItems = [...(CartState?.items?.list || []), ...(CartState?.items?.bill || [])];
+
+    const items = allItems?.map(item => {
       const base = {
         catalog_id: item.id,
         quantity: item.quantity,
@@ -124,9 +144,9 @@ const CheckoutScreen = () => {
       channel_id: Channel?.selectedChannel?.id,
       payment_method_id: selectedMethod?.id,
       payment_ref: selectedMethod?.id === 0 ? '' : paymentRef,
-      total_payment: selectedMethod?.id === 0 ? Number(pay) || 0 : CartState?.meta?.subtotal || 0,
+      total_payment:
+        selectedMethod?.id === 0 ? Number(pay) || 0 : CartState?.meta?.grand_total || 0,
       items,
-      discount_categories,
     };
 
     if (CartState?.discount?.cart?.type) {
@@ -137,6 +157,15 @@ const CheckoutScreen = () => {
       if (CartState?.discount?.cart?.type === 'nominal') {
         payload.discount_value = CartState?.discount?.cart?.value;
       }
+    }
+
+    if (discount_categories?.length > 0) {
+      payload.discount_categories = discount_categories;
+    }
+
+    if (card_id) {
+      payload.card_id = card_id;
+      payload.payment_ref = ref;
     }
 
     if (isBill) {
@@ -157,13 +186,107 @@ const CheckoutScreen = () => {
     checkSaldo(params);
   };
 
-  const handleOpenPrint = () => {
-    openPrint(<Receipt data={orderDetail} />);
+  const handleOpenPrint = data => {
+    openPrint(<Receipt data={data} />);
   };
 
-  const handleOpenPrintKitchen = () => {
-    openPrint(<Kitchen data={orderDetail} />);
+  const handleOpenPrintKitchen = data => {
+    openPrint(<Kitchen data={data} />);
   };
+
+  const openNFC = async () => {
+    openModal(
+      <NFCField onRead={handleRead} isOpen={true} onClose={closeModal} result={checkResult} />
+    );
+  };
+
+  const openSuccess = async data => {
+    openModal(
+      <>
+        <Modal.Header
+          onClose={() => {
+            closeModal();
+            navigate('/');
+          }}
+        >
+          <div className="text-lg font-semibold tracking-wide uppercase">Payment success</div>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="flex place-content-center place-items-center">
+            <img src="./success.png" className="h-64" />
+          </div>
+
+          <div className="flex h-16 place-items-center">
+            <div className="flex flex-1 flex-col place-content-center place-items-center">
+              <div className="text-xl font-semibold">{currencyFormat(data?.total_payment)}</div>
+              <div className="text-base-300 text-base font-thin capitalize">total paid</div>
+            </div>
+            {selectedMethod?.id === 0 && (
+              <div className="border-base-200 flex flex-1 flex-col place-content-center place-items-center border-l">
+                <div className="text-xl font-semibold">
+                  {currencyFormat(data?.total_payment - data?.total_charges)}
+                </div>
+                <div className="text-base-300 text-base font-thin capitalize">change</div>
+              </div>
+            )}
+          </div>
+          <div className="mt-4">
+            <div className="flex h-16">
+              <div
+                className="btn btn-lg btn-soft btn-primary mb-3 flex-1 rounded-none"
+                onClick={() => handleOpenPrint(data)}
+              >
+                <PrintIcon /> Print Receipt
+              </div>
+              <div
+                className="btn btn-lg btn-soft btn-primary mb-3 flex-1 rounded-none"
+                onClick={() => handleOpenPrintKitchen(data)}
+              >
+                <PrintIcon /> Print Kitchen
+              </div>
+            </div>
+
+            <div
+              className="btn btn-block btn-lg btn-primary mb-3"
+              onClick={() => {
+                closeModal();
+                navigate('/');
+              }}
+            >
+              Back to menu
+            </div>
+          </div>
+        </Modal.Body>
+      </>
+    );
+  };
+
+  React.useEffect(() => {
+    if (checkResult?.isSuccess) {
+      // openSuccess()
+      const card = checkResult?.data?.data;
+      handleSubmit(card?.card_id, card?.reff_code);
+    }
+  }, [checkResult]);
+
+  React.useEffect(() => {
+    if (checkoutResult?.isSuccess) {
+      setSelectedMethod(paymentMethod[0]);
+      show(checkoutResult?.data?.data?.id);
+    }
+  }, [checkoutResult]);
+
+  React.useEffect(() => {
+    if (closeBillResult?.isSuccess) {
+      show(billID);
+    }
+  }, [closeBillResult]);
+
+  React.useEffect(() => {
+    if ((closeBillResult?.isSuccess || checkoutResult?.isSuccess) && showResult?.isSuccess) {
+      openSuccess(showResult?.data?.data);
+    }
+  }, [checkoutResult, closeBillResult, showResult]);
 
   React.useEffect(() => {
     const getMethod = async () => {
@@ -174,19 +297,6 @@ const CheckoutScreen = () => {
 
     getMethod();
   }, []);
-
-  React.useEffect(() => {
-    if (checkoutResult?.isSuccess) {
-      show(checkoutResult?.data?.data?.id);
-      openModal();
-    }
-  }, [checkoutResult]);
-
-  React.useEffect(() => {
-    if (isBill && !billID) return;
-    console.log('orderDetail', orderDetail);
-    setOrderDetail(showResult?.data?.data);
-  }, [isBill, billID, showResult]);
 
   React.useEffect(() => {
     const inputs = {};
@@ -207,26 +317,6 @@ const CheckoutScreen = () => {
 
     setDiscountInputs(inputs);
   }, []);
-
-  React.useEffect(() => {
-    if (!isBill) return;
-    show(CartState?.bill?.id);
-  }, [isBill]);
-
-  React.useEffect(() => {
-    if (!isBill) return;
-    if (showResult?.isSuccess) {
-      billItems(showResult?.data?.data?.items);
-    }
-  }, [showResult, isBill]);
-
-  React.useEffect(() => {
-    if (!isBill) return;
-    if (closeBillResult?.isSuccess) {
-      show(billID);
-      openModal();
-    }
-  }, [closeBillResult, isBill]);
 
   return (
     <div className="flex h-screen flex-col">
@@ -249,41 +339,54 @@ const CheckoutScreen = () => {
           <div className="py-4 text-base font-semibold">Order details</div>
 
           <div className="flex-1 overflow-y-auto">
-            {CartState?.bill ? (
-              <div className="bg-accent mb-5 p-4">
-                {CartState?.items?.bill?.map((item, i) => (
-                  <div key={i} className="border-base-200 border-b py-2">
-                    <div className="flex place-content-between place-items-center text-base font-semibold">
-                      <div>{item?.name}</div>
+            <div className="bg-accent p-4">
+              {CartState?.bill
+                ? CartState?.items?.bill?.map((item, i) => (
+                    <div key={i} className="border-base-200 border-b py-2">
+                      <div className="flex place-content-between place-items-center text-base font-semibold">
+                        <div>{item?.name}</div>
+                        <div>
+                          {item?.discount_amount > 0 ? (
+                            <div className="text-base">
+                              <span className="me-2 text-xs !font-thin line-through">
+                                {currencyFormat(item?.subtotal)}
+                              </span>
+                              {currencyFormat(item?.final_total)}
+                            </div>
+                          ) : (
+                            currencyFormat(item?.subtotal)
+                          )}
+                        </div>
+                      </div>
+                      <div className="pb-2 text-xs">
+                        {item?.quantity} x {currencyFormat(item?.unit_price)}
+                      </div>
                       <div>
-                        {item?.discount_amount > 0 ? (
-                          <div className="text-base">
-                            <span className="me-2 text-xs !font-thin line-through">
-                              {currencyFormat(item?.subtotal)}
-                            </span>
-                            {currencyFormat(item?.final_total)}
+                        {renderAdditionals(item).map((line, idx) => (
+                          <div key={idx} className="pb-2">
+                            {line}
                           </div>
-                        ) : (
-                          currencyFormat(item?.subtotal)
-                        )}
+                        ))}
+                      </div>
+
+                      <div className="flex place-items-center gap-2">
+                        <div
+                          className="btn btn-sm btn-error btn-circle btn-outline hover:!text-white"
+                          onClick={() => remove(i, 'bill')}
+                        >
+                          <TrashIcon />
+                        </div>
+                        <div
+                          className="btn btn-sm btn-primary btn-circle btn-outline"
+                          onClick={() => onShow(item, i, 'bill')}
+                        >
+                          <EditIcon />
+                        </div>
                       </div>
                     </div>
-                    <div className="pb-2 text-xs">
-                      {item?.quantity} x {currencyFormat(item?.unit_price)}
-                    </div>
-                    <div>
-                      {renderAdditionals(item).map((line, idx) => (
-                        <div key={idx} className="pb-2">
-                          {line}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
+                  ))
+                : null}
 
-            <div className="bg-accent p-4">
               {CartState?.items?.list?.map((item, i) => (
                 <div key={i} className="border-base-200 border-b py-2">
                   <div className="flex place-content-between place-items-center text-base font-semibold">
@@ -310,6 +413,20 @@ const CheckoutScreen = () => {
                         {line}
                       </div>
                     ))}
+                  </div>
+                  <div className="flex place-items-center gap-2">
+                    <div
+                      className="btn btn-sm btn-error btn-circle btn-outline hover:!text-white"
+                      onClick={() => remove(i)}
+                    >
+                      <TrashIcon />
+                    </div>
+                    <div
+                      className="btn btn-sm btn-primary btn-circle btn-outline"
+                      onClick={() => onShow(item, i)}
+                    >
+                      <EditIcon />
+                    </div>
                   </div>
                 </div>
               ))}
@@ -394,7 +511,7 @@ const CheckoutScreen = () => {
               </div>
             </div>
             <div className="collapse-arrow bg-accent collapse">
-              <input type="checkbox" name="my-accordion-2" />
+              <input type="checkbox" name="my-accordion-2" defaultChecked />
               <div className="collapse-title text-xl font-semibold">Discount All</div>
               <div className="collapse-content">
                 <div className="mb-3 flex place-content-between place-items-center">
@@ -542,76 +659,13 @@ const CheckoutScreen = () => {
 
           <div
             className={`btn btn-primary btn-xl btn-block ${CartState?.items?.list?.count === 0 || checkoutResult?.isLoading ? 'btn-disabled' : ''}`}
-            onClick={selectedMethod?.is_nfc === 1 ? openModal : handleSubmit}
+            onClick={selectedMethod?.is_nfc === 1 ? openNFC : () => handleSubmit()}
           >
             Pay now
             {checkoutResult?.isLoading && <span className="loading loading-spinner"></span>}
           </div>
         </div>
       </div>
-
-      <Dialog.Wrapper ref={dialogRef} className="w-lg">
-        <Dialog.Header
-          onClose={
-            selectedMethod?.is_nfc === 1
-              ? closeModal
-              : () => {
-                  closeModal();
-                  navigate('/');
-                }
-          }
-        >
-          <div className="text-lg font-semibold tracking-wide uppercase">
-            {selectedMethod?.is_nfc === 1 ? 'Scan card' : 'Payment success'}
-          </div>
-        </Dialog.Header>
-        {selectedMethod?.is_nfc === 1 ? (
-          <NFCField onRead={handleRead} isOpen={isOpen} onClose={closeModal} result={checkResult} />
-        ) : (
-          <Dialog.Body>
-            <div className="flex place-content-center place-items-center">
-              <img src="./success.png" className="h-64" />
-            </div>
-
-            <div className="flex h-16 place-items-center">
-              <div className="flex flex-1 flex-col place-content-center place-items-center">
-                <div className="text-xl font-semibold">
-                  {currencyFormat(orderDetail?.total_payment)}
-                </div>
-                <div className="text-base-300 text-base font-thin capitalize">total paid</div>
-              </div>
-              {selectedMethod?.id === 0 && (
-                <div className="border-base-200 flex flex-1 flex-col place-content-center place-items-center border-l">
-                  <div className="text-xl font-semibold">
-                    {currencyFormat(orderDetail?.total_payment - orderDetail?.total_charges)}
-                  </div>
-                  <div className="text-base-300 text-base font-thin capitalize">change</div>
-                </div>
-              )}
-            </div>
-            <div className="mt-4">
-              <div className="flex h-16">
-                <div
-                  className="btn btn-lg btn-soft btn-primary mb-3 flex-1 rounded-none"
-                  onClick={handleOpenPrint}
-                >
-                  <PrintIcon /> Print Receipt
-                </div>
-                <div
-                  className="btn btn-lg btn-soft btn-primary mb-3 flex-1 rounded-none"
-                  onClick={handleOpenPrintKitchen}
-                >
-                  <PrintIcon /> Print Kitchen
-                </div>
-              </div>
-
-              <div className="btn btn-block btn-lg btn-primary mb-3" onClick={() => navigate('/')}>
-                Back to menu
-              </div>
-            </div>
-          </Dialog.Body>
-        )}
-      </Dialog.Wrapper>
     </div>
   );
 };

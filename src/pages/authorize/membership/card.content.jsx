@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
 import { useSelector } from 'react-redux';
 
@@ -64,8 +65,8 @@ const CardContent = ({ data, onClose }) => {
       </div>
 
       {/* Form Section */}
-      <div className="p-4">
-        <div>
+      <div className="pt-4">
+        <div className="px-4">
           <div className="mb-2 text-sm font-semibold tracking-wider uppercase">Topup Amount</div>
           <input
             type="text"
@@ -84,7 +85,7 @@ const CardContent = ({ data, onClose }) => {
           <small className="text-error">{FormState?.errors?.nominal}</small>
         </div>
 
-        <div className="mt-4 mb-2">
+        <div className="mt-4 mb-2 px-4">
           <div className="mb-2 text-sm font-semibold tracking-wider uppercase">Payment Method</div>
           <div className="grid grid-cols-3 gap-3">
             {['cash', 'transfer'].map(m => (
@@ -102,9 +103,9 @@ const CardContent = ({ data, onClose }) => {
           <small className="text-error">{FormState?.errors?.payment_type}</small>
         </div>
 
-        <div className="border-base-200 mt-4 border-t pt-4">
+        <div className="mt-4">
           <div
-            className={`btn btn-primary btn-block btn-sm rounded-full ${
+            className={`btn btn-primary btn-block btn-xl !rounded-none !rounded-b ${
               topupResult?.isLoading ? 'btn-disabled' : ''
             }`}
             onClick={handleTopup}

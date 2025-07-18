@@ -1,16 +1,12 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
-import { useDispatch } from 'react-redux';
 
-import { Input, QuantityStepper } from '../../../components/ui';
+import { Input, Modal, QuantityStepper } from '../../../components/ui';
 import useCart from '../../../services/cart/hook';
-import { addItem, changeItem } from '../../../services/cart/slice';
 import { currencyFormat } from '../../../utils/common';
 
-const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null }) => {
-  const dispatch = useDispatch();
-
-  const { catalogDetail } = useCart(catalog?.id);
+const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = 'cart' }) => {
+  const { catalogDetail, change, add } = useCart(catalog?.id);
 
   const [catalogData, setCatalogData] = React.useState({});
   const [quantity, setQuantity] = React.useState(0);
@@ -74,9 +70,9 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null }) => {
     };
 
     if (mode === 'edit') {
-      dispatch(changeItem({ key: editKey, catalog: formattedItem }));
+      change(editKey, formattedItem, type);
     } else {
-      dispatch(addItem(formattedItem));
+      add(formattedItem);
     }
 
     onClose();
@@ -156,8 +152,8 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null }) => {
   };
 
   return (
-    <div className="card card-side bg-base-100 min-h-1/3 shadow-sm">
-      <div className="card-body min-w-120 justify-between">
+    <Modal.Body full>
+      <div className="bg-base-100 flex min-h-1/3 min-w-fit flex-1 flex-col overflow-y-auto p-6 shadow-sm">
         <div>
           <div className="border-base-200 mb-3 flex place-content-between border-b border-dashed pb-3">
             {catalogDetail?.is_custom !== 1 && (
@@ -183,13 +179,14 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null }) => {
                 <div className="mb-3">
                   <Input
                     label="Catalog Price"
-                    value={catalogData?.unit_price || ''}
-                    onChange={e =>
+                    value={currencyFormat(catalogData?.unit_price)}
+                    onChange={e => {
+                      const raw = e.target.value.replace(/[^0-9]/g, '');
                       setCatalogData(prev => ({
                         ...prev,
-                        unit_price: parseInt(e.target.value || 0),
-                      }))
-                    }
+                        unit_price: raw,
+                      }));
+                    }}
                   />
                 </div>
               </div>
@@ -303,9 +300,9 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null }) => {
           </div>
         </div>
 
-        <div className="card-actions">
+        <div>
           <QuantityStepper value={quantity} onChange={setQuantity} />
-          <button className="btn btn-primary btn-block btn-lg" onClick={addToCart}>
+          <button className="btn btn-primary btn-block btn-lg mt-4" onClick={addToCart}>
             {quantity > 0
               ? `Add (${currencyFormat(calculateSubtotal(), undefined, 'Free')})`
               : mode === 'edit'
@@ -314,7 +311,7 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null }) => {
           </button>
         </div>
       </div>
-    </div>
+    </Modal.Body>
   );
 };
 

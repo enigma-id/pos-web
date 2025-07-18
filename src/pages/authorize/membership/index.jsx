@@ -5,28 +5,18 @@ import CardContent from './card.content';
 import CreateSection from './create';
 import DetailSession from './detail';
 import createTableConfig from './table.config';
-import { Dialog, Drawer, NFCField } from '../../../components/ui';
+import { Drawer, Modal, NFCField } from '../../../components/ui';
 import { CardSearchIcon, PlusIcon } from '../../../components/ui/icon';
+import useModal from '../../../components/ui/modal/hook';
 import useTable from '../../../components/ui/table';
 import useMembership from '../../../services/membership/hook';
 import useDrawer from '../../../utils/drawer';
-import useDialogModal from '../../../utils/modal';
 
 const MembershipScreen = () => {
   const { drawerRef, open: openDrawer, close: closeDrawer, isOpen: drawerOpen } = useDrawer();
 
-  const {
-    dialogRef,
-    open: openModal,
-    close: closeModal,
-    isOpen,
-  } = useDialogModal({
-    onClose: () => {
-      setData(null);
-    },
-  });
-
   const { checkSaldo, checkResult } = useMembership();
+  const { openModal, closeModal } = useModal();
 
   const [type, setType] = React.useState('detail');
   const [data, setData] = React.useState(null);
@@ -51,9 +41,42 @@ const MembershipScreen = () => {
     checkSaldo(params);
   };
 
+  const onScan = () => {
+    openModal(
+      <NFCField onRead={handleRead} isOpen={true} onClose={closeModal} result={checkResult} />,
+      'w-md'
+    );
+  };
+
+  const onScanSuccess = data => {
+    openModal(
+      <>
+        <Modal.Header
+          onClose={() => {
+            closeModal();
+            setData(null);
+          }}
+        >
+          <div className="text-[16px] font-semibold tracking-wide">Membership Card</div>
+        </Modal.Header>
+        <Modal.Body full>
+          <CardContent
+            data={data}
+            onClose={() => {
+              closeModal();
+              setData(null);
+              Table.boot();
+            }}
+          />
+        </Modal.Body>
+      </>,
+      'w-md'
+    );
+  };
+
   React.useEffect(() => {
     if (checkResult?.isSuccess) {
-      setData(checkResult?.data?.data);
+      onScanSuccess(checkResult?.data?.data);
     }
   }, [checkResult]);
 
@@ -70,7 +93,7 @@ const MembershipScreen = () => {
           <div className="flex h-full place-content-end place-items-center">
             <div
               className="btn bg-primary/15 text-primary h-full rounded-none border-0 px-6"
-              onClick={openModal}
+              onClick={onScan}
             >
               <CardSearchIcon /> Scan Card
             </div>
@@ -87,32 +110,6 @@ const MembershipScreen = () => {
         </Table.Tools>
         <Table.Card />
         <Table.Pagination />
-
-        <Dialog.Wrapper ref={dialogRef}>
-          <Dialog.Header
-            onClose={() => {
-              closeModal();
-              setData(null);
-            }}
-          >
-            <div className="text-[16px] font-semibold tracking-wide">
-              {data ? 'Membership Card' : 'Scan Membership Card'}
-            </div>
-          </Dialog.Header>
-          <Dialog.Body>
-            {data ? (
-              <CardContent
-                data={data}
-                onClose={() => {
-                  closeModal();
-                  setData(null);
-                }}
-              />
-            ) : (
-              <NFCField onRead={handleRead} isOpen={isOpen} onClose={closeModal} />
-            )}
-          </Dialog.Body>
-        </Dialog.Wrapper>
       </div>
 
       <Drawer.Content

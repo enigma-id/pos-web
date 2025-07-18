@@ -3,39 +3,29 @@ import React from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 
-import { Dialog, Input } from '../../../components/ui';
-import {
-  AddUserIcon,
-  EditIcon,
-  SearchIcon,
-  TrashIcon,
-  UserIcon,
-} from '../../../components/ui/icon';
+import BillModal from './saveBill';
+import SuccessModal from './success';
+import { AddUserIcon, EditIcon, TrashIcon, UserIcon } from '../../../components/ui/icon';
+import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
-import useOrder from '../../../services/sales/order/hook';
-import { currencyFormat, duration } from '../../../utils/common';
-import useDialogModal from '../../../utils/modal';
+import { currencyFormat } from '../../../utils/common';
 
 const Cart = ({ onUpdate }) => {
   const navigate = useNavigate();
   const CartState = useSelector(state => state?.Cart);
   const Channel = useSelector(state => state?.SalesChannel);
   const { showCustomer } = useSidebar();
+  const { openModal } = useModal();
 
-  const {
-    dialogRef,
-    open: openModal,
-    close: closeModal,
-  } = useDialogModal({
-    onClose: () => setTicket(''),
-  });
+  const { reset, remove, onCount, countResult, cartItems, openBill, billResult } = useCart();
 
-  const { openBill, billResult, reset, remove, onCount, countResult, onBillSelected } = useCart();
-  const { order, orderResult } = useOrder();
+  const getMode = () => {
+    const isOpen =
+      billCount > 0 && CartState?.items?.list?.length === 0 && CartState?.bill === null;
 
-  const [ticket, setTicket] = React.useState('');
-  const [search, setSearch] = React.useState('');
+    return isOpen ? 'open' : 'create';
+  };
 
   const flattenAdditionals = (additionals = []) => {
     const result = [];
@@ -64,7 +54,7 @@ const Cart = ({ onUpdate }) => {
     return result;
   };
 
-  const onBillCreate = async () => {
+  const onBillCreate = async ticket => {
     const items = CartState?.items?.list?.map(item => {
       const base = {
         catalog_id: item.id,
@@ -129,11 +119,21 @@ const Cart = ({ onUpdate }) => {
       .filter(Boolean);
   };
 
+  const handleModal = () => {
+    openModal(
+      <BillModal mode={mode} count={billCount} onBillCreate={v => onBillCreate(v)} />,
+      mode === 'open' ? 'w-lg' : 'w-md'
+    );
+  };
+
+  const handleModalPrint = data => {
+    openModal(<SuccessModal data={data} />, 'w-md');
+  };
+
   React.useEffect(() => {
     if (billResult?.isSuccess) {
-      setTicket('');
-      closeModal();
       onCount();
+      handleModalPrint(billResult?.data?.data);
     }
   }, [billResult]);
 
@@ -143,24 +143,7 @@ const Cart = ({ onUpdate }) => {
 
   const billCount = countResult?.data?.data;
 
-  const mode =
-    billCount > 0 && CartState?.items?.list?.length === 0 && CartState?.bill === null
-      ? 'open'
-      : 'create';
-
-  React.useEffect(() => {
-    if (mode === 'create') return;
-    const delayDebounceFn = setTimeout(
-      () => {
-        order({ status: 'pending', search });
-      },
-      search ? 1000 : 0
-    );
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [mode, search]);
-
-  const billData = orderResult?.data?.data || [];
+  const mode = getMode();
 
   return (
     <div className="border-base-200 bg-base-100 flex h-screen flex-col border-t border-l">
@@ -194,22 +177,60 @@ const Cart = ({ onUpdate }) => {
       )}
 
       {CartState?.bill && (
-        <div className="border-base-200 border-b p-4">
-          <div className="flex place-content-between place-items-center">
-            <div>Bill name: </div>
-            <div className="text-base-content font-semibold">{CartState?.bill?.ticket}</div>
-          </div>
-          <div className="flex place-content-between place-items-center">
-            <div>Total bill: </div>
-            <div className="text-base-content font-semibold">
-              {currencyFormat(CartState?.bill?.total_bill)}
+        <div className="collapse-arrow bg-accent collapse rounded-none">
+          <input type="checkbox" name="my-accordion-2" />
+          <div className="collapse-title border-base-200 border-b text-base font-semibold">
+            <div className="">
+              <div className="flex place-content-between place-items-center">
+                <div>Bill name: </div>
+                <div className="text-base-content font-semibold">{CartState?.bill?.ticket}</div>
+              </div>
+              <div className="flex place-content-between place-items-center">
+                <div>Total bill: </div>
+                <div className="text-base-content font-semibold">
+                  {currencyFormat(CartState?.bill?.total_bill)}
+                </div>
+              </div>
             </div>
+          </div>
+          <div className="collapse-content border-base-200 !max-h-64 !min-h-0 !overflow-auto border-b pb-0">
+            {CartState?.items?.bill?.map((item, i) => (
+              <div key={i} className="border-base-200 border-b py-4">
+                <div className="flex place-content-between place-items-center">
+                  <div>
+                    <span className="bg-base-content rounded-lg px-3 py-1 text-white">
+                      {item?.quantity}
+                    </span>
+                    <span className="ps-2 text-base font-semibold uppercase">{item?.name}</span>
+                  </div>
+                  <span className="text-base-300 text-xs">
+                    {currencyFormat(item?.unit_price, undefined, 'Free')}
+                  </span>
+                </div>
+
+                {item?.additionals?.length > 0 && (
+                  <div className="border-base-200 ms-3.5 border-s py-2 ps-6">
+                    {renderAdditionals(item).map((line, idx) => (
+                      <div key={idx} className="mb-2">
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-2 flex place-content-end place-items-center">
+                  <div className="text-primary text-lg font-bold">
+                    {currencyFormat(item?.subtotal, undefined, 'Free')}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        {CartState?.items?.list?.map((item, i) => (
+        {cartItems?.map((item, i) => (
           <div key={i} className="border-base-200 border-b py-4">
             <div className="flex place-content-between place-items-center">
               <div>
@@ -258,28 +279,28 @@ const Cart = ({ onUpdate }) => {
       </div>
 
       {/* Footer */}
-      <div className="border-base-200 border-t p-4">
-        <div className="mb-3 flex place-content-between place-items-center">
-          <div className="text-base">Total</div>
+      <div className="border-base-200 border-t pt-4">
+        <div className="mb-3 flex place-content-between place-items-center px-4">
+          <div className="text-base">Total Cart</div>
           <div className="text-primary text-xl font-bold">
             {currencyFormat(CartState?.meta?.subtotal_list)}
           </div>
         </div>
 
-        {/* {CartState?.bill && (
-          <div className="mb-3 flex place-content-between place-items-center">
-            <div className="text-base">Total Bill</div>
+        {CartState?.bill && (
+          <div className="mb-3 flex place-content-between place-items-center px-4">
+            <div className="text-base">Subtotal</div>
             <div className="text-primary text-xl font-bold">
               {currencyFormat(CartState?.meta?.subtotal)}
             </div>
           </div>
-        )} */}
+        )}
 
-        <div className="mb-4 flex place-items-center gap-1">
+        <div className="flex place-items-center gap-1">
           {mode === 'open' ? (
             <button
               className={`btn btn-xl btn-primary w-1/2 rounded-none text-lg font-thin uppercase`}
-              onClick={openModal}
+              onClick={handleModal}
             >
               Open Bill ({billCount})
             </button>
@@ -288,7 +309,7 @@ const Cart = ({ onUpdate }) => {
               className={`btn btn-xl btn-primary w-1/2 rounded-none text-lg font-thin uppercase ${
                 CartState?.items?.list?.length > 0 ? '' : 'btn-disabled'
               }`}
-              onClick={CartState?.bill ? onBillCreate : openModal}
+              onClick={CartState?.bill ? onBillCreate : handleModal}
             >
               Save Bill
             </button>
@@ -309,74 +330,6 @@ const Cart = ({ onUpdate }) => {
             Pay
           </button>
         </div>
-
-        <Dialog.Wrapper ref={dialogRef} className={`${mode === 'open' ? 'w-lg' : 'w-md'}`}>
-          <Dialog.Header onClose={closeModal}>
-            <div className="text-lg font-semibold">
-              {mode === 'open' ? `Open Bills (${billCount})` : 'Save Bills'}
-            </div>
-          </Dialog.Header>
-          <Dialog.Body full={mode === 'open'}>
-            {mode === 'open' ? (
-              <div>
-                <div className="border-base-200 h-16 w-full border-b">
-                  <div className="relative flex h-full w-full items-center">
-                    <div className="absolute left-4">
-                      <SearchIcon />
-                    </div>
-
-                    <input
-                      name="search"
-                      placeholder="Search..."
-                      value={search}
-                      onChange={e => {
-                        setSearch(e.target.value);
-                      }}
-                      className="h-full w-full pl-15 focus-visible:!outline-none"
-                    />
-                  </div>
-                </div>
-                {billData?.map((bill, idx) => (
-                  <div
-                    key={idx}
-                    className="border-base-200 flex cursor-pointer place-content-between place-items-center border-b p-4"
-                    onClick={() => {
-                      onBillSelected(bill);
-                      closeModal();
-                    }}
-                  >
-                    <div>
-                      <div className="font-semibold">{bill?.ticket}</div>
-                      <div className="text-xs">{duration(bill?.ordered_at)}</div>
-                    </div>
-                    <div className="font-semibold">{currencyFormat(bill?.total_charges)}</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="mb-3 py-4">
-                <Input
-                  label="bill name"
-                  value={ticket}
-                  onChange={e => setTicket(e?.target?.value)}
-                />
-              </div>
-            )}
-          </Dialog.Body>
-          {mode === 'open' ? null : (
-            <Dialog.Footer>
-              <div
-                className={`btn btn-block btn-primary btn-lg ${billResult?.isLoading ? 'btn-disabled' : ''}`}
-                onClick={onBillCreate}
-              >
-                Save Bill
-                {billResult?.isLoading && (
-                  <span className="loading loading-spinner loading-sm"></span>
-                )}
-              </div>
-            </Dialog.Footer>
-          )}
-        </Dialog.Wrapper>
       </div>
     </div>
   );

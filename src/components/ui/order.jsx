@@ -1,157 +1,147 @@
-import { useSelector } from 'react-redux';
+import { currencyFormat, dateFormat } from '../../utils/common';
 
-import { currencyFormat } from '../../utils/common';
-
-const OrderSummary = ({ title, subtitle, data, onClose, onConfirm, isLoading }) => {
-  const FormState = useSelector(state => state?.Form);
-
-  const renderAdditionals = item => {
-    return (item?.additionals || [])
-      .map(add => {
-        const selectedChilds = (add?.childs || []).filter(child =>
-          add.type === 'quantity' ? (child?.quantity || 0) > 0 : !!child?.selected
-        );
-
-        if (selectedChilds.length === 0) return null;
-
-        const childNames = selectedChilds
-          .map(child => {
-            const suffix =
-              add?.type === 'quantity'
-                ? ` (${child?.quantity}) (${child?.unit_price > 0 ? currencyFormat(child?.unit_price, false) : 'Free'})`
-                : ` (${child?.unit_price > 0 ? currencyFormat(child?.unit_price, false) : 'Free'})`;
-            return `${child.name}${suffix}`;
-          })
-          .join(', ');
-
-        return (
-          <div key={add.id} className="text-sm">
-            {add.name}: <span className="font-semibold">{childNames}</span>
-          </div>
-        );
-      })
-      .filter(Boolean);
-  };
-
+const OrderDetails = ({ data }) => {
   return (
-    <div className="bg-base-100 w-1/2 rounded px-4 py-6">
-      <div className="mb-4 pb-3 text-center">
-        <div className="text-lg font-semibold tracking-wide uppercase">{title}</div>
-        <div className="text-accent text-sm">{subtitle}</div>
+    <div className="h-fit w-full rounded-xl bg-white p-6 shadow">
+      <div className="border-base-200 border-b">
+        <h2 className="mb-4 text-center text-4xl font-bold">
+          {currencyFormat(data?.total_charges)}
+        </h2>
       </div>
 
-      <div className="mb-4">
-        <table className="w-full">
-          <thead>
-            <tr className="border-base-200 border-b uppercase">
-              <th className="text-accent px-2 py-3 text-start text-xs font-thin">item name</th>
-              <th className="text-accent w-15 px-2 py-3 text-center text-xs font-thin">qty</th>
-              <th className="text-accent w-40 px-2 py-3 text-end text-xs font-thin">price</th>
-              <th className="text-accent w-40 px-2 py-3 text-end text-xs font-thin">subtotal</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data?.items?.map((item, i) => (
-              <tr className="border-base-200 border-b" key={i}>
-                <td className="px-2 py-3 text-start text-sm capitalize">
-                  <div className="font-semibold">{item?.name}</div>
-                  {renderAdditionals(item).map((line, idx) => (
-                    <div key={idx} className="text-sm text-gray-700">
-                      {line}
-                    </div>
-                  ))}
+      <div className="border-base-200 border-b py-4">
+        <div className="mb-2 text-sm">
+          <span className="font-semibold">Bills name :</span> {data?.ticket || '-'}
+        </div>
+        <div className="mb-2 text-sm">
+          <span className="font-semibold">Cashier :</span> {data?.session?.cashier?.name || '-'}
+        </div>
+        <div className="mb-2 text-sm">
+          <span className="font-semibold">Session time :</span>{' '}
+          {dateFormat(data?.session?.started_at, 'DD MMM YYYY')} -{' '}
+          {dateFormat(data?.session?.finished_at, 'DD MMM YYYY', '(ongoing)')}
+        </div>
+        <div className="mb-2 text-sm capitalize">
+          <span className="font-semibold">Customer :</span> {data?.membership?.name || '-'}
+        </div>
+      </div>
 
-                  {FormState?.errors?.[`items.${i}.catalog_id`] && (
-                    <small className="text-error">
-                      {FormState?.errors?.[`items.${i}.catalog_id`]}
-                    </small>
-                  )}
-                </td>
-                <td className="px-2 py-3 text-center text-sm capitalize">{item?.quantity}</td>
-                <td className="px-2 py-3 text-end text-sm capitalize">
-                  {currencyFormat(item?.unit_price)}
-                </td>
-                <td className="px-2 py-3 text-end text-sm capitalize">
-                  {currencyFormat(item?.subtotal)}
-                </td>
-              </tr>
-            ))}
-
-            <tr>
-              <td colSpan={2} rowSpan={4} className="px-2 pt-5 text-start">
-                {data?.note && (
-                  <div className="bg-base-100 w-full p-3">
-                    <div className="text-sm font-semibold tracking-wide uppercase">notes</div>
-                    <div className="pt-3 text-xs tracking-wide">{data?.note}</div>
-                  </div>
+      <div className="border-base-200 border-b pt-4 pb-2">
+        {data?.items?.map((item, i) => (
+          <div key={i} className="pb-2">
+            <div className="flex place-content-between place-items-center text-base">
+              <div>{item?.catalog?.name}</div>
+              <div>
+                {item?.discount_value > 0 && (
+                  <span className="text-base-300 me-2 text-xs line-through">
+                    {currencyFormat(item?.unit_gross * item?.quantity)}
+                  </span>
                 )}
-              </td>
-              <td className="w-40 px-2 pt-5 pb-3 text-end text-sm font-thin uppercase">
-                BILL AMOUNT
-              </td>
-              <td className="text-primary px-2 pt-5 pb-3 text-end text-sm font-semibold capitalize">
-                {currencyFormat(data?.subtotal)}
-              </td>
-            </tr>
-            {data && 'payment' in data && (
-              <tr>
-                <td className="w-40 px-2 pb-3 text-end text-sm font-thin uppercase">
-                  Total payment
-                </td>
-                <td className="text-primary px-2 pb-3 text-end text-sm font-semibold capitalize">
-                  {currencyFormat(data?.payment)}
-                </td>
-              </tr>
-            )}
+                {currencyFormat(item?.unit_bill * item?.quantity)}{' '}
+              </div>
+            </div>
+            <div className="pb-2 text-xs">
+              {item?.quantity} x {currencyFormat(item?.unit_bill)}{' '}
+              {item?.discount_value > 0 && (
+                <span className="text-base-300 line-through">
+                  {currencyFormat(item?.unit_gross)}
+                </span>
+              )}
+            </div>
+            <div>
+              {item?.additionals?.map((addon, i) => (
+                <div className="text-xs font-thin" key={i}>
+                  <span>
+                    + {addon?.catalog?.name} ({addon?.quantity > 0 && `${addon?.quantity} x `}
+                    {`${addon?.unit_nett > 0 ? currencyFormat(addon?.unit_nett) : 'Free'}`})
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="border-base-200 border-b py-4">
+        {/* {data?.subtotal_nett > data?.total_charges && (
+          <div className="flex place-content-between place-items-center text-base">
+            <div>Subtotal</div>
+            <div>
+              {data?.subtotal_gross > data?.subtotal_nett && (
+                <span className="text-base-300 me-2 text-xs font-thin line-through">
+                  {currencyFormat(data?.subtotal_gross)}
+                </span>
+              )}
+              {currencyFormat(data?.subtotal_nett)}
+            </div>
+          </div>
+        )} */}
 
-            {data?.payment > 0 && data?.payment - data?.subtotal > 0 && (
-              <tr>
-                <td className="w-40 px-2 pb-3 text-end text-sm font-thin uppercase">change</td>
-                <td className="text-primary px-2 pb-3 text-end text-sm font-semibold capitalize">
-                  {currencyFormat(data?.payment - data?.subtotal)}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-
-        {FormState?.errors?.total_payment && (
-          <div className="bg-error/15 border-error w-full rounded border py-4 text-center">
-            <small className="text-error">{FormState?.errors?.total_payment}</small>
+        {data?.items.reduce((sum, item) => {
+          const qty = item.quantity ?? 1; // default 1 kalau tidak ada quantity
+          const discount = item.discount_value ?? 0;
+          return sum + discount * qty;
+        }, 0) > 0 && (
+          <div className="flex place-content-between place-items-center text-base">
+            <div>Discount Category </div>
+            <div>
+              -
+              {currencyFormat(
+                data?.items.reduce((sum, item) => {
+                  const qty = item.quantity ?? 1; // default 1 kalau tidak ada quantity
+                  const discount = item.discount_value ?? 0;
+                  return sum + discount * qty;
+                }, 0)
+              )}
+            </div>
+          </div>
+        )}
+        {data?.discount_value > 0 && (
+          <div className="flex place-content-between place-items-center text-base">
+            <div>Discount Order </div>
+            <div>-{currencyFormat(data?.discount_value)}</div>
           </div>
         )}
       </div>
+      <div className="border-base-200 border-b py-4">
+        <div className="flex place-content-between place-items-center text-base font-semibold">
+          <div>Total</div>
+          <div>
+            {data?.subtotal_gross > data?.total_charges && (
+              <span className="text-base-300 me-2 text-xs font-thin line-through">
+                {currencyFormat(data?.subtotal_gross)}
+              </span>
+            )}
 
-      <div className="border-base-200 flex place-content-between place-items-center border-t px-4 pt-4">
-        {data?.payment_method ? (
-          <div>
-            <div className="text-accent text-xs font-thin tracking-wide">Payment Method</div>
-            <div className="text-primary text-sm font-bold tracking-wide">
-              {data?.payment_method?.name} {data?.payment_ref && `#${data?.payment_ref}`}
-            </div>
-          </div>
-        ) : (
-          <div>
-            <div className="text-accent text-xs font-thin tracking-wide">Ticket Name.</div>
-            <div className="text-primary text-sm font-bold tracking-wide">
-              {data?.ticket || '-'}
-            </div>
-          </div>
-        )}
-        <div className="flex gap-4">
-          <div className="btn btn-outline btn-primary rounded-full px-6" onClick={onClose}>
-            Cancel
-          </div>
-          <div
-            className={`btn btn-primary ${isLoading ? 'btn-disabled' : ''} rounded-full px-6`}
-            onClick={onConfirm}
-          >
-            Confirm
+            {currencyFormat(data?.total_charges)}
           </div>
         </div>
+        {data?.total_payment > 0 && (
+          <div className="flex place-content-between place-items-center text-base">
+            <div className="capitalize">{data?.payment_method?.name || 'Cash'} </div>
+            <div>{currencyFormat(data?.total_payment)}</div>
+          </div>
+        )}
+
+        {data?.total_payment - data?.total_charges > 0 && (
+          <div className="flex place-content-between place-items-center text-base">
+            <div>Change</div>
+            <div>{currencyFormat(data?.total_payment - data?.total_charges)}</div>
+          </div>
+        )}
+        {data?.payment_ref !== '' && (
+          <div className="flex place-content-between place-items-center text-base">
+            <div>Ref</div>
+            <div>{data?.payment_ref}</div>
+          </div>
+        )}
+      </div>
+
+      <div className="text-base-300 flex place-content-between place-items-center py-4 text-base">
+        <div>{dateFormat(data?.ordered_at)}</div>
+        <div>{data?.code}</div>
       </div>
     </div>
   );
 };
 
-export default OrderSummary;
+export default OrderDetails;

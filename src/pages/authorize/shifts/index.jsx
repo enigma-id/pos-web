@@ -1,8 +1,15 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
-import { useSelector } from 'react-redux';
 
-import { Dialog, Drawer, EmptySection, Input, Receipt, Summary } from '../../../components/ui';
+import {
+  Drawer,
+  EmptySection,
+  Kitchen,
+  OrderDetails,
+  Receipt,
+  Refund,
+  Summary,
+} from '../../../components/ui';
 import {
   ArrowRightIcon,
   MoneysIcon,
@@ -11,36 +18,36 @@ import {
   TrashIcon,
   WalletIcon,
 } from '../../../components/ui/icon';
+import useModal from '../../../components/ui/modal/hook';
 import useOrder from '../../../services/sales/order/hook';
 import useSession from '../../../services/sales/session/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 import useDrawer from '../../../utils/drawer';
-import useDialogModal from '../../../utils/modal';
 import { usePrintWindow } from '../../../utils/print';
 
 const ShiftScreen = () => {
-  const FormState = useSelector(state => state?.Form);
-
   const [detail, setDetail] = React.useState(null);
   const [search, setSearch] = React.useState('');
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [currentPage, setCurrentPage] = React.useState(1);
   const itemsPerPage = 25;
   const [orderDetail, setOrderDetail] = React.useState(null);
-  const [pin, setPin] = React.useState('');
 
   const { session, sessionResult, show, showResult } = useSession();
 
-  const { show: showOrder, showResult: showOrderResult, cancel, cancelResult } = useOrder();
+  const { show: showOrder, showResult: showOrderResult } = useOrder();
 
   const { drawerRef, open: openDrawer, close: closeDrawer } = useDrawer();
-
-  const { dialogRef, open: openModal, close: closeModal } = useDialogModal();
+  const { openModal, closeModal } = useModal();
 
   const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
 
   const handleOpenPrint = () => {
     open(<Receipt data={orderDetail} />);
+  };
+
+  const handleOpenPrintKitchen = () => {
+    open(<Kitchen data={orderDetail} />);
   };
 
   const handleOpenPrintSummary = () => {
@@ -52,22 +59,19 @@ const ShiftScreen = () => {
     showOrder(v);
   };
 
-  const onCancel = () => {
-    const payload = {
-      pin,
-    };
-
-    cancel({ id: orderDetail?.id, payload });
+  const onRefund = async id => {
+    openModal(
+      <Refund
+        id={id}
+        onClose={() => {
+          show(sessionResult?.data?.data?.[selectedIndex]?.id);
+          closeModal();
+          closeDrawer();
+        }}
+      />,
+      'w-md'
+    );
   };
-
-  React.useEffect(() => {
-    if (cancelResult?.isSuccess) {
-      show(sessionResult?.data?.data?.[selectedIndex]?.id);
-      setPin('');
-      closeModal();
-      closeDrawer();
-    }
-  }, [cancelResult]);
 
   React.useEffect(() => {
     setCurrentPage(1);
@@ -219,48 +223,6 @@ const ShiftScreen = () => {
                 </div>
 
                 <div className="border-base-200 border-b pt-4 pb-2">
-                  <div className="mb-2 text-sm font-semibold">Catalog Sold :</div>
-                  {detail?.catalog_solds?.map((item, i) => (
-                    <div key={i} className="flex place-content-between place-items-center py-2">
-                      <div>
-                        <span className="bg-base-content rounded-lg px-3 py-1 text-sm text-white">
-                          {item?.quantity}
-                        </span>
-                        <span className="ps-2 text-sm">{item?.catalog_name || '-'}</span>
-                      </div>
-                      <span className="text-sm">{currencyFormat(item?.subtotal)}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-base-200 border-b pt-4 pb-2">
-                  <div className="mb-2 text-sm font-semibold">Sales Channels :</div>
-                  {detail?.sales_channels?.map((item, i) => (
-                    <div key={i} className="flex place-content-between place-items-center py-2">
-                      <div>
-                        <span className="bg-base-content rounded-lg px-3 py-1 text-sm text-white">
-                          {item?.transaction_count}
-                        </span>
-                        <span className="ps-2 text-sm">{item?.channel_name || '-'}</span>
-                      </div>
-                      <span className="text-sm">{currencyFormat(item?.subtotal)}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-base-200 border-b pt-4 pb-2">
-                  <div className="mb-2 text-sm font-semibold">Payments :</div>
-                  {detail?.cash_payments?.map((item, i) => (
-                    <div key={i} className="flex place-content-between place-items-center py-2">
-                      <div>
-                        <span className="ps-2 text-sm">{item?.payment_name || 'Cash'}</span>
-                      </div>
-                      <span className="text-sm">{currencyFormat(item?.subtotal)}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-base-200 border-b pt-4 pb-2">
                   <div className="mb-2 text-sm font-semibold">Cashflow Summary :</div>
                   <div className="flex place-content-between place-items-center py-2">
                     <div>
@@ -305,6 +267,56 @@ const ShiftScreen = () => {
                 </div>
 
                 <div className="border-base-200 border-b pt-4 pb-2">
+                  <div className="mb-2 text-sm font-semibold">Payments :</div>
+                  {detail?.cash_payments?.map((item, i) => (
+                    <div key={i} className="flex place-content-between place-items-center py-2">
+                      <div className="text-sm">{item?.payment_name || 'Cash'}</div>
+                      <span className="text-sm">{currencyFormat(item?.subtotal)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-base-200 border-b pt-4 pb-2">
+                  <div className="mb-2 text-sm font-semibold">Sales Channels :</div>
+                  {detail?.sales_channels?.map((item, i) => (
+                    <div key={i} className="flex place-content-between place-items-center py-2">
+                      <div>
+                        <span className="bg-base-content rounded-lg px-3 py-1 text-sm text-white">
+                          {item?.transaction_count}
+                        </span>
+                        <span className="ps-2 text-sm">{item?.channel_name || '-'}</span>
+                      </div>
+                      <span className="text-sm">{currencyFormat(item?.subtotal)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-base-200 border-b pt-4 pb-2">
+                  <div className="mb-2 text-sm font-semibold">Category Sold :</div>
+                  {detail?.category_solds?.map((item, i) => (
+                    <div key={i} className="flex place-content-between place-items-center py-2">
+                      <div className="text-sm">{item?.name || '-'} </div>
+                      <span className="text-sm">{currencyFormat(item?.quantity, false)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* <div className="border-base-200 border-b pt-4 pb-2">
+                  <div className="mb-2 text-sm font-semibold">Catalog Sold :</div>
+                  {detail?.catalog_solds?.map((item, i) => (
+                    <div key={i} className="flex place-content-between place-items-center py-2">
+                      <div>
+                        <span className="bg-base-content rounded-lg px-3 py-1 text-sm text-white">
+                          {item?.quantity}
+                        </span>
+                        <span className="ps-2 text-sm">{item?.catalog_name || '-'}</span>
+                      </div>
+                      <span className="text-sm">{currencyFormat(item?.quantity, false)}</span>
+                    </div>
+                  ))}
+                </div> */}
+
+                <div className="border-base-200 border-b pt-4 pb-2">
                   <div className="mb-2 text-sm font-semibold">Sales Order :</div>
 
                   <div className="grid grid-cols-2 gap-2">
@@ -345,134 +357,28 @@ const ShiftScreen = () => {
             <EmptySection />
           </div>
         )}
-
-        <Dialog.Wrapper ref={dialogRef} className="w-md">
-          <Dialog.Header onClose={closeModal}>
-            <div className="text-lg font-semibold">Refund</div>
-          </Dialog.Header>
-          <Dialog.Body>
-            <div className="mb-3 py-4">
-              <div>Are you sure you want to refund this transaction?</div>
-              <div className="mb-3">Cash amount on hand will be recalculated.</div>
-
-              <Input
-                label="Enter PIN"
-                value={pin}
-                onChange={e => setPin(e?.target?.value)}
-                error={FormState?.errors?.pin}
-                type="password"
-              />
-            </div>
-          </Dialog.Body>
-          <Dialog.Footer>
-            <div className="btn btn-md px-10" onClick={closeModal}>
-              Cancel
-            </div>
-            <div
-              className={`btn btn-md btn-error px-10 text-white ${cancelResult?.isLoading ? 'btn-disabled' : ''}`}
-              onClick={onCancel}
-            >
-              Confirm{' '}
-              {cancelResult.isLoading ? (
-                <span className="loading loading-spinner loading-sm"></span>
-              ) : null}
-            </div>
-          </Dialog.Footer>
-        </Dialog.Wrapper>
       </div>
 
       <Drawer.Content
         drawerRef={drawerRef}
         title="Order Details"
         close={closeDrawer}
-        className="!bg-accent"
+        className="!bg-accent w-lg"
       >
         <div className="bg-accent flex h-[calc(100vh-200px)] flex-1 flex-col place-content-center overflow-y-auto p-6">
           <div className="mb-4 h-full w-full flex-1">
-            <div className="h-fit w-full rounded-xl bg-white p-6 shadow">
-              <div className="border-base-200 border-b">
-                <h2 className="mb-4 text-center text-4xl font-bold">
-                  {currencyFormat(orderDetail?.total_charges)}
-                </h2>
-              </div>
-
-              <div className="border-base-200 border-b py-4">
-                <div className="mb-2 text-sm">
-                  <span className="font-semibold">Bills name :</span> {orderDetail?.ticket || '-'}
-                </div>
-                <div className="mb-2 text-sm">
-                  <span className="font-semibold">Cashier :</span>{' '}
-                  {orderDetail?.session?.cashier?.name || '-'}
-                </div>
-                <div className="mb-2 text-sm">
-                  <span className="font-semibold">Session time :</span>{' '}
-                  {dateFormat(orderDetail?.session?.started_at, 'DD MMM YYYY')} -{' '}
-                  {dateFormat(orderDetail?.session?.finished_at, 'DD MMM YYYY', '(ongoing)')}
-                </div>
-                <div className="mb-2 text-sm capitalize">
-                  <span className="font-semibold">Customer :</span>{' '}
-                  {orderDetail?.membership?.name || '-'}
-                </div>
-              </div>
-
-              <div className="border-base-200 border-b pt-4 pb-2">
-                {orderDetail?.items?.map((item, i) => (
-                  <div key={i} className="pb-2">
-                    <div className="flex place-content-between place-items-center text-base">
-                      <div>{item?.catalog?.name}</div>
-                      <div>{currencyFormat(item?.unit_nett * item?.quantity)}</div>
-                    </div>
-                    <div className="pb-2 text-xs">
-                      {item?.quantity} x {currencyFormat(item?.unit_nett)}
-                    </div>
-                    <div>
-                      {item?.additionals?.map((addon, i) => (
-                        <div className="text-base-300 text-xs font-thin" key={i}>
-                          <span>
-                            + {addon?.catalog?.name} (
-                            {addon?.quantity > 0 && `${addon?.quantity} x `}
-                            {`${addon?.unit_nett > 0 ? currencyFormat(addon?.unit_nett) : 'Free'}`})
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="border-base-200 border-b py-4">
-                <div className="flex place-content-between place-items-center text-base font-semibold">
-                  <div>Total: </div>
-                  <div>{currencyFormat(orderDetail?.total_charges)}</div>
-                </div>
-                <div className="flex place-content-between place-items-center text-base">
-                  <div className="capitalize">{orderDetail?.payment_method?.name || 'Cash'}: </div>
-                  <div>{currencyFormat(orderDetail?.total_payment)}</div>
-                </div>
-                {orderDetail?.total_payment - orderDetail?.total_charges > 0 && (
-                  <div className="flex place-content-between place-items-center text-base">
-                    <div>Total Change: </div>
-                    <div>
-                      {currencyFormat(orderDetail?.total_payment - orderDetail?.total_charges)}
-                    </div>
-                  </div>
-                )}
-                {orderDetail?.payment_ref !== '' && (
-                  <div className="flex place-content-between place-items-center text-base">
-                    <div>Ref: </div>
-                    <div>{orderDetail?.payment_ref}</div>
-                  </div>
-                )}
-              </div>
-
-              <div className="text-base-300 flex place-content-between place-items-center py-4 text-base">
-                <div>{dateFormat(orderDetail?.ordered_at)}</div>
-                <div>{orderDetail?.code}</div>
-              </div>
-            </div>
+            <OrderDetails data={orderDetail} />
           </div>
         </div>
 
         <div className="border-base-200 bg-base-100 mt-3 flex min-h-15 border-t">
+          <div
+            className="bg-primary text-base-100 flex flex-1 cursor-pointer place-content-center place-items-center gap-2 px-4 text-sm capitalize"
+            onClick={handleOpenPrintKitchen}
+          >
+            <PrintIcon />
+            print kitchen
+          </div>
           <div
             className="bg-base-content text-base-100 flex flex-1 cursor-pointer place-content-center place-items-center gap-2 px-4 text-sm capitalize"
             onClick={handleOpenPrint}
@@ -482,7 +388,7 @@ const ShiftScreen = () => {
           </div>
           <div
             className="bg-error text-base-100 flex flex-1 cursor-pointer place-content-center place-items-center gap-2 px-4 text-sm capitalize"
-            onClick={openModal}
+            onClick={() => onRefund(orderDetail?.id)}
           >
             <TrashIcon />
             refund

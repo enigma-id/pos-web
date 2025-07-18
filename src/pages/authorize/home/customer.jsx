@@ -1,19 +1,20 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
 import { useSelector } from 'react-redux';
 
-import { Dialog, NFCField } from '../../../components/ui';
+import { NFCField } from '../../../components/ui';
 import { BackIcon, CardSearchIcon, SearchIcon, UserCircleIcon } from '../../../components/ui/icon';
+import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
 import useMembership from '../../../services/membership/hook';
-import useDialogModal from '../../../utils/modal';
 
 const CustomerSection = () => {
   const CartState = useSelector(state => state?.Cart);
   const { showCart } = useSidebar();
   const { setCustomer } = useCart();
   const { getMember, getMemberResult, checkSaldo, checkResult } = useMembership();
-  const { dialogRef, open: openModal, close: closeModal, isOpen } = useDialogModal();
+  const { openModal, closeModal } = useModal();
 
   const [search, setSearch] = React.useState('');
 
@@ -38,6 +39,13 @@ const CustomerSection = () => {
     checkSaldo(params);
   };
 
+  const onScan = () => {
+    openModal(
+      <NFCField onRead={handleRead} isOpen={true} onClose={closeModal} result={checkResult} />,
+      'w-md'
+    );
+  };
+
   React.useEffect(() => {
     const handler = setTimeout(() => {
       onLoad();
@@ -52,6 +60,7 @@ const CustomerSection = () => {
 
       if (data) {
         onSelected(data);
+        closeModal();
       }
     }
   }, [checkResult]);
@@ -86,7 +95,7 @@ const CustomerSection = () => {
 
           <div
             className="bg-primary/10 text-primary flex h-full flex-1/3 cursor-pointer place-content-center place-items-center gap-2"
-            onClick={openModal}
+            onClick={onScan}
           >
             <CardSearchIcon /> Scan card
           </div>
@@ -120,13 +129,6 @@ const CustomerSection = () => {
           </div>
         )}
       </div>
-
-      <Dialog.Wrapper ref={dialogRef} className="w-md !rounded-lg">
-        <Dialog.Header onClose={closeModal}>
-          <div className="text-lg font-semibold">Scan card</div>
-        </Dialog.Header>
-        <NFCField onRead={handleRead} isOpen={isOpen} onClose={closeModal} result={checkResult} />
-      </Dialog.Wrapper>
     </div>
   );
 };

@@ -17,9 +17,14 @@ import {
   updateCartDiscount,
   selectedBill,
   setBillItems,
+  removeBillItem,
+  changeItem,
+  changeBillItem,
+  addItem,
 } from './slice';
 import { useLazyGetCatalogDetailQuery } from '../catalog/action';
 import { $failure } from '../form/action';
+import useOrder from '../sales/order/hook';
 
 const useCart = catalog_id => {
   const dispatch = useDispatch();
@@ -32,6 +37,8 @@ const useCart = catalog_id => {
   const [closeBillMutation, closeBillResult] = useCloseBillMutation();
   const [triggerPaymentMethod] = useLazyGetMethodQuery();
   const [triggerCountBill, countResult] = useLazyGetBillQuery();
+
+  const { show, showResult } = useOrder();
 
   // All cart items
   const cartItems = useSelector(state => state?.Cart?.items?.list || []);
@@ -92,8 +99,25 @@ const useCart = catalog_id => {
     return [{ id: 0, name: 'Cash' }, ...data];
   };
 
-  const remove = async index => {
-    dispatch(removeItem(index));
+  const add = catalog => {
+    const cloned = { ...catalog, from_bill: false };
+    dispatch(addItem(cloned));
+  };
+
+  const remove = async (index, type = 'cart') => {
+    if (type === 'cart') {
+      dispatch(removeItem(index));
+    } else {
+      dispatch(removeBillItem(index));
+    }
+  };
+
+  const change = async (key, catalog, type = 'cart') => {
+    if (type === 'cart') {
+      dispatch(changeItem({ key, catalog }));
+    } else {
+      dispatch(changeBillItem({ key, catalog }));
+    }
   };
 
   const setCustomer = data => {
@@ -205,13 +229,19 @@ const useCart = catalog_id => {
 
   const onBillSelected = async data => {
     if (!data) return;
-
+    show(data?.id);
     dispatch(selectedBill(data));
   };
 
   const billItems = data => {
     dispatch(setBillItems(data));
   };
+
+  useEffect(() => {
+    if (showResult?.isSuccess) {
+      billItems(showResult?.data?.data?.items);
+    }
+  }, [showResult]);
 
   useEffect(() => {
     if (catalog_id) {
@@ -238,7 +268,9 @@ const useCart = catalog_id => {
     closeBillResult,
     reset,
     cartItems,
+    add,
     remove,
+    change,
     setCustomer,
     onChangeDiscount,
     onChangeCartDiscount,

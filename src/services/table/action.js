@@ -42,7 +42,6 @@ export const tableApi = createApi({
   endpoints: builder => ({
     getTableData: builder.query({
       query: ({ url, table }) => {
-        console.log('params: ', buildParams(table));
         return {
           url,
           method: 'GET',

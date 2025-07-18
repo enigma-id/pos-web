@@ -1,0 +1,103 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+import React from 'react';
+import { useSelector } from 'react-redux';
+
+import { Input, Modal } from '../../../components/ui';
+import { SearchIcon } from '../../../components/ui/icon';
+import useModal from '../../../components/ui/modal/hook';
+import useCart from '../../../services/cart/hook';
+import useOrder from '../../../services/sales/order/hook';
+import { currencyFormat, duration } from '../../../utils/common';
+
+const BillModal = ({ mode, count, onBillCreate }) => {
+  const FormState = useSelector(state => state?.Form);
+  const { closeModal } = useModal();
+  const [search, setSearch] = React.useState('');
+  const [ticket, setTicket] = React.useState('');
+  const { billResult, onBillSelected } = useCart();
+
+  const { order, orderResult } = useOrder();
+
+  React.useEffect(() => {
+    if (mode === 'create') return;
+    const delayDebounceFn = setTimeout(
+      () => {
+        order({ status: 'pending', search });
+      },
+      search ? 1000 : 0
+    );
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [mode, search]);
+
+  const billData = orderResult?.data?.data || [];
+
+  return (
+    <>
+      <Modal.Header onClose={closeModal}>
+        <div className="text-lg font-semibold">
+          {mode === 'open' ? `Open Bills (${count})` : 'Save Bills'}
+        </div>
+      </Modal.Header>
+      <Modal.Body full={mode === 'open'}>
+        {mode === 'open' ? (
+          <>
+            <div className="border-base-200 relative !min-h-16 w-full place-content-center place-items-center border-b">
+              <div className="absolute top-1/3 left-4">
+                <SearchIcon />
+              </div>
+
+              <input
+                name="search"
+                placeholder="Search..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="!min-h-16 w-full pl-15 focus-visible:!outline-none"
+              />
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {billData?.map((bill, idx) => (
+                <div
+                  key={idx}
+                  className="border-base-200 flex cursor-pointer place-content-between place-items-center border-b p-4"
+                  onClick={() => {
+                    onBillSelected(bill);
+                    closeModal();
+                  }}
+                >
+                  <div>
+                    <div className="font-semibold">{bill?.ticket}</div>
+                    <div className="text-xs">{duration(bill?.ordered_at)}</div>
+                  </div>
+                  <div className="font-semibold">{currencyFormat(bill?.total_charges)}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="mb-3 py-4">
+            <Input
+              label="bill name"
+              value={ticket}
+              onChange={e => setTicket(e?.target?.value)}
+              error={FormState?.errors?.ticket}
+            />
+          </div>
+        )}
+      </Modal.Body>
+      {mode === 'open' ? null : (
+        <Modal.Footer>
+          <div
+            className={`btn btn-block btn-primary btn-lg ${billResult?.isLoading ? 'btn-disabled' : ''}`}
+            onClick={() => onBillCreate(ticket)}
+          >
+            Save Bill
+            {billResult?.isLoading && <span className="loading loading-spinner loading-sm"></span>}
+          </div>
+        </Modal.Footer>
+      )}
+    </>
+  );
+};
+
+export default BillModal;

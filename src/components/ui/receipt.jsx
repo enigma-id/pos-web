@@ -35,6 +35,13 @@ const Receipt = ({ data }) => {
           <p style={{ marginBlock: 2, fontSize: 11 }}>Cashier</p>
           <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.session?.cashier?.name}</p>
         </div>
+        {data?.ticket && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Bill</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.ticket}</p>
+          </div>
+        )}
+
         {data?.membership && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <p style={{ marginBlock: 2, fontSize: 11 }}>Membership</p>
@@ -67,24 +74,64 @@ const Receipt = ({ data }) => {
                 {item?.catalog?.name || item?.description}
               </p>
               <p style={{ marginBlock: 2, fontSize: 9 }}>
-                {item?.quantity} x {currencyFormat(item?.unit_nett, false)}
+                {item?.quantity} x {currencyFormat(item?.unit_bill, false)}
               </p>
             </div>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
-              {currencyFormat(item?.quantity * item?.unit_nett, false)}
+              {currencyFormat(item?.quantity * item?.unit_bill, false)}
             </p>
           </div>
           {item?.additionals?.map((addon, idx) => (
             <div key={idx}>
               <p style={{ marginBlock: 2, fontSize: 9, textTransform: 'capitalize' }}>
                 + {addon?.catalog?.name} ({addon?.quantity > 0 && `${addon?.quantity} x `}
-                {`${addon?.unit_nett > 0 ? currencyFormat(addon?.unit_nett, false) : 'Free'}`})
+                {`${addon?.unit_bill > 0 ? currencyFormat(addon?.unit_bill, false) : 'Free'}`})
               </p>
             </div>
           ))}
         </div>
       ))}
 
+      <div
+        style={{
+          borderTop: 1,
+          borderTopStyle: 'dashed',
+          paddingBlock: 5,
+          marginBottom: 5,
+        }}
+      >
+        {data?.subtotal_nett > data?.total_charges && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Before Discount</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(data?.subtotal_nett)}</p>
+          </div>
+        )}
+        {data?.items.reduce((sum, item) => {
+          const qty = item.quantity ?? 1; // default 1 kalau tidak ada quantity
+          const discount = item.discount_value ?? 0;
+          return sum + discount * qty;
+        }, 0) > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Discount Category</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>
+              -
+              {currencyFormat(
+                data?.items.reduce((sum, item) => {
+                  const qty = item.quantity ?? 1; // default 1 kalau tidak ada quantity
+                  const discount = item.discount_value ?? 0;
+                  return sum + discount * qty;
+                }, 0)
+              )}
+            </p>
+          </div>
+        )}
+        {data?.discount_value > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Discount Order</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>-{currencyFormat(data?.discount_value)}</p>
+          </div>
+        )}
+      </div>
       <div
         style={{
           borderTop: 1,

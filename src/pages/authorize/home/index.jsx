@@ -9,17 +9,18 @@ import DetailScreen from './detail';
 import OpenSection from './openSession';
 import { Drawer } from '../../../components/ui';
 import { ChevronDownIcon, PlusIcon, RefreshIcon, SearchIcon } from '../../../components/ui/icon';
+import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCatalog from '../../../services/catalog/hooks';
 import useSalesChannel from '../../../services/sales/channel/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
 import useDrawer from '../../../utils/drawer';
-import useDialogModal from '../../../utils/modal';
 
 const CatalogScreen = () => {
   const dropdownRef = React.useRef(null);
   const dropdownRefs = React.useRef(null);
   const selectedChannel = useSelector(state => state?.SalesChannel?.selectedChannel);
+  const User = useSelector(state => state?.Auth?.session?.user);
 
   const {
     refreshCatalog,
@@ -33,23 +34,25 @@ const CatalogScreen = () => {
 
   const { mode } = useSidebar();
   const { channels, selectChannel } = useSalesChannel();
-  const [catalogSelected, setCatalogSelected] = React.useState(null);
-  const [editKey, setEditKey] = React.useState(null);
   const [isOpen, setIsOpen] = React.useState(false);
   const [isOpens, setIsOpens] = React.useState(false);
 
-  const { dialogRef, open, close } = useDialogModal({
-    onClose: () => {
-      setCatalogSelected(null);
-      setEditKey(null);
-    },
-  });
   const { drawerRef, open: openDrawer, close: closeDrawer } = useDrawer();
+  const { openModal, closeModal } = useModal();
 
   const onShow = (data, index = null) => {
-    setCatalogSelected(data);
-    setEditKey(index);
-    open();
+    handleModal({ catalog: data, key: index });
+  };
+
+  const handleModal = ({ catalog, key }) => {
+    openModal(
+      <DetailScreen
+        catalog={catalog}
+        mode={key !== null ? 'edit' : 'add'}
+        editKey={key}
+        onClose={closeModal}
+      />
+    );
   };
 
   React.useEffect(() => {
@@ -196,16 +199,6 @@ const CatalogScreen = () => {
                 ))}
               </div>
             </div>
-
-            {/* Detail Modal */}
-            <dialog ref={dialogRef} className="modal">
-              <DetailScreen
-                catalog={catalogSelected}
-                mode={editKey !== null ? 'edit' : 'add'}
-                editKey={editKey}
-                onClose={close}
-              />
-            </dialog>
           </div>
 
           <div className="absolute bottom-5 left-5 flex flex-col gap-2">
@@ -216,9 +209,11 @@ const CatalogScreen = () => {
               <RefreshIcon />
             </div>
 
-            <div className="btn btn-circle btn-xl btn-primary" onClick={openDrawer}>
-              <PlusIcon />
-            </div>
+            {User?.is_supervisor === 1 && (
+              <div className="btn btn-circle btn-xl btn-primary" onClick={openDrawer}>
+                <PlusIcon />
+              </div>
+            )}
           </div>
         </div>
 

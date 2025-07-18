@@ -2,15 +2,21 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
 
-import { Dialog, EmptySection, Input, Kitchen, Receipt } from '../../../components/ui';
+import {
+  EmptySection,
+  Input,
+  Kitchen,
+  OrderDetails,
+  Receipt,
+  Refund,
+} from '../../../components/ui';
 import { MoneysIcon, PrintIcon, SearchIcon, TrashIcon } from '../../../components/ui/icon';
+import useModal from '../../../components/ui/modal/hook';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
-import useDialogModal from '../../../utils/modal';
 import { usePrintWindow } from '../../../utils/print';
 
 const HistoryScreen = () => {
-  const FormState = useSelector(state => state?.Form);
   const Session = useSelector(state => state?.Auth?.session);
 
   const [detail, setDetail] = React.useState(null);
@@ -19,18 +25,10 @@ const HistoryScreen = () => {
   const [currentPage, setCurrentPage] = React.useState(1);
   const itemsPerPage = 25;
 
-  const { order, orderResult, show, showResult, cancel, cancelResult } = useOrder();
-  const [pin, setPin] = React.useState('');
+  const { order, orderResult, show, showResult } = useOrder();
+  const { openModal, closeModal } = useModal();
 
-  const {
-    dialogRef,
-    open: openModal,
-    close: closeModal,
-  } = useDialogModal({
-    onClose: () => setPin(''),
-  });
-
-  const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
+  const { open } = usePrintWindow({ title: 'Print Preview', autoClose: false });
 
   const handleOpenPrint = () => {
     open(<Receipt data={detail} />);
@@ -39,12 +37,17 @@ const HistoryScreen = () => {
     open(<Kitchen data={detail} />);
   };
 
-  const onCancel = () => {
-    const payload = {
-      pin,
-    };
-
-    cancel({ id: detail?.id, payload });
+  const onRefund = id => {
+    openModal(
+      <Refund
+        id={id}
+        onClose={() => {
+          order({ status: 'completed', search, page: currentPage, limit: itemsPerPage });
+          closeModal();
+        }}
+      />,
+      'w-md'
+    );
   };
 
   React.useEffect(() => {
@@ -79,14 +82,6 @@ const HistoryScreen = () => {
       setDetail(showResult?.data?.data);
     }
   }, [showResult]);
-
-  React.useEffect(() => {
-    if (cancelResult?.isSuccess) {
-      order({ status: 'completed', search, page: currentPage, limit: itemsPerPage });
-      closeModal();
-      setPin('');
-    }
-  }, [cancelResult]);
 
   const data = orderResult?.data?.data || [];
   const total = orderResult?.data?.total || 0;
@@ -133,7 +128,7 @@ const HistoryScreen = () => {
                     <div className="text-base-300 text-xs">{dateFormat(item?.ordered_at)}</div>
                   </div>
                 </div>
-                <div className="text-base-300 text-base">{item?.code}</div>
+                <div className="text-base-300 text-sm">{item?.code}</div>
               </div>
             </div>
           ))}
@@ -179,7 +174,7 @@ const HistoryScreen = () => {
               {Session?.user?.is_supervisor === 1 && (
                 <div
                   className="bg-error text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
-                  onClick={openModal}
+                  onClick={() => onRefund(detail?.id)}
                 >
                   <TrashIcon />
                   refund
@@ -189,83 +184,8 @@ const HistoryScreen = () => {
           </div>
 
           <div className="flex h-[calc(100vh-64px)] w-full place-content-center overflow-x-auto py-20">
-            <div className="h-fit w-2/4 rounded-xl bg-white p-6 shadow">
-              <div className="border-base-200 border-b">
-                <h2 className="mb-4 text-center text-4xl font-bold">
-                  {currencyFormat(detail?.total_charges)}
-                </h2>
-              </div>
-
-              <div className="border-base-200 border-b py-4">
-                <div className="mb-2 text-sm">
-                  <span className="font-semibold">Bills name :</span> {detail?.ticket || '-'}
-                </div>
-                <div className="mb-2 text-sm">
-                  <span className="font-semibold">Cashier :</span>{' '}
-                  {detail?.session?.cashier?.name || '-'}
-                </div>
-                <div className="mb-2 text-sm">
-                  <span className="font-semibold">Session time :</span>{' '}
-                  {dateFormat(detail?.session?.started_at, 'DD MMM YYYY')} -{' '}
-                  {dateFormat(detail?.session?.finished_at, 'DD MMM YYYY', '(ongoing)')}
-                </div>
-                <div className="mb-2 text-sm capitalize">
-                  <span className="font-semibold">Customer :</span>{' '}
-                  {detail?.membership?.name || '-'}
-                </div>
-              </div>
-
-              <div className="border-base-200 border-b pt-4 pb-2">
-                {detail?.items?.map((item, i) => (
-                  <div key={i} className="pb-2">
-                    <div className="flex place-content-between place-items-center text-base">
-                      <div>{item?.catalog?.name || item?.description}</div>
-                      <div>{currencyFormat(item?.unit_nett * item?.quantity)}</div>
-                    </div>
-                    <div className="pb-2 text-xs">
-                      {item?.quantity} x {currencyFormat(item?.unit_nett)}
-                    </div>
-                    <div>
-                      {item?.additionals?.map((addon, i) => (
-                        <div className="text-base-300 text-xs font-thin" key={i}>
-                          <span>
-                            + {addon?.catalog?.name} (
-                            {addon?.quantity > 0 && `${addon?.quantity} x `}
-                            {`${addon?.unit_nett > 0 ? currencyFormat(addon?.unit_nett) : 'Free'}`})
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="border-base-200 border-b py-4">
-                <div className="flex place-content-between place-items-center text-base font-semibold">
-                  <div>Total: </div>
-                  <div>{currencyFormat(detail?.total_charges)}</div>
-                </div>
-                <div className="flex place-content-between place-items-center text-base">
-                  <div className="capitalize">{detail?.payment_method?.name || 'Cash'}: </div>
-                  <div>{currencyFormat(detail?.total_payment)}</div>
-                </div>
-                {detail?.total_payment - detail?.total_charges > 0 && (
-                  <div className="flex place-content-between place-items-center text-base">
-                    <div>Total Change: </div>
-                    <div>{currencyFormat(detail?.total_payment - detail?.total_charges)}</div>
-                  </div>
-                )}
-                {detail?.payment_ref !== '' && (
-                  <div className="flex place-content-between place-items-center text-base">
-                    <div>Ref: </div>
-                    <div>{detail?.payment_ref}</div>
-                  </div>
-                )}
-              </div>
-
-              <div className="text-base-300 flex place-content-between place-items-center py-4 text-base">
-                <div>{dateFormat(detail?.ordered_at)}</div>
-                <div>{detail?.code}</div>
-              </div>
+            <div className="w-2/4">
+              <OrderDetails data={detail} />
             </div>
           </div>
         </div>
@@ -274,40 +194,6 @@ const HistoryScreen = () => {
           <EmptySection />
         </div>
       )}
-
-      <Dialog.Wrapper ref={dialogRef} className="w-md">
-        <Dialog.Header onClose={closeModal}>
-          <div className="text-lg font-semibold">Refund</div>
-        </Dialog.Header>
-        <Dialog.Body>
-          <div className="mb-3 py-4">
-            <div>Are you sure you want to refund this transaction?</div>
-            <div className="mb-3">Cash amount on hand will be recalculated.</div>
-
-            <Input
-              label="Enter PIN"
-              value={pin}
-              onChange={e => setPin(e?.target?.value)}
-              error={FormState?.errors?.pin}
-              type="password"
-            />
-          </div>
-        </Dialog.Body>
-        <Dialog.Footer>
-          <div className="btn btn-md px-10" onClick={closeModal}>
-            Cancel
-          </div>
-          <div
-            className={`btn btn-md btn-error px-10 text-white ${cancelResult?.isLoading ? 'btn-disabled' : ''}`}
-            onClick={onCancel}
-          >
-            Confirm{' '}
-            {cancelResult.isLoading ? (
-              <span className="loading loading-spinner loading-sm"></span>
-            ) : null}
-          </div>
-        </Dialog.Footer>
-      </Dialog.Wrapper>
     </div>
   );
 };

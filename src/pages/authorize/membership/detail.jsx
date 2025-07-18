@@ -2,16 +2,16 @@
 import React from 'react';
 
 import CardMockup from '../../../assets/card-mockup.jpg';
-import { Dialog } from '../../../components/ui';
+import { Modal } from '../../../components/ui';
 import { PaypassIcon } from '../../../components/ui/icon';
 import Input from '../../../components/ui/input';
+import useModal from '../../../components/ui/modal/hook';
 import useMembership from '../../../services/membership/hook';
 import { currencyFormat } from '../../../utils/common';
-import useDialogModal from '../../../utils/modal';
 
 const DetailSession = ({ id, onClose, isOpen, reboot }) => {
-  const { dialogRef, open: openModal, close: closeModal } = useDialogModal();
   const { showResult, remove, removeResult, update, updateResult } = useMembership(id);
+  const { openModal, closeModal } = useModal();
 
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
@@ -29,6 +29,34 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
     };
 
     update({ id, payload });
+  };
+
+  const onDeleteOpen = () => {
+    openModal(
+      <>
+        <Modal.Header
+          onClose={() => {
+            closeModal();
+          }}
+        >
+          <div className="text-[16px] font-semibold tracking-wide">Remove Member</div>
+        </Modal.Header>
+        <Modal.Body full>
+          <div className="p-6 text-center">
+            <div className="mb-4 text-[16px] font-semibold tracking-wide">Are you sure ?</div>
+            <div className="flex place-content-center place-items-center gap-4">
+              <div className="btn btn-error btn-lg px-6 text-white" onClick={onDelete}>
+                Yes
+              </div>
+              <div className="btn btn-outline btn-lg px-6" onClick={closeModal}>
+                Cancel
+              </div>
+            </div>
+          </div>
+        </Modal.Body>
+      </>,
+      'w-md'
+    );
   };
 
   React.useEffect(() => {
@@ -66,7 +94,7 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
   const data = updateResult?.isSuccess ? updateResult?.data?.data : showResult?.data?.data;
 
   return (
-    <div className="flex h-full w-md flex-1 flex-col">
+    <div className="flex h-full w-md min-w-lg flex-1 flex-col">
       <div className="flex-1">
         <div className="h-80 w-full overflow-hidden rounded-lg">
           <div
@@ -139,29 +167,10 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
           Save
         </button>
 
-        <div className="btn btn-error h-full flex-1 rounded-none text-white" onClick={openModal}>
+        <div className="btn btn-error h-full flex-1 rounded-none text-white" onClick={onDeleteOpen}>
           Remove
         </div>
       </div>
-
-      <Dialog.Wrapper ref={dialogRef}>
-        <Dialog.Header onClose={closeModal}>
-          <div className="text-[16px] font-semibold tracking-wide">Remove</div>
-        </Dialog.Header>
-        <Dialog.Body>
-          <div className="p-6 text-center">
-            <div className="mb-4 text-[16px] font-semibold tracking-wide">Are you sure ?</div>
-            <div className="flex place-content-center place-items-center gap-4">
-              <div className="btn btn-error btn-lg px-6 text-white" onClick={onDelete}>
-                Yes
-              </div>
-              <div className="btn btn-outline btn-lg px-6" onClick={closeModal}>
-                Cancel
-              </div>
-            </div>
-          </div>
-        </Dialog.Body>
-      </Dialog.Wrapper>
     </div>
   );
 };
