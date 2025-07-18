@@ -28,7 +28,7 @@ const HistoryScreen = () => {
   const { order, orderResult, show, showResult } = useOrder();
   const { openModal, closeModal } = useModal();
 
-  const { open } = usePrintWindow({ title: 'Print Preview', autoClose: false });
+  const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
 
   const handleOpenPrint = () => {
     open(<Receipt data={detail} />);
