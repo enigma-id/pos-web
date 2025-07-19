@@ -254,15 +254,35 @@ const ShiftScreen = () => {
 
                   <div className="flex place-content-between place-items-center py-2">
                     <div>
-                      <span className="text-sm">Total Sales</span>
+                      <span className="text-sm">Total Nett</span>
                     </div>
-                    <span className="text-sm">{currencyFormat(detail?.subtotal_order)}</span>
+                    <span className="text-sm">
+                      {currencyFormat(detail?.summary_order?.total_nett)}
+                    </span>
+                  </div>
+                  <div className="flex place-content-between place-items-center py-2">
+                    <div>
+                      <span className="text-sm">Total Discount</span>
+                    </div>
+                    <span className="text-sm">
+                      {currencyFormat(detail?.summary_order?.total_discount)}
+                    </span>
+                  </div>
+                  <div className="flex place-content-between place-items-center py-2">
+                    <div>
+                      <span className="text-sm">Total Charge</span>
+                    </div>
+                    <span className="text-sm">
+                      {currencyFormat(detail?.summary_order?.total_charges)}
+                    </span>
                   </div>
                   <div className="flex place-content-between place-items-center py-2">
                     <div>
                       <span className="text-sm">Total Bills</span>
                     </div>
-                    <span className="text-sm">{currencyFormat(detail?.subtotal_openbill)}</span>
+                    <span className="text-sm">
+                      {currencyFormat(detail?.summary_order?.total_openbill)}
+                    </span>
                   </div>
                 </div>
 
