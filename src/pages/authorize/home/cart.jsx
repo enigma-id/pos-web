@@ -96,15 +96,17 @@ const Cart = ({ onUpdate }) => {
 
         const childNames = selectedChilds.map(child => {
           const suffix =
-            add?.type === 'quantity'
-              ? `(${child?.quantity} x ${currencyFormat(child?.unit_price, undefined, 'Free')})`
+            add?.type === 'quantity' || add?.type === 'checkbox'
+              ? `(${item?.quantity} x ${child?.quantity}) x ${currencyFormat(child?.unit_price || 0)}`
               : '';
           return (
             <div className="text-base-300 flex place-content-between text-xs font-thin">
               <span>
                 + {child?.name} {suffix}
               </span>
-              <span>{currencyFormat(child?.quantity * child?.unit_price, undefined, 'Free')}</span>
+              <span>
+                {currencyFormat(item?.quantity * child?.quantity * child?.unit_price || 0)}
+              </span>
             </div>
           );
         });
@@ -204,7 +206,7 @@ const Cart = ({ onUpdate }) => {
                     <span className="ps-2 text-base font-semibold uppercase">{item?.name}</span>
                   </div>
                   <span className="text-base-300 text-xs">
-                    {currencyFormat(item?.unit_price, undefined, 'Free')}
+                    {currencyFormat(item?.quantity * item?.unit_price, undefined)}
                   </span>
                 </div>
 
@@ -240,7 +242,7 @@ const Cart = ({ onUpdate }) => {
                 <span className="ps-2 text-base font-semibold uppercase">{item?.name}</span>
               </div>
               <span className="text-base-300 text-xs">
-                {currencyFormat(item?.unit_price, undefined, 'Free')}
+                {currencyFormat(item?.quantity * item?.unit_price, undefined)}
               </span>
             </div>
 

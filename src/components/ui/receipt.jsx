@@ -95,10 +95,11 @@ const Receipt = ({ data }) => {
               style={{ display: 'flex', alignItems: '', justifyContent: 'space-between' }}
             >
               <p style={{ marginBlock: 2, fontSize: 9, textTransform: 'capitalize' }}>
-                + {addon?.catalog?.name} ({addon?.quantity > 0 && `${addon?.quantity} x `}
-                {currencyFormat(addon?.unit_bill, false)})
+                + {addon?.catalog?.name}
+                {addon?.addon?.type !== 'options' &&
+                  ` (${addon?.quantity} x ${currencyFormat(addon?.unit_bill, false)})`}
               </p>
-              <p style={{ marginBlock: 2, fontSize: 11 }}>
+              <p style={{ marginBlock: 2, fontSize: 9 }}>
                 {currencyFormat(
                   addon?.quantity > 0
                     ? addon?.quantity * addon?.unit_bill

@@ -9,6 +9,7 @@ export { default as Drawer } from './drawer';
 export { default as NFCField } from './nfc';
 export { default as Modal } from './modal';
 export { default as Refund } from './refund';
+export { default as Remove } from './remove';
 export { default as Receipt } from './receipt';
 export { default as Summary } from './summary';
 export { default as Kitchen } from './kitchen';

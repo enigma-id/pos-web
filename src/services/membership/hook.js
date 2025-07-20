@@ -47,9 +47,9 @@ const useMembership = id => {
     }
   };
 
-  const remove = async id => {
+  const remove = async ({ id, payload }) => {
     try {
-      await removeMember(id).unwrap();
+      await removeMember({ id, payload }).unwrap();
     } catch (err) {
       dispatch($failure(err));
     }

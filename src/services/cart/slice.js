@@ -123,14 +123,14 @@ function convertApiOrderToCartItem(item) {
   const groupedAdditionals = {};
 
   for (const add of item.additionals || []) {
-    const addonId = add.addon_id;
+    const addonId = add.addon.id;
     if (!addonId) continue;
 
     if (!groupedAdditionals[addonId]) {
       groupedAdditionals[addonId] = {
         id: addonId,
-        name: add.addon_name || '',
-        type: add.addon_type || '',
+        name: add.addon.name || '',
+        type: add.addon.type || '',
         childs: [],
       };
     }
@@ -138,23 +138,26 @@ function convertApiOrderToCartItem(item) {
     const qty = add.quantity > 0 ? add.quantity / item.quantity : 0;
 
     groupedAdditionals[addonId].childs.push({
-      id: add.catalog.id,
+      id: add.id,
+      catalog_id: add.catalog.id,
       name: add.catalog.name,
       unit_price: add.unit_nett,
       quantity: qty,
       selected: add.quantity > 0 || add.addon_type !== 'quantity',
     });
-
-    if (qty > 0) {
-      groupedAdditionals[addonId].type = 'quantity';
-    }
   }
 
+  const additionalsGrouped = Object.values(groupedAdditionals);
+
   const additionalsFlat = (item.additionals || []).map(add => ({
-    addon_id: add.addon_id,
+    id: add.id,
+    addon_id: add.addon.id,
     catalog_id: add.catalog.id,
     ...(add.quantity ? { quantity: add.quantity } : {}),
   }));
+
+  const additionalPerItem = calculateAdditionalsPerItem(additionalsGrouped);
+  const subtotal = (item.unit_nett + additionalPerItem) * item.quantity;
 
   return {
     id: item.id,
@@ -172,7 +175,7 @@ function convertApiOrderToCartItem(item) {
     is_deleted: item.catalog.is_deleted,
     unit_price: item.unit_nett,
     quantity: item.quantity,
-    subtotal: item.unit_bill * item.quantity,
+    subtotal,
     catalog_id: item.catalog.id,
     additionals: Object.values(groupedAdditionals),
     additionals_flat: additionalsFlat,
@@ -180,6 +183,21 @@ function convertApiOrderToCartItem(item) {
     final_total: item.unit_bill * item.quantity,
     from_bill: true,
   };
+}
+
+function calculateAdditionalsPerItem(additionals = []) {
+  return additionals.reduce((total, add) => {
+    const { childs = [] } = add;
+
+    return (
+      total +
+      childs.reduce((sum, child) => {
+        // const isSelected = type === 'quantity' ? (child.quantity || 0) > 0 : !!child.selected;
+        // const quantity = type === 'quantity' ? child.quantity || 0 : 1;
+        return sum + child.unit_price * child.quantity;
+      }, 0)
+    );
+  }, 0);
 }
 
 // Initial State

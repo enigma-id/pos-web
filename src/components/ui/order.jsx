@@ -10,9 +10,11 @@ const OrderDetails = ({ data }) => {
       </div>
 
       <div className="border-base-200 border-b py-4">
-        <div className="mb-2 text-sm">
-          <span className="font-semibold">Bills name :</span> {data?.ticket || data?.note}
-        </div>
+        {(data?.ticket || data?.note) && (
+          <div className="mb-2 text-sm">
+            <span className="font-semibold">Bills name :</span> {data?.ticket || data?.note}
+          </div>
+        )}
         <div className="mb-2 text-sm">
           <span className="font-semibold">Cashier :</span> {data?.session?.cashier?.name || '-'}
         </div>
@@ -50,11 +52,18 @@ const OrderDetails = ({ data }) => {
             </div>
             <div>
               {item?.additionals?.map((addon, i) => (
-                <div className="text-xs font-thin" key={i}>
-                  <span>
-                    + {addon?.catalog?.name} ({addon?.quantity > 0 && `${addon?.quantity} x `}
-                    {`${addon?.unit_nett > 0 ? currencyFormat(addon?.unit_nett) : 'Free'}`})
-                  </span>
+                <div key={i} className="flex place-content-between place-items-center text-base">
+                  <div className="text-xs font-thin">
+                    <span>
+                      + {addon?.catalog?.name}{' '}
+                      {addon?.addon?.type === 'options'
+                        ? ''
+                        : `(${addon?.quantity > 0 && addon?.quantity} x ${currencyFormat(addon?.unit_nett)})`}
+                    </span>
+                  </div>
+                  <div className="text-xs font-thin">
+                    {currencyFormat(addon?.quantity * addon?.unit_nett)}
+                  </div>
                 </div>
               ))}
             </div>

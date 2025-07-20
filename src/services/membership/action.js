@@ -28,9 +28,10 @@ export const memberApi = createApi({
       }),
     }),
     delete: builder.mutation({
-      query: id => ({
+      query: ({ id, payload }) => ({
         url: `/membership/${id}`,
         method: 'DELETE',
+        body: payload,
       }),
     }),
     show: builder.query({

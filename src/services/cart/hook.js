@@ -230,7 +230,6 @@ const useCart = catalog_id => {
   const onBillSelected = async data => {
     if (!data) return;
     show(data?.id);
-    dispatch(selectedBill(data));
   };
 
   const billItems = data => {
@@ -240,6 +239,7 @@ const useCart = catalog_id => {
   useEffect(() => {
     if (showResult?.isSuccess) {
       billItems(showResult?.data?.data?.items);
+      dispatch(selectedBill(showResult?.data?.data));
     }
   }, [showResult]);
 

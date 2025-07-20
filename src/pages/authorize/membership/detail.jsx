@@ -1,8 +1,9 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
+import { useSelector } from 'react-redux';
 
 import CardMockup from '../../../assets/card-mockup.jpg';
-import { Modal } from '../../../components/ui';
+import { Remove } from '../../../components/ui';
 import { PaypassIcon } from '../../../components/ui/icon';
 import Input from '../../../components/ui/input';
 import useModal from '../../../components/ui/modal/hook';
@@ -10,16 +11,14 @@ import useMembership from '../../../services/membership/hook';
 import { currencyFormat } from '../../../utils/common';
 
 const DetailSession = ({ id, onClose, isOpen, reboot }) => {
-  const { showResult, remove, removeResult, update, updateResult } = useMembership(id);
+  const Session = useSelector(state => state?.Auth?.session);
+
+  const { showResult, update, updateResult } = useMembership(id);
   const { openModal, closeModal } = useModal();
 
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
   const [edit, setEdit] = React.useState(false);
-
-  const onDelete = async () => {
-    remove(id);
-  };
 
   const onSave = async () => {
     const payload = {
@@ -33,38 +32,17 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
 
   const onDeleteOpen = () => {
     openModal(
-      <>
-        <Modal.Header
-          onClose={() => {
-            closeModal();
-          }}
-        >
-          <div className="text-[16px] font-semibold tracking-wide">Remove Member</div>
-        </Modal.Header>
-        <Modal.Body full>
-          <div className="p-6 text-center">
-            <div className="mb-4 text-[16px] font-semibold tracking-wide">Are you sure ?</div>
-            <div className="flex place-content-center place-items-center gap-4">
-              <div className="btn btn-error btn-lg px-6 text-white" onClick={onDelete}>
-                Yes
-              </div>
-              <div className="btn btn-outline btn-lg px-6" onClick={closeModal}>
-                Cancel
-              </div>
-            </div>
-          </div>
-        </Modal.Body>
-      </>,
+      <Remove
+        id={id}
+        onClose={() => {
+          closeModal();
+          reboot?.();
+          onClose?.();
+        }}
+      />,
       'w-md'
     );
   };
-
-  React.useEffect(() => {
-    if (removeResult?.isSuccess) {
-      closeModal();
-      onClose();
-    }
-  }, [removeResult]);
 
   React.useEffect(() => {
     if (isOpen === false) {
@@ -83,8 +61,9 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
 
   React.useEffect(() => {
     if (updateResult?.isSuccess) {
-      setName(updateResult?.data?.data?.name);
-      setPhone(updateResult?.data?.data?.reff_code);
+      // setName(updateResult?.data?.data?.name);
+      // setPhone(updateResult?.data?.data?.reff_code);
+      onClose?.();
       reboot?.();
     }
   }, [updateResult]);
@@ -166,10 +145,14 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
         >
           Save
         </button>
-
-        <div className="btn btn-error h-full flex-1 rounded-none text-white" onClick={onDeleteOpen}>
-          Remove
-        </div>
+        {Session?.user?.is_supervisor === 1 && (
+          <div
+            className="btn btn-error h-full flex-1 rounded-none text-white"
+            onClick={onDeleteOpen}
+          >
+            Remove
+          </div>
+        )}
       </div>
     </div>
   );

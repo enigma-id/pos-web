@@ -42,6 +42,7 @@ const CheckoutScreen = () => {
     closeBill,
     closeBillResult,
     remove,
+    billItems,
   } = useCart();
   const { show, showResult } = useOrder();
 
@@ -70,15 +71,15 @@ const CheckoutScreen = () => {
 
         const childNames = selectedChilds.map(child => {
           const suffix =
-            add?.type === 'quantity'
-              ? `(${child?.quantity} x ${currencyFormat(child?.unit_price, undefined, 'Free')})`
+            add?.type === 'quantity' || add?.type === 'checkbox'
+              ? `(${item?.quantity} x ${child?.quantity}) x ${currencyFormat(child?.unit_price)}`
               : '';
           return (
             <div className="text-base-300 flex place-content-between text-xs font-thin">
               <span>
                 + {child?.name} {suffix}
               </span>
-              <span>{currencyFormat(child?.quantity * child?.unit_price, undefined, 'Free')}</span>
+              <span>{currencyFormat(item?.quantity * child?.quantity * child?.unit_price)}</span>
             </div>
           );
         });
@@ -289,12 +290,6 @@ const CheckoutScreen = () => {
     }
   }, [checkoutResult]);
 
-  // React.useEffect(() => {
-  //   if (closeBillResult?.isSuccess) {
-  //     show(billID);
-  //   }
-  // }, [closeBillResult]);
-
   React.useEffect(() => {
     if (closeBillResult?.isSuccess || (checkoutResult?.isSuccess && showResult?.isSuccess)) {
       openSuccess(closeBillResult?.data?.data ?? showResult?.data?.data);
@@ -346,7 +341,19 @@ const CheckoutScreen = () => {
       </div>
       <div className="flex h-[calc(100vh-64px)] p-4">
         <div className="bg-base-100 flex h-full min-h-0 w-1/3 flex-1 flex-col p-4">
-          <div className="py-4 text-base font-semibold">Order details</div>
+          <div className="flex place-content-between place-items-center">
+            <div className="py-4 text-base font-semibold">Order details</div>
+            {isBill ? (
+              <div
+                className="btn btn-info btn-sm"
+                onClick={() => billItems(CartState?.bill?.items)}
+              >
+                Reset
+              </div>
+            ) : (
+              ''
+            )}
+          </div>
 
           <div className="flex-1 overflow-y-auto">
             <div className="bg-accent p-4">
@@ -355,21 +362,25 @@ const CheckoutScreen = () => {
                     <div key={i} className="border-base-200 border-b py-2">
                       <div className="flex place-content-between place-items-center text-base font-semibold">
                         <div>{item?.name}</div>
-                        <div>
-                          {item?.discount_amount > 0 ? (
-                            <div className="text-base">
-                              <span className="me-2 text-xs !font-thin line-through">
-                                {currencyFormat(item?.subtotal)}
-                              </span>
-                              {currencyFormat(item?.final_total)}
-                            </div>
-                          ) : (
-                            currencyFormat(item?.subtotal)
+                        <div className="text-base-300 text-xs">
+                          {currencyFormat(
+                            item?.quantity *
+                              (item?.discount_amount > 0
+                                ? item?.unit_price - item?.discount_amount / item.quantity
+                                : item?.unit_price)
                           )}
                         </div>
                       </div>
                       <div className="pb-2 text-xs">
-                        {item?.quantity} x {currencyFormat(item?.unit_price)}
+                        {item?.quantity} x{' '}
+                        {item?.discount_amount > 0
+                          ? currencyFormat(item?.unit_price - item?.discount_amount / item.quantity)
+                          : currencyFormat(item?.unit_price)}
+                        {item?.discount_amount > 0 && (
+                          <span className="text-base-300 ms-2 line-through">
+                            {currencyFormat(item?.unit_price)}
+                          </span>
+                        )}
                       </div>
                       <div>
                         {renderAdditionals(item).map((line, idx) => (
@@ -379,18 +390,34 @@ const CheckoutScreen = () => {
                         ))}
                       </div>
 
-                      <div className="flex place-items-center gap-2">
-                        <div
-                          className="btn btn-sm btn-error btn-circle btn-outline hover:!text-white"
-                          onClick={() => remove(i, 'bill')}
-                        >
-                          <TrashIcon />
+                      <div className="mt-2 flex place-content-between place-items-center">
+                        <div className="flex place-items-center gap-2">
+                          <div
+                            className="btn btn-sm btn-error btn-circle btn-outline hover:!text-white"
+                            onClick={() => remove(i, 'bill')}
+                          >
+                            <TrashIcon />
+                          </div>
+                          <div
+                            className="btn btn-sm btn-primary btn-circle btn-outline"
+                            onClick={() => onShow(item, i, 'bill')}
+                          >
+                            <EditIcon />
+                          </div>
                         </div>
-                        <div
-                          className="btn btn-sm btn-primary btn-circle btn-outline"
-                          onClick={() => onShow(item, i, 'bill')}
-                        >
-                          <EditIcon />
+                        <div>
+                          {item?.discount_amount > 0 ? (
+                            <div className="text-primary text-lg font-bold">
+                              <span className="me-2 text-xs !font-thin line-through">
+                                {currencyFormat(item?.subtotal)}
+                              </span>
+                              {currencyFormat(item?.final_total)}
+                            </div>
+                          ) : (
+                            <div className="text-primary text-lg font-bold">
+                              {currencyFormat(item?.subtotal)}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -401,21 +428,25 @@ const CheckoutScreen = () => {
                 <div key={i} className="border-base-200 border-b py-2">
                   <div className="flex place-content-between place-items-center text-base font-semibold">
                     <div>{item?.name}</div>
-                    <div>
-                      {item?.discount_amount > 0 ? (
-                        <div className="text-base">
-                          <span className="me-2 text-xs !font-thin line-through">
-                            {currencyFormat(item?.subtotal)}
-                          </span>
-                          {currencyFormat(item?.final_total)}
-                        </div>
-                      ) : (
-                        currencyFormat(item?.subtotal)
+                    <div className="text-base-300 text-xs">
+                      {currencyFormat(
+                        item?.quantity *
+                          (item?.discount_amount > 0
+                            ? item?.unit_price - item?.discount_amount / item.quantity
+                            : item?.unit_price)
                       )}
                     </div>
                   </div>
                   <div className="pb-2 text-xs">
-                    {item?.quantity} x {currencyFormat(item?.unit_price)}
+                    {item?.quantity} x{' '}
+                    {item?.discount_amount > 0
+                      ? currencyFormat(item?.unit_price - item?.discount_amount / item.quantity)
+                      : currencyFormat(item?.unit_price)}
+                    {item?.discount_amount > 0 && (
+                      <span className="text-base-300 ms-2 line-through">
+                        {currencyFormat(item?.unit_price)}
+                      </span>
+                    )}
                   </div>
                   <div>
                     {renderAdditionals(item).map((line, idx) => (
@@ -424,20 +455,22 @@ const CheckoutScreen = () => {
                       </div>
                     ))}
                   </div>
-                  {/* <div className="flex place-items-center gap-2">
-                    <div
-                      className="btn btn-sm btn-error btn-circle btn-outline hover:!text-white"
-                      onClick={() => remove(i)}
-                    >
-                      <TrashIcon />
+                  <div className="flex place-content-end place-items-center gap-2">
+                    <div>
+                      {item?.discount_amount > 0 ? (
+                        <div className="text-primary text-lg font-bold">
+                          <span className="me-2 text-xs !font-thin line-through">
+                            {currencyFormat(item?.subtotal)}
+                          </span>
+                          {currencyFormat(item?.final_total)}
+                        </div>
+                      ) : (
+                        <div className="text-primary text-lg font-bold">
+                          {currencyFormat(item?.subtotal)}
+                        </div>
+                      )}
                     </div>
-                    <div
-                      className="btn btn-sm btn-primary btn-circle btn-outline"
-                      onClick={() => onShow(item, i)}
-                    >
-                      <EditIcon />
-                    </div>
-                  </div> */}
+                  </div>
                 </div>
               ))}
             </div>
@@ -447,7 +480,7 @@ const CheckoutScreen = () => {
           <div>
             {CartState?.meta?.customer ? (
               <div className="border-base-200 border-b pb-4">
-                <div className="py-4 text-base font-semibold">Customer Info</div>
+                <div className="py-4 text-base font-semibold">Customer </div>
                 <div className="flex gap-5">
                   <div>
                     <UserCircleIcon />
@@ -464,7 +497,7 @@ const CheckoutScreen = () => {
               </div>
             ) : CartState?.bill?.ticket ? (
               <div className="border-base-200 border-b pb-4">
-                <div className="py-4 text-base font-semibold">Ticket</div>
+                <div className="py-4 text-base font-semibold">Customer</div>
                 <div className="text-base">{CartState?.bill?.ticket || '-'}</div>
               </div>
             ) : (
