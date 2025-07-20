@@ -90,10 +90,21 @@ const Receipt = ({ data }) => {
             </p>
           </div>
           {item?.additionals?.map((addon, idx) => (
-            <div key={idx}>
+            <div
+              key={idx}
+              style={{ display: 'flex', alignItems: '', justifyContent: 'space-between' }}
+            >
               <p style={{ marginBlock: 2, fontSize: 9, textTransform: 'capitalize' }}>
                 + {addon?.catalog?.name} ({addon?.quantity > 0 && `${addon?.quantity} x `}
-                {`${addon?.unit_bill > 0 ? currencyFormat(addon?.unit_bill, false) : 'Free'}`})
+                {currencyFormat(addon?.unit_bill, false)})
+              </p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>
+                {currencyFormat(
+                  addon?.quantity > 0
+                    ? addon?.quantity * addon?.unit_bill
+                    : item?.quantity * addon?.unit_bill,
+                  false
+                )}
               </p>
             </div>
           ))}
@@ -115,7 +126,7 @@ const Receipt = ({ data }) => {
           </div>
         )}
         {data?.items.reduce((sum, item) => {
-          const qty = item.quantity ?? 1; // default 1 kalau tidak ada quantity
+          const qty = item.quantity ?? 1;
           const discount = item.discount_value ?? 0;
           return sum + discount * qty;
         }, 0) > 0 && (
@@ -125,7 +136,7 @@ const Receipt = ({ data }) => {
               -
               {currencyFormat(
                 data?.items.reduce((sum, item) => {
-                  const qty = item.quantity ?? 1; // default 1 kalau tidak ada quantity
+                  const qty = item.quantity ?? 1;
                   const discount = item.discount_value ?? 0;
                   return sum + discount * qty;
                 }, 0)

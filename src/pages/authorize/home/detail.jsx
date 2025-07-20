@@ -182,7 +182,22 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
           add =>
             add.childs?.length > 0 && (
               <div key={add.id} className="border-base-200 mb-4 border-b border-dashed pb-3">
-                <p className="mb-2 text-base font-semibold uppercase">{add.name}</p>
+                <p className="mb-2 text-base font-semibold uppercase">
+                  {add.name}{' '}
+                  {add?.type === 'quantity' ? (
+                    <span className="text-base-content text-sm !font-thin !capitalize">
+                      (set quantity for each option)
+                    </span>
+                  ) : add?.type === 'options' ? (
+                    <span className="text-base-content text-sm !font-thin !capitalize">
+                      (choose one)
+                    </span>
+                  ) : add?.type === 'checkbox' ? (
+                    <span className="text-base-content text-sm !font-thin !capitalize">
+                      (choose one or more)
+                    </span>
+                  ) : null}
+                </p>
                 {add.childs.map(child => (
                   <div key={child.id} className="mb-2 flex items-center justify-between text-sm">
                     <span>{child.name}</span>

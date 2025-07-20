@@ -111,7 +111,8 @@ const Kitchen = ({ data }) => {
           {item?.additionals?.map((addon, idx) => (
             <div key={idx}>
               <p style={{ marginBlock: 2, fontSize: 11, textTransform: 'capitalize' }}>
-                + {addon?.catalog?.name} {`x (${addon?.quantity > 0 ? addon?.quantity : 1})`}
+                + {addon?.catalog?.name}{' '}
+                {addon?.quantity > 0 ? `(${addon?.quantity / item?.quantity})` : ''}
               </p>
             </div>
           ))}
