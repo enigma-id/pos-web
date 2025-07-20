@@ -247,7 +247,7 @@ const ShiftScreen = () => {
 
                   <div className="flex place-content-between place-items-center py-2">
                     <div>
-                      <span className="text-sm">Topup Bill Payments</span>
+                      <span className="text-sm">Total Bill Payments</span>
                     </div>
                     <span className="text-sm">{currencyFormat(detail?.bill_payment)}</span>
                   </div>
