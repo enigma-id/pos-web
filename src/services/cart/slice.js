@@ -129,13 +129,13 @@ function convertApiOrderToCartItem(item) {
     if (!groupedAdditionals[addonId]) {
       groupedAdditionals[addonId] = {
         id: addonId,
-        name: add.addon_name || '', // optional: bisa dari API
-        type: add.addon_type || '', // optional: bisa dari API
+        name: add.addon_name || '',
+        type: add.addon_type || '',
         childs: [],
       };
     }
 
-    const qty = add.quantity || 0;
+    const qty = add.quantity > 0 ? add.quantity / item.quantity : 0;
 
     groupedAdditionals[addonId].childs.push({
       id: add.catalog.id,
@@ -157,12 +157,12 @@ function convertApiOrderToCartItem(item) {
   }));
 
   return {
-    id: item.catalog.id,
+    id: item.id,
     category: item.catalog.category,
     brand_id: item.catalog.brand_id,
     ref_id: item.catalog.ref_id,
     code: item.catalog.code,
-    name: item.catalog.name,
+    name: item.catalog.name || item?.description,
     base_price: item.catalog.base_price,
     image: item.catalog.image,
     is_custom: item.catalog.is_custom,

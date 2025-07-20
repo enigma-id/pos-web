@@ -1,26 +1,33 @@
-const QuantityStepper = ({ value, onChange, small }) => {
-  const increment = () => onChange(value + 1);
+const QuantityStepper = ({ value, onChange, small, disableIncrement = false }) => {
+  const increment = () => {
+    if (!disableIncrement) {
+      onChange(value + 1);
+    }
+  };
+
   const decrement = () => {
     onChange(value - 1);
   };
 
-  const isDisabled = () => {
-    value === 0 ? 'btn-disabled' : '';
-  };
+  const isDecrementDisabled = value === 0;
 
   return (
     <div className={`flex items-center justify-between rounded-full ${small ? 'w-25' : 'w-full'}`}>
-      <div
-        className={`btn btn-primary ${isDisabled()} ${small ? 'btn-sm' : 'btn-lg'}`}
-        disabled={value === 0}
+      <button
+        className={`btn btn-primary ${small ? 'btn-sm' : 'btn-lg'}`}
+        disabled={isDecrementDisabled}
         onClick={decrement}
       >
         -
-      </div>
+      </button>
       <div className={`${small ? 'text-sm' : 'text-lg'} font-semibold`}>{value}</div>
-      <div className={`btn btn-primary ${small ? 'btn-sm' : 'btn-lg'}`} onClick={increment}>
+      <button
+        className={`btn btn-primary ${small ? 'btn-sm' : 'btn-lg'}`}
+        disabled={disableIncrement}
+        onClick={increment}
+      >
         +
-      </div>
+      </button>
     </div>
   );
 };

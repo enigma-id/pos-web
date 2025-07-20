@@ -40,6 +40,47 @@ const Kitchen = ({ data }) => {
           <p style={{ marginBlock: 2, fontSize: 12 }}>Cashier</p>
           <p style={{ marginBlock: 2, fontSize: 12 }}>{data?.session?.cashier?.name}</p>
         </div>
+        {data?.note && (
+          <div
+            style={{
+              marginBottom: 5,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Bill Name</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.note}</p>
+          </div>
+        )}
+
+        {data?.membership && (
+          <div
+            style={{
+              marginBottom: 5,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Member</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.membership?.name}</p>
+          </div>
+        )}
+
+        {data?.ticket && (
+          <div
+            style={{
+              marginBottom: 5,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Bill Name</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.ticket}</p>
+          </div>
+        )}
       </div>
 
       <div
@@ -70,7 +111,7 @@ const Kitchen = ({ data }) => {
           {item?.additionals?.map((addon, idx) => (
             <div key={idx}>
               <p style={{ marginBlock: 2, fontSize: 11, textTransform: 'capitalize' }}>
-                + {addon?.catalog?.name} {addon?.quantity > 0 && `(${addon?.quantity})`}
+                + {addon?.catalog?.name} {`x (${addon?.quantity > 0 ? addon?.quantity : 1})`}
               </p>
             </div>
           ))}

@@ -103,19 +103,41 @@ const CloseSection = () => {
           value={currencyFormat(summaryResult?.data?.data?.cash_started || 0)}
         />
         <List
-          title="Total Transactions"
-          value={currencyFormat(summaryResult?.data?.data?.subtotal_order || 0)}
+          title="Total Bill Payments"
+          value={currencyFormat(summaryResult?.data?.data?.bill_payment || 0)}
+        />
+        <List
+          title="Topup Cash"
+          value={currencyFormat(summaryResult?.data?.data?.cash_topup || 0)}
+        />
+        <List
+          title="Total Sales"
+          value={currencyFormat(summaryResult?.data?.data?.summary_order?.total_nett || 0)}
+        />
+        <List
+          title="Total Discount"
+          value={currencyFormat(summaryResult?.data?.data?.summary_order?.total_discount || 0)}
+        />
+        <List
+          title="Total After Discount"
+          value={currencyFormat(summaryResult?.data?.data?.summary_order?.total_charges || 0)}
+        />
+        <List
+          title="Total Bills"
+          value={currencyFormat(summaryResult?.data?.data?.summary_order?.total_openbill || 0)}
         />
 
-        <div className="bg-base-300/30 mb-3 rounded-md p-3">
-          {summaryResult?.data?.data?.cash_payments?.map((pm, i) => (
-            <List
-              key={i}
-              title={pm?.payment_name === '' ? 'Cash' : pm?.payment_name}
-              value={currencyFormat(pm?.subtotal || 0)}
-            />
-          ))}
-        </div>
+        {summaryResult?.data?.data?.cash_payments?.length > 0 && (
+          <div className="bg-accent mb-3 rounded-md p-3">
+            {summaryResult?.data?.data?.cash_payments?.map((pm, i) => (
+              <List
+                key={i}
+                title={pm?.payment_name === '' ? 'Cash' : pm?.payment_name}
+                value={currencyFormat(pm?.subtotal || 0)}
+              />
+            ))}
+          </div>
+        )}
 
         <div className="mb-3">
           <div className="text-sm font-thin">Ending Cash</div>

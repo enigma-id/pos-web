@@ -247,6 +247,13 @@ const ShiftScreen = () => {
 
                   <div className="flex place-content-between place-items-center py-2">
                     <div>
+                      <span className="text-sm">Topup Bill Payments</span>
+                    </div>
+                    <span className="text-sm">{currencyFormat(detail?.bill_payment)}</span>
+                  </div>
+
+                  <div className="flex place-content-between place-items-center py-2">
+                    <div>
                       <span className="text-sm">Topup Cash</span>
                     </div>
                     <span className="text-sm">{currencyFormat(detail?.cash_topup)}</span>
@@ -254,7 +261,7 @@ const ShiftScreen = () => {
 
                   <div className="flex place-content-between place-items-center py-2">
                     <div>
-                      <span className="text-sm">Total Nett</span>
+                      <span className="text-sm">Total Sales</span>
                     </div>
                     <span className="text-sm">
                       {currencyFormat(detail?.summary_order?.total_nett)}
@@ -270,7 +277,7 @@ const ShiftScreen = () => {
                   </div>
                   <div className="flex place-content-between place-items-center py-2">
                     <div>
-                      <span className="text-sm">Total Charge</span>
+                      <span className="text-sm">Total After Discount</span>
                     </div>
                     <span className="text-sm">
                       {currencyFormat(detail?.summary_order?.total_charges)}
@@ -296,7 +303,7 @@ const ShiftScreen = () => {
                   ))}
                 </div>
 
-                <div className="border-base-200 border-b pt-4 pb-2">
+                {/* <div className="border-base-200 border-b pt-4 pb-2">
                   <div className="mb-2 text-sm font-semibold">Sales Channels :</div>
                   {detail?.sales_channels?.map((item, i) => (
                     <div key={i} className="flex place-content-between place-items-center py-2">
@@ -309,14 +316,19 @@ const ShiftScreen = () => {
                       <span className="text-sm">{currencyFormat(item?.subtotal)}</span>
                     </div>
                   ))}
-                </div>
+                </div> */}
 
                 <div className="border-base-200 border-b pt-4 pb-2">
                   <div className="mb-2 text-sm font-semibold">Category Sold :</div>
                   {detail?.category_solds?.map((item, i) => (
                     <div key={i} className="flex place-content-between place-items-center py-2">
-                      <div className="text-sm">{item?.name || '-'} </div>
-                      <span className="text-sm">{currencyFormat(item?.quantity, false)}</span>
+                      <div>
+                        <span className="bg-base-content rounded-lg px-3 py-1 text-sm text-white">
+                          {item?.quantity}
+                        </span>
+                        <span className="ps-2 text-sm">{item?.name || '-'}</span>
+                      </div>
+                      <span className="text-sm">{currencyFormat(item?.total_charges)}</span>
                     </div>
                   ))}
                 </div>

@@ -11,7 +11,7 @@ const OrderDetails = ({ data }) => {
 
       <div className="border-base-200 border-b py-4">
         <div className="mb-2 text-sm">
-          <span className="font-semibold">Bills name :</span> {data?.ticket || '-'}
+          <span className="font-semibold">Bills name :</span> {data?.ticket || data?.note}
         </div>
         <div className="mb-2 text-sm">
           <span className="font-semibold">Cashier :</span> {data?.session?.cashier?.name || '-'}
@@ -30,7 +30,7 @@ const OrderDetails = ({ data }) => {
         {data?.items?.map((item, i) => (
           <div key={i} className="pb-2">
             <div className="flex place-content-between place-items-center text-base">
-              <div>{item?.catalog?.name}</div>
+              <div>{item?.catalog?.name || item?.description}</div>
               <div>
                 {item?.discount_value > 0 && (
                   <span className="text-base-300 me-2 text-xs line-through">

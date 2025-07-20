@@ -54,7 +54,8 @@ const CheckoutScreen = () => {
   const [paymentRef, setPaymentRef] = React.useState('');
   const [pay, setPay] = React.useState(0);
   const [discountInputs, setDiscountInputs] = React.useState({});
-  const [billID, setBillID] = React.useState(null);
+  // const [billID, setBillID] = React.useState(null);
+  const [note, setNote] = React.useState('');
 
   const [selectedMethod, setSelectedMethod] = React.useState(null);
 
@@ -113,9 +114,13 @@ const CheckoutScreen = () => {
 
     const items = allItems?.map(item => {
       const base = {
-        catalog_id: item.id,
+        catalog_id: item.catalog_id,
         quantity: item.quantity,
       };
+
+      if (CartState?.bill) {
+        base.id = item.id;
+      }
 
       if (item?.additionals_flat?.length > 0) {
         base.additionals = item?.additionals_flat;
@@ -149,6 +154,14 @@ const CheckoutScreen = () => {
       items,
     };
 
+    if (note) {
+      payload.note = note;
+    }
+
+    if (CartState?.meta?.customer) {
+      payload.membership_id = CartState?.meta?.customer?.id;
+    }
+
     if (CartState?.discount?.cart?.type) {
       if (CartState?.discount?.cart?.type === 'percentage') {
         payload.discount_percentage = CartState?.discount?.cart?.value;
@@ -169,7 +182,7 @@ const CheckoutScreen = () => {
     }
 
     if (isBill) {
-      setBillID(CartState?.bill?.id);
+      // setBillID(CartState?.bill?.id);
       await closeBill(CartState?.bill?.id, payload);
     } else {
       await checkout(payload);
@@ -221,7 +234,7 @@ const CheckoutScreen = () => {
               <div className="text-xl font-semibold">{currencyFormat(data?.total_payment)}</div>
               <div className="text-base-300 text-base font-thin capitalize">total paid</div>
             </div>
-            {selectedMethod?.id === 0 && (
+            {selectedMethod?.id === 0 && data?.total_payment - data?.total_charges > 0 && (
               <div className="border-base-200 flex flex-1 flex-col place-content-center place-items-center border-l">
                 <div className="text-xl font-semibold">
                   {currencyFormat(data?.total_payment - data?.total_charges)}
@@ -276,15 +289,15 @@ const CheckoutScreen = () => {
     }
   }, [checkoutResult]);
 
-  React.useEffect(() => {
-    if (closeBillResult?.isSuccess) {
-      show(billID);
-    }
-  }, [closeBillResult]);
+  // React.useEffect(() => {
+  //   if (closeBillResult?.isSuccess) {
+  //     show(billID);
+  //   }
+  // }, [closeBillResult]);
 
   React.useEffect(() => {
-    if ((closeBillResult?.isSuccess || checkoutResult?.isSuccess) && showResult?.isSuccess) {
-      openSuccess(showResult?.data?.data);
+    if (closeBillResult?.isSuccess || (checkoutResult?.isSuccess && showResult?.isSuccess)) {
+      openSuccess(closeBillResult?.data?.data ?? showResult?.data?.data);
     }
   }, [checkoutResult, closeBillResult, showResult]);
 
@@ -323,10 +336,7 @@ const CheckoutScreen = () => {
       <div className="border-base-200 bg-base-100 flex h-16 border-t border-b">
         <div className="border-base-200 flex-1 place-content-center border-r border-l">
           <div className="flex place-items-center gap-6 px-4">
-            <div
-              className="btn btn-circle btn-md btn-outline btn-neutral"
-              onClick={() => navigate(-1)}
-            >
+            <div className="btn btn-circle btn-md btn-outline" onClick={() => navigate(-1)}>
               <BackIcon />
             </div>
 
@@ -414,7 +424,7 @@ const CheckoutScreen = () => {
                       </div>
                     ))}
                   </div>
-                  <div className="flex place-items-center gap-2">
+                  {/* <div className="flex place-items-center gap-2">
                     <div
                       className="btn btn-sm btn-error btn-circle btn-outline hover:!text-white"
                       onClick={() => remove(i)}
@@ -427,31 +437,49 @@ const CheckoutScreen = () => {
                     >
                       <EditIcon />
                     </div>
-                  </div>
+                  </div> */}
                 </div>
               ))}
             </div>
           </div>
         </div>
         <div className="bg-base-100 border-base-200 flex h-full min-h-0 w-1/3 flex-1 flex-col border-r border-l p-4">
-          {CartState?.meta?.customer && (
-            <div>
-              <div className="py-4 text-base font-semibold">Customer Info</div>
-              <div className="border-base-200 flex gap-5 border-b py-4">
-                <div>
-                  <UserCircleIcon />
-                </div>
-                <div>
-                  <div className="text-base font-semibold capitalize">
-                    {CartState?.meta?.customer?.name || '-'}
+          <div>
+            {CartState?.meta?.customer ? (
+              <div className="border-base-200 border-b pb-4">
+                <div className="py-4 text-base font-semibold">Customer Info</div>
+                <div className="flex gap-5">
+                  <div>
+                    <UserCircleIcon />
                   </div>
-                  <div className="text-base-300 text-xs">
-                    {CartState?.meta?.customer?.reff_code || '-'}
+                  <div>
+                    <div className="text-base font-semibold capitalize">
+                      {CartState?.meta?.customer?.name || '-'}
+                    </div>
+                    <div className="text-base-300 text-xs">
+                      {CartState?.meta?.customer?.reff_code || '-'}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            ) : CartState?.bill?.ticket ? (
+              <div className="border-base-200 border-b pb-4">
+                <div className="py-4 text-base font-semibold">Ticket</div>
+                <div className="text-base">{CartState?.bill?.ticket || '-'}</div>
+              </div>
+            ) : (
+              <div className="pb-4">
+                <div className="py-4 text-base font-semibold">Customer</div>
+                <Input
+                  value={note}
+                  onChange={e => {
+                    setNote(e.target.value);
+                  }}
+                  placeholder="Write a note here..."
+                />
+              </div>
+            )}
+          </div>
 
           <div className="py-4 text-base font-semibold">Add discount(s)</div>
           <div className="flex-1 overflow-y-auto">
@@ -643,7 +671,7 @@ const CheckoutScreen = () => {
               <Keypad
                 payment={selectedMethod?.id}
                 onChange={v => setPay(v)}
-                subtotal={CartState?.meta?.subtotal}
+                subtotal={CartState?.meta?.grand_total}
               />
             ) : (
               <div className="my-3">

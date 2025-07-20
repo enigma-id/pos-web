@@ -138,58 +138,71 @@ const Summary = ({ data }) => {
               {currencyFormat(data?.cash_topup, false)}
             </p>
           </div>
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: 5,
-          }}
-        >
-          <p style={{ marginBlock: 2, fontSize: 11 }}>Total Nett</p>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>
-            {currencyFormat(data?.summary_order?.total_nett, false)}
-          </p>
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: 5,
-          }}
-        >
-          <p style={{ marginBlock: 2, fontSize: 11 }}>Total Discount</p>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>
-            {currencyFormat(data?.summary_order?.total_discount, false)}
-          </p>
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: 5,
-          }}
-        >
-          <p style={{ marginBlock: 2, fontSize: 11 }}>Total Charge</p>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>
-            {currencyFormat(data?.summary_order?.total_charges, false)}
-          </p>
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: 5,
-          }}
-        >
-          <p style={{ marginBlock: 2, fontSize: 11 }}>Total Bill</p>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>
-            {currencyFormat(data?.summary_order?.total_openbill, false)}
-          </p>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 5,
+            }}
+          >
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Total Bill Payments</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>
+              {currencyFormat(data?.bill_payment, false)}
+            </p>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 5,
+            }}
+          >
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Total Sales</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>
+              {currencyFormat(data?.summary_order?.total_nett, false)}
+            </p>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 5,
+            }}
+          >
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Total Discount</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>
+              {currencyFormat(data?.summary_order?.total_discount, false)}
+            </p>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 5,
+            }}
+          >
+            <p style={{ marginBlock: 2, fontSize: 11 }}>After Discount</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>
+              {currencyFormat(data?.summary_order?.total_charges, false)}
+            </p>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 5,
+            }}
+          >
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Total Bill</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>
+              {currencyFormat(data?.summary_order?.total_openbill, false)}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -226,7 +239,7 @@ const Summary = ({ data }) => {
         </div>
       ) : null}
 
-      {data?.sales_channels && data?.sales_channels !== null ? (
+      {/* {data?.sales_channels && data?.sales_channels !== null ? (
         <div style={{ marginBottom: 10 }}>
           <div
             style={{
@@ -259,7 +272,7 @@ const Summary = ({ data }) => {
             </div>
           ))}
         </div>
-      ) : null}
+      ) : null} */}
 
       {data?.category_solds && data?.category_solds !== null ? (
         <div style={{ marginBottom: 10 }}>
@@ -288,7 +301,9 @@ const Summary = ({ data }) => {
               }}
             >
               <p style={{ marginBlock: 2, fontSize: 11 }}>{cat?.name}</p>
-              <p style={{ marginBlock: 2, fontSize: 11 }}>{cat?.quantity}</p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>
+                ({cat?.quantity}) {currencyFormat(cat?.total_charges, false)}
+              </p>
             </div>
           ))}
         </div>

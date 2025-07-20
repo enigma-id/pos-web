@@ -35,17 +35,25 @@ const Receipt = ({ data }) => {
           <p style={{ marginBlock: 2, fontSize: 11 }}>Cashier</p>
           <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.session?.cashier?.name}</p>
         </div>
-        {data?.ticket && (
+
+        {data?.note && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>Bill</p>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.ticket}</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Bill Name</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.note}</p>
           </div>
         )}
 
         {data?.membership && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>Membership</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Member</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.membership?.name}</p>
+          </div>
+        )}
+
+        {data?.ticket && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Bill Name</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.ticket}</p>
           </div>
         )}
       </div>
