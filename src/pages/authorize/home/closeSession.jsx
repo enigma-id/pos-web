@@ -17,17 +17,20 @@ const CloseSection = () => {
   const { showCart } = useSidebar();
   const { openModal, closeModal } = useModal();
 
-  const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
+  const { open } = usePrintWindow({
+    title: 'Print Preview',
+    autoClose: true,
+    onClose: () => onLogout(),
+  });
 
   const [cash, setCash] = React.useState('');
   const [diff, setDiff] = React.useState(0);
 
-  const handleOpenPrintSummary = () => {
-    open(<Summary data={summaryResult?.data?.data} />);
+  const handleOpenPrintSummary = v => {
+    open(<Summary data={v} />);
   };
 
   const onSubmit = async () => {
-    handleOpenPrintSummary();
     const payload = {
       cash: Number(cash),
     };
@@ -64,7 +67,7 @@ const CloseSection = () => {
 
   React.useEffect(() => {
     if (endResult?.isSuccess) {
-      onLogout();
+      handleOpenPrintSummary(endResult?.data?.data);
     }
   }, [endResult]);
 

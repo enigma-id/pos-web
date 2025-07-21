@@ -82,11 +82,11 @@ const Receipt = ({ data }) => {
                 {item?.catalog?.name || item?.description}
               </p>
               <p style={{ marginBlock: 2, fontSize: 9 }}>
-                {item?.quantity} x {currencyFormat(item?.unit_bill, false)}
+                {item?.quantity} x {currencyFormat(item?.unit_nett, false)}
               </p>
             </div>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
-              {currencyFormat(item?.quantity * item?.unit_bill, false)}
+              {currencyFormat(item?.quantity * item?.unit_nett, false)}
             </p>
           </div>
           {item?.additionals?.map((addon, idx) => (
@@ -97,13 +97,13 @@ const Receipt = ({ data }) => {
               <p style={{ marginBlock: 2, fontSize: 9, textTransform: 'capitalize' }}>
                 + {addon?.catalog?.name}
                 {addon?.addon?.type !== 'options' &&
-                  ` (${addon?.quantity} x ${currencyFormat(addon?.unit_bill, false)})`}
+                  ` (${addon?.quantity} x ${currencyFormat(addon?.unit_nett, false)})`}
               </p>
               <p style={{ marginBlock: 2, fontSize: 9 }}>
                 {currencyFormat(
                   addon?.quantity > 0
-                    ? addon?.quantity * addon?.unit_bill
-                    : item?.quantity * addon?.unit_bill,
+                    ? addon?.quantity * addon?.unit_nett
+                    : item?.quantity * addon?.unit_nett,
                   false
                 )}
               </p>

@@ -32,9 +32,9 @@ export const duration = v => {
   return start.fromNow(); // akan return dalam format relatif, seperti "2 hours ago"
 };
 
-const moneyList = [500, 1000, 2000, 5000, 10000, 20000, 50000, 100000];
-
 export const cashList = total => {
+  const moneyList = [500, 1000, 2000, 5000, 10000, 20000, 50000, 100000];
+
   let res = [];
 
   moneyList.forEach(i => {
@@ -42,13 +42,13 @@ export const cashList = total => {
       res.push(i);
     } else {
       let roundup = Math.ceil(total / i) * i;
-      if (roundup !== i && roundup !== total) {
+      if (roundup !== i) {
         res.push(roundup);
       }
     }
   });
 
-  return Array.from(new Set(res));
+  return [total, ...Array.from(new Set(res))];
 };
 
 export const isActive = (val_1, val_2) => {

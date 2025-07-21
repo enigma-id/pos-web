@@ -82,6 +82,10 @@ const Cart = ({ onUpdate }) => {
       items: items,
     };
 
+    if (CartState?.bill?.id) {
+      payload.id = CartState?.bill?.id;
+    }
+
     await openBill(payload);
   };
 
