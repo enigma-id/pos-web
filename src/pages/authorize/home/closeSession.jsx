@@ -125,8 +125,14 @@ const CloseSection = () => {
         <List
           title="Total Bills"
           value={currencyFormat(summaryResult?.data?.data?.summary_order?.total_openbill || 0)}
+        />{' '}
+        <List
+          title="Total Omzet"
+          value={currencyFormat(
+            summaryResult?.data?.data?.summary_order?.total_openbill +
+              summaryResult?.data?.data?.summary_order?.total_nett || 0
+          )}
         />
-
         {summaryResult?.data?.data?.cash_payments?.length > 0 && (
           <div className="bg-accent mb-3 rounded-md p-3">
             {summaryResult?.data?.data?.cash_payments?.map((pm, i) => (
@@ -138,7 +144,6 @@ const CloseSection = () => {
             ))}
           </div>
         )}
-
         <div className="mb-3">
           <div className="text-sm font-thin">Ending Cash</div>
           <Input
@@ -153,7 +158,6 @@ const CloseSection = () => {
             }}
           />
         </div>
-
         {cash > 0 && diff !== 0 && (
           <div className="border-base-200 mb-3 flex items-center justify-between border-b py-1">
             <div className="text-sm font-thin">Difference:</div>
