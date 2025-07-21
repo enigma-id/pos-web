@@ -15,6 +15,7 @@ const Cart = ({ onUpdate }) => {
   const navigate = useNavigate();
   const CartState = useSelector(state => state?.Cart);
   const Channel = useSelector(state => state?.SalesChannel);
+  const Session = useSelector(state => state?.Auth?.session?.user?.sales_session);
   const { showCustomer } = useSidebar();
   const { openModal } = useModal();
 
@@ -305,26 +306,27 @@ const Cart = ({ onUpdate }) => {
         <div className="flex place-items-center gap-1">
           {mode === 'open' ? (
             <button
-              className={`btn btn-xl btn-primary w-1/2 rounded-none text-lg font-thin uppercase`}
+              className={`btn btn-xl btn-primary flex-1 rounded-none text-lg font-thin uppercase`}
               onClick={handleModal}
             >
               Open Bill ({billCount})
             </button>
-          ) : (
+          ) : CartState?.bill?.session?.id === Session?.id ? (
             <button
-              className={`btn btn-xl btn-primary w-1/2 rounded-none text-lg font-thin uppercase ${
+              className={`btn btn-xl btn-primary flex-1 rounded-none text-lg font-thin uppercase ${
                 CartState?.items?.list?.length > 0 ? '' : 'btn-disabled'
               }`}
               onClick={CartState?.bill ? onBillCreate : handleModal}
             >
               Save Bill
             </button>
+          ) : (
+            ''
           )}
 
           <button
-            className={`btn btn-xl btn-primary w-1/2 rounded-none text-lg font-thin uppercase ${
-              (CartState?.items?.list?.length > 0 && !CartState?.bill) ||
-              (CartState?.bill && CartState?.items?.list?.length === 0)
+            className={`btn btn-xl btn-primary flex-1 rounded-none text-lg font-thin uppercase ${
+              (CartState?.items?.list?.length > 0 && !CartState?.bill) || CartState?.bill
                 ? ''
                 : 'btn-disabled'
             }`}
