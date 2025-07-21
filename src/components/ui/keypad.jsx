@@ -70,7 +70,7 @@ const Keypad = ({ onChange, payment, subtotal }) => {
         )}
       </div>
 
-      <div className="mb-3 flex flex-wrap gap-2">
+      <div className="mb-3 grid grid-cols-4 gap-2">
         {moneyList?.map((mon, i) => (
           <div key={i} onClick={() => setValue(String(mon))} className="btn btn-outline btn-lg">
             {currencyFormat(mon)}

@@ -1,15 +1,11 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
-import { useSelector } from 'react-redux';
 
 import { Input, Modal, QuantityStepper } from '../../../components/ui';
 import useCart from '../../../services/cart/hook';
 import { currencyFormat } from '../../../utils/common';
 
 const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = 'cart' }) => {
-  const Session = useSelector(state => state?.Auth?.session?.user?.sales_session);
-  const CartState = useSelector(state => state?.Cart);
-
   const { catalogDetail, change, add } = useCart(type === 'cart' ? catalog?.id : null);
 
   const [catalogData, setCatalogData] = React.useState({});
@@ -249,19 +245,14 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
           onChange={setQuantity}
           disableIncrement={type === 'bill' && quantity >= initialQuantity}
         />
-        {CartState?.bill && CartState?.bill?.session?.id !== Session?.id ? (
-          <button className="btn btn-block btn-lg mt-4 text-base" onClick={onClose}>
-            Cannot edit bill
-          </button>
-        ) : (
-          <button className="btn btn-primary btn-block btn-lg mt-4" onClick={addToCart}>
-            {quantity > 0
-              ? `Add (${currencyFormat(calculateSubtotal(), undefined, 'Free')})`
-              : mode === 'edit'
-                ? 'Remove & Back'
-                : 'Back'}
-          </button>
-        )}
+
+        <button className="btn btn-primary btn-block btn-lg mt-4" onClick={addToCart}>
+          {quantity > 0
+            ? `Add (${currencyFormat(calculateSubtotal(), undefined, 'Free')})`
+            : mode === 'edit'
+              ? 'Remove & Back'
+              : 'Back'}
+        </button>
       </div>
     </Modal.Body>
   );

@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 
 import BillModal from './saveBill';
 import SuccessModal from './success';
+import { Modal } from '../../../components/ui';
 import { AddUserIcon, EditIcon, TrashIcon, UserIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
@@ -14,10 +15,10 @@ import { currencyFormat } from '../../../utils/common';
 const Cart = ({ onUpdate }) => {
   const navigate = useNavigate();
   const CartState = useSelector(state => state?.Cart);
+  const FormState = useSelector(state => state?.Form);
   const Channel = useSelector(state => state?.SalesChannel);
-  const Session = useSelector(state => state?.Auth?.session?.user?.sales_session);
   const { showCustomer } = useSidebar();
-  const { openModal } = useModal();
+  const { openModal, closeModal } = useModal();
 
   const { reset, remove, onCount, countResult, cartItems, openBill, billResult } = useCart();
 
@@ -133,6 +134,27 @@ const Cart = ({ onUpdate }) => {
     );
   };
 
+  const handleModalError = () => {
+    openModal(
+      <>
+        <Modal.Header onClose={closeModal}>
+          <div className="text-lg font-semibold">Can't save bill</div>
+        </Modal.Header>
+        <Modal.Body full>
+          <div className="flex place-content-center place-items-center">
+            <img src="./error.png" className="h-64" />
+          </div>
+          <div className="-mt-5 pb-4 text-center">
+            <div className="text-lg font-semibold capitalize">{FormState?.errors?.ticket}</div>
+            <p className="text-base-300 text-xs">Try another bill’s</p>
+          </div>
+        </Modal.Body>
+      </>,
+
+      mode === 'open' ? 'w-lg' : 'w-md'
+    );
+  };
+
   const handleModalPrint = data => {
     openModal(<SuccessModal data={data} />, 'w-md');
   };
@@ -141,6 +163,12 @@ const Cart = ({ onUpdate }) => {
     if (billResult?.isSuccess) {
       onCount();
       handleModalPrint(billResult?.data?.data);
+    }
+  }, [billResult]);
+
+  React.useEffect(() => {
+    if (billResult?.isError) {
+      handleModalError();
     }
   }, [billResult]);
 
@@ -311,7 +339,7 @@ const Cart = ({ onUpdate }) => {
             >
               Open Bill ({billCount})
             </button>
-          ) : CartState?.bill?.session?.id === Session?.id ? (
+          ) : (
             <button
               className={`btn btn-xl btn-primary flex-1 rounded-none text-lg font-thin uppercase ${
                 CartState?.items?.list?.length > 0 ? '' : 'btn-disabled'
@@ -320,8 +348,6 @@ const Cart = ({ onUpdate }) => {
             >
               Save Bill
             </button>
-          ) : (
-            ''
           )}
 
           <button

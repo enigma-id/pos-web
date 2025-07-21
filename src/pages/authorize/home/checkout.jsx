@@ -227,7 +227,7 @@ const CheckoutScreen = () => {
         </Modal.Header>
         <Modal.Body>
           <div className="flex place-content-center place-items-center">
-            <img src="./success.png" className="h-64" />
+            <img src="./print.png" className="h-64" />
           </div>
 
           <div className="flex h-16 place-items-center">

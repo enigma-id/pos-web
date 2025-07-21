@@ -84,7 +84,7 @@ const Wrapper = ({ open = false, onClose, className = '', children }) => {
 };
 
 const Header = ({ children, onClose }) => (
-  <div className="border-base-200 relative w-full border-b px-4 py-6">
+  <div className="border-base-200 relative w-full border-b px-4 py-5">
     {children}
     {/* Close Button */}
     {onClose && (

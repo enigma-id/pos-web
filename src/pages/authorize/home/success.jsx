@@ -36,7 +36,7 @@ const SuccessModal = ({ data }) => {
 
       <Modal.Body full>
         <div className="flex place-content-center place-items-center">
-          <img src="./success.png" className="h-64" />
+          <img src="./bill_success.png" className="h-64" />
         </div>
 
         <div className="py-4 text-center">

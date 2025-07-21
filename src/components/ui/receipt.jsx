@@ -1,6 +1,42 @@
+import React from 'react';
+
 import { currencyFormat, dateFormat } from '../../utils/common';
 
 const Receipt = ({ data }) => {
+  const [discountMap, setDiscountMap] = React.useState([]);
+
+  const groupedCategories = items => {
+    const group = {};
+
+    items.forEach(item => {
+      const category = item?.catalog?.category;
+      const discount = item?.discount_value * item?.quantity || 0;
+
+      if (!category) return;
+
+      const id = category.id;
+      const name = category.name;
+
+      if (!group[id]) {
+        group[id] = {
+          id,
+          name,
+          subtotal: 0,
+        };
+      }
+
+      group[id].subtotal += discount;
+    });
+
+    const result = Object.values(group).filter(item => item.subtotal > 0);
+    setDiscountMap(result);
+  };
+
+  React.useEffect(() => {
+    if (!data) return;
+    groupedCategories(data?.items);
+  }, [data]);
+
   if (!data) return;
 
   return (
@@ -126,7 +162,18 @@ const Receipt = ({ data }) => {
             <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(data?.subtotal_nett)}</p>
           </div>
         )}
-        {data?.items.reduce((sum, item) => {
+
+        {discountMap?.length > 0 &&
+          discountMap?.map((d, i) => (
+            <div
+              key={i}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+            >
+              <p style={{ marginBlock: 2, fontSize: 11 }}>Discount Category {d?.name}</p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>-{currencyFormat(d?.subtotal)}</p>
+            </div>
+          ))}
+        {/* {data?.items.reduce((sum, item) => {
           const qty = item.quantity ?? 1;
           const discount = item.discount_value ?? 0;
           return sum + discount * qty;
@@ -144,7 +191,7 @@ const Receipt = ({ data }) => {
               )}
             </p>
           </div>
-        )}
+        )} */}
         {data?.discount_value > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <p style={{ marginBlock: 2, fontSize: 11 }}>Discount Order</p>

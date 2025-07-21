@@ -42,13 +42,21 @@ export const cashList = total => {
       res.push(i);
     } else {
       let roundup = Math.ceil(total / i) * i;
-      if (roundup !== i) {
+      if (roundup !== i && roundup !== total) {
         res.push(roundup);
       }
     }
   });
 
-  return [total, ...Array.from(new Set(res))];
+  const uniqueSorted = Array.from(new Set(res)).sort((a, b) => a - b);
+
+  // Jika total sudah jadi elemen pertama, tidak perlu tambahkan lagi
+  if (uniqueSorted[0] === total) {
+    return uniqueSorted;
+  }
+
+  // Jika belum, sisipkan total di awal
+  return [total, ...uniqueSorted];
 };
 
 export const isActive = (val_1, val_2) => {

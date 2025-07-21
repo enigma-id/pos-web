@@ -1,6 +1,42 @@
+import React from 'react';
+
 import { currencyFormat, dateFormat } from '../../utils/common';
 
 const OrderDetails = ({ data }) => {
+  const [discountMap, setDiscountMap] = React.useState([]);
+
+  const groupedCategories = items => {
+    const group = {};
+
+    items.forEach(item => {
+      const category = item?.catalog?.category;
+      const discount = item?.discount_value * item?.quantity || 0;
+
+      if (!category) return;
+
+      const id = category.id;
+      const name = category.name;
+
+      if (!group[id]) {
+        group[id] = {
+          id,
+          name,
+          subtotal: 0,
+        };
+      }
+
+      group[id].subtotal += discount;
+    });
+
+    const result = Object.values(group).filter(item => item.subtotal > 0);
+    setDiscountMap(result);
+  };
+
+  React.useEffect(() => {
+    if (!data) return;
+    groupedCategories(data?.items);
+  }, [data]);
+
   return (
     <div className="h-fit w-full rounded-xl bg-white p-6 shadow">
       <div className="border-base-200 border-b">
@@ -34,21 +70,21 @@ const OrderDetails = ({ data }) => {
             <div className="flex place-content-between place-items-center text-base">
               <div>{item?.catalog?.name || item?.description}</div>
               <div>
-                {item?.discount_value > 0 && (
+                {/* {item?.discount_value > 0 && (
                   <span className="text-base-300 me-2 text-xs line-through">
                     {currencyFormat(item?.unit_gross * item?.quantity)}
                   </span>
-                )}
-                {currencyFormat(item?.unit_bill * item?.quantity)}{' '}
+                )} */}
+                {currencyFormat(item?.unit_nett * item?.quantity)}{' '}
               </div>
             </div>
             <div className="pb-2 text-xs">
-              {item?.quantity} x {currencyFormat(item?.unit_bill)}{' '}
-              {item?.discount_value > 0 && (
+              {item?.quantity} x {currencyFormat(item?.unit_nett)}{' '}
+              {/* {item?.discount_value > 0 && (
                 <span className="text-base-300 line-through">
                   {currencyFormat(item?.unit_gross)}
                 </span>
-              )}
+              )} */}
             </div>
             <div>
               {item?.additionals?.map((addon, i) => (
@@ -71,9 +107,9 @@ const OrderDetails = ({ data }) => {
         ))}
       </div>
       <div className="border-base-200 border-b py-4">
-        {/* {data?.subtotal_nett > data?.total_charges && (
+        {data?.subtotal_nett > data?.total_charges && (
           <div className="flex place-content-between place-items-center text-base">
-            <div>Subtotal</div>
+            <div>Subtotal Before Discount</div>
             <div>
               {data?.subtotal_gross > data?.subtotal_nett && (
                 <span className="text-base-300 me-2 text-xs font-thin line-through">
@@ -83,26 +119,34 @@ const OrderDetails = ({ data }) => {
               {currencyFormat(data?.subtotal_nett)}
             </div>
           </div>
-        )} */}
+        )}
 
         {data?.items.reduce((sum, item) => {
           const qty = item.quantity ?? 1; // default 1 kalau tidak ada quantity
           const discount = item.discount_value ?? 0;
           return sum + discount * qty;
         }, 0) > 0 && (
-          <div className="flex place-content-between place-items-center text-base">
-            <div>Discount Category </div>
-            <div>
-              -
-              {currencyFormat(
-                data?.items.reduce((sum, item) => {
-                  const qty = item.quantity ?? 1; // default 1 kalau tidak ada quantity
-                  const discount = item.discount_value ?? 0;
-                  return sum + discount * qty;
-                }, 0)
-              )}
-            </div>
-          </div>
+          <>
+            {/* <div className="flex place-content-between place-items-center text-base">
+              <div>Discount Category </div>
+              <div>
+                -
+                {currencyFormat(
+                  data?.items.reduce((sum, item) => {
+                    const qty = item.quantity ?? 1; // default 1 kalau tidak ada quantity
+                    const discount = item.discount_value ?? 0;
+                    return sum + discount * qty;
+                  }, 0)
+                )}
+              </div>
+            </div> */}
+            {discountMap?.map((d, i) => (
+              <div key={i} className="flex place-content-between place-items-center text-base">
+                <div>Discount Category {d?.name} </div>
+                <div>-{currencyFormat(d?.subtotal)}</div>
+              </div>
+            ))}
+          </>
         )}
         {data?.discount_value > 0 && (
           <div className="flex place-content-between place-items-center text-base">
@@ -115,11 +159,11 @@ const OrderDetails = ({ data }) => {
         <div className="flex place-content-between place-items-center text-base font-semibold">
           <div>Total</div>
           <div>
-            {data?.subtotal_gross > data?.total_charges && (
+            {/* {data?.subtotal_gross > data?.total_charges && (
               <span className="text-base-300 me-2 text-xs font-thin line-through">
                 {currencyFormat(data?.subtotal_gross)}
               </span>
-            )}
+            )} */}
 
             {currencyFormat(data?.total_charges)}
           </div>
