@@ -8,6 +8,7 @@ import useMembership from '../../../services/membership/hook';
 import { currencyFormat } from '../../../utils/common';
 
 const CardContent = ({ data, onClose }) => {
+  const SalesSession = useSelector(state => state?.SalesSession?.hasSession);
   const FormState = useSelector(state => state?.Form);
   const { topup, topupResult } = useMembership();
 
@@ -106,7 +107,7 @@ const CardContent = ({ data, onClose }) => {
         <div className="mt-4">
           <div
             className={`btn btn-primary btn-block btn-xl !rounded-none !rounded-b ${
-              topupResult?.isLoading ? 'btn-disabled' : ''
+              topupResult?.isLoading || !SalesSession ? 'btn-disabled' : ''
             }`}
             onClick={handleTopup}
           >
