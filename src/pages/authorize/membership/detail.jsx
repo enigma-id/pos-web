@@ -147,7 +147,7 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
         </button>
         {Session?.user?.is_supervisor === 1 && (
           <div
-            className="btn btn-error h-full flex-1 rounded-none text-white"
+            className={`btn btn-error h-full flex-1 rounded-none text-white ${data?.saldo > 0 ? 'btn-disabled' : ''}`}
             onClick={onDeleteOpen}
           >
             Remove
