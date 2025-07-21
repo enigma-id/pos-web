@@ -45,16 +45,8 @@ const NFCField = ({ onRead, isOpen, onClose, result }) => {
   useEffect(() => {
     if (result?.isError) {
       setStatus('failed');
-      // const timeout = setTimeout(() => {
-      // const isFocused = document.activeElement === ref.current;
-      // setStatus(isFocused ? 'scanning' : 'idle');
-      // }, 1500);
-
-      // return () => {
-      //   clearTimeout(timeout);
-      // };
     }
-  }, [result?.isError]);
+  }, [result]);
 
   const handleBlur = () => setStatus('idle');
 

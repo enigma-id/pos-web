@@ -16,7 +16,12 @@ function flattenAdditionals(additionals = []) {
       const isSelected = type === 'quantity' ? (child.quantity || 0) > 0 : !!child.selected;
 
       if (isSelected) {
-        const entry = { addon_id, catalog_id: child.id };
+        const entry = { addon_id, catalog_id: child.catalog_id ?? child.id };
+
+        if (child.catalog_id) {
+          entry.id = child.id;
+        }
+
         if (type === 'quantity') entry.quantity = child.quantity;
         result.push(entry);
       }
