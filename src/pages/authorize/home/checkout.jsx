@@ -366,7 +366,9 @@ const CheckoutScreen = () => {
                           {currencyFormat(
                             item?.quantity *
                               (item?.discount_amount > 0
-                                ? item?.unit_price - item?.discount_amount / item.quantity
+                                ? item?.unit_price - item?.discount_amount / item.quantity > 0
+                                  ? item?.unit_price - item?.discount_amount / item.quantity
+                                  : 0
                                 : item?.unit_price)
                           )}
                         </div>
@@ -374,7 +376,11 @@ const CheckoutScreen = () => {
                       <div className="pb-2 text-xs">
                         {item?.quantity} x{' '}
                         {item?.discount_amount > 0
-                          ? currencyFormat(item?.unit_price - item?.discount_amount / item.quantity)
+                          ? currencyFormat(
+                              item?.unit_price - item?.discount_amount / item.quantity > 0
+                                ? item?.unit_price - item?.discount_amount / item.quantity
+                                : 0
+                            )
                           : currencyFormat(item?.unit_price)}
                         {item?.discount_amount > 0 && (
                           <span className="text-base-300 ms-2 line-through">
@@ -432,7 +438,9 @@ const CheckoutScreen = () => {
                       {currencyFormat(
                         item?.quantity *
                           (item?.discount_amount > 0
-                            ? item?.unit_price - item?.discount_amount / item.quantity
+                            ? item?.unit_price - item?.discount_amount / item.quantity > 0
+                              ? item?.unit_price - item?.discount_amount / item.quantity
+                              : 0
                             : item?.unit_price)
                       )}
                     </div>
@@ -440,7 +448,11 @@ const CheckoutScreen = () => {
                   <div className="pb-2 text-xs">
                     {item?.quantity} x{' '}
                     {item?.discount_amount > 0
-                      ? currencyFormat(item?.unit_price - item?.discount_amount / item.quantity)
+                      ? currencyFormat(
+                          item?.unit_price - item?.discount_amount / item.quantity > 0
+                            ? item?.unit_price - item?.discount_amount / item.quantity
+                            : 0
+                        )
                       : currencyFormat(item?.unit_price)}
                     {item?.discount_amount > 0 && (
                       <span className="text-base-300 ms-2 line-through">
