@@ -326,7 +326,8 @@ const Cart = ({ onUpdate }) => {
 
           <button
             className={`btn btn-xl btn-primary flex-1 rounded-none text-lg font-thin uppercase ${
-              (CartState?.items?.list?.length > 0 && !CartState?.bill) || CartState?.bill
+              (CartState?.items?.list?.length > 0 && !CartState?.bill) ||
+              (CartState?.bill && CartState?.items?.list?.length === 0)
                 ? ''
                 : 'btn-disabled'
             }`}
