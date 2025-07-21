@@ -12,6 +12,7 @@ import { currencyFormat } from '../../../utils/common';
 
 const DetailSession = ({ id, onClose, isOpen, reboot }) => {
   const Session = useSelector(state => state?.Auth?.session);
+  const FormState = useSelector(state => state?.Form);
 
   const { showResult, update, updateResult } = useMembership(id);
   const { openModal, closeModal } = useModal();
@@ -126,6 +127,7 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
               onChange={v => setName(v?.target?.value)}
               disabled={!edit}
               label="Name"
+              error={FormState?.errors?.name}
             />
           </div>
           <div className="pt-4">
