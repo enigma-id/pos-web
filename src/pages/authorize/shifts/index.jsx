@@ -291,6 +291,16 @@ const ShiftScreen = () => {
                       {currencyFormat(detail?.summary_order?.total_openbill)}
                     </span>
                   </div>
+                  <div className="flex place-content-between place-items-center py-2">
+                    <div>
+                      <span className="text-sm">Total Omzet</span>
+                    </div>
+                    <span className="text-sm">
+                      {currencyFormat(
+                        detail?.summary_order?.total_openbill + detail?.summary_order?.total_nett
+                      )}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="border-base-200 border-b pt-4 pb-2">
