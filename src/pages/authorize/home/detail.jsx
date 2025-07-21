@@ -249,7 +249,7 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
           onChange={setQuantity}
           disableIncrement={type === 'bill' && quantity >= initialQuantity}
         />
-        {CartState?.bill?.session?.id !== Session?.id ? (
+        {CartState?.bill && CartState?.bill?.session?.id !== Session?.id ? (
           <button className="btn btn-block btn-lg mt-4 text-base" onClick={onClose}>
             Cannot edit bill
           </button>
