@@ -159,7 +159,7 @@ const ShiftScreen = () => {
                         {item?.cashier?.name}
                       </div>
                       <div className="text-base-300 text-xs">
-                        {dateFormat(item?.transaction_date)}
+                        {dateFormat(item?.transaction_date, 'DD/MM/YYYY')}
                       </div>
                     </div>
                   </div>
