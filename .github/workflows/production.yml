@@ -18,7 +18,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-southeast-3
       - name: Build Application
-        run: npm install && npm run build
+        run: npm install && npm run build:prod
       - name: Deploy app build to S3 bucket
         run: aws s3 sync ./dist/ s3://sukabread.prod/clients/pos --delete
       - name: Revalidate aws cloudfront
