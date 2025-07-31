@@ -44,7 +44,6 @@ const useSession = () => {
       const res = await endMutation(data).unwrap();
 
       if (res?.status === 'success') {
-        summary();
         refreshCatalog();
         dispatch(resetCart());
       }
