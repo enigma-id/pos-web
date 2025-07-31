@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { Kitchen, Modal } from '../../../components/ui';
+import { Kitchen, Receipt, Modal } from '../../../components/ui';
 import { PrintIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 // import useOrder from '../../../services/sales/order/hook';
@@ -12,6 +12,10 @@ const SuccessModal = ({ data }) => {
   //   const { show, showResult } = useOrder();
 
   //   const [data, setData] = React.useState(null);
+
+  const handleOpenPrint = () => {
+    openPrint(<Receipt data={data} />);
+  };
 
   const handleOpenPrintKitchen = () => {
     openPrint(<Kitchen data={data} />);
@@ -45,6 +49,12 @@ const SuccessModal = ({ data }) => {
         </div>
 
         <div className="flex h-16 px-4">
+          <div
+            className="btn btn-lg btn-soft btn-primary mb-3 flex-1 rounded-none"
+            onClick={() => handleOpenPrint(data)}
+          >
+            <PrintIcon /> Print Receipt
+          </div>
           <div
             className="btn btn-lg btn-soft btn-primary flex-1 rounded-none"
             onClick={handleOpenPrintKitchen}

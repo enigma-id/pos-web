@@ -4,7 +4,6 @@ import { useSelector } from 'react-redux';
 
 import {
   EmptySection,
-  Input,
   Kitchen,
   OrderDetails,
   Receipt,

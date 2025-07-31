@@ -2,7 +2,7 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
 
-import { EmptySection, Kitchen, OrderDetails, Refund } from '../../../components/ui';
+import { EmptySection, Kitchen, Receipt, OrderDetails, Refund } from '../../../components/ui';
 import { MoneysIcon, PrintIcon, SearchIcon, TrashIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useOrder from '../../../services/sales/order/hook';
@@ -24,6 +24,10 @@ const BillScreen = () => {
   const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
 
   const handleOpenPrint = () => {
+    open(<Receipt data={detail} />);
+  };
+
+  const handleOpenPrintKitchen = () => {
     open(<Kitchen data={detail} />);
   };
 
@@ -158,8 +162,15 @@ const BillScreen = () => {
           <div className="bg-base-100 h-16 w-full">
             <div className="flex h-full flex-1/2 place-content-end place-items-center">
               <div
-                className="bg-base-content text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
+                className="bg-primary text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
                 onClick={handleOpenPrint}
+              >
+                <PrintIcon />
+                print receipt
+              </div>
+              <div
+                className="bg-base-content text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
+                onClick={handleOpenPrintKitchen}
               >
                 <PrintIcon />
                 print kitchen

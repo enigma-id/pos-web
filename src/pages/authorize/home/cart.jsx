@@ -65,9 +65,9 @@ const Cart = ({ onUpdate }) => {
         quantity: bi.quantity,
       }
 
-      if (bi?.catalog?.is_custom === 1) {
-        base.description = bi.description;
-        base.unit_price = bi.unit_nett;
+      if (bi?.is_custom === 1) {
+        base.description = bi.name;
+        base.unit_price = bi.unit_price;
       }
 
       const flattened = flattenAdditionals(bi?.additionals);
