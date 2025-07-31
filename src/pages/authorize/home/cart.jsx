@@ -39,10 +39,11 @@ const Cart = ({ onUpdate }) => {
         const isSelected = type === 'quantity' ? (child.quantity || 0) > 0 : !!child.selected;
 
         if (isSelected) {
-          const entry = {
-            addon_id,
-            catalog_id: child.id,
-          };
+          const entry = { addon_id, catalog_id: child.catalog_id ?? child.id };
+
+          if (child.catalog_id) {
+            entry.id = child.id;
+          }
 
           if (type === 'quantity') {
             entry.quantity = child.quantity;
@@ -57,6 +58,27 @@ const Cart = ({ onUpdate }) => {
   };
 
   const onBillCreate = async ticket => {
+    const billItems = CartState?.items?.bill?.map(bi => {
+      const base = {
+        id: bi.id,
+        catalog_id: bi.catalog_id,
+        quantity: bi.quantity,
+      }
+
+      if (bi?.catalog?.is_custom === 1) {
+        base.description = bi.description;
+        base.unit_price = bi.unit_nett;
+      }
+
+      const flattened = flattenAdditionals(bi?.additionals);
+
+      if (flattened?.length > 0) {
+        base.additionals = flattened;
+      }
+
+      return base;
+    })
+
     const items = CartState?.items?.list?.map(item => {
       const base = {
         catalog_id: item.id,
@@ -83,6 +105,10 @@ const Cart = ({ onUpdate }) => {
       channel_id: Channel?.selectedChannel?.id,
       items: items,
     };
+
+    if (billItems?.length > 0) {
+      payload.items = [...billItems, ...items]
+    }
 
     if (CartState?.bill?.id) {
       payload.id = CartState?.bill?.id;
@@ -253,7 +279,18 @@ const Cart = ({ onUpdate }) => {
                   </div>
                 )}
 
-                <div className="mt-2 flex place-content-end place-items-center">
+                <div className="mt-2 flex place-content-between place-items-center">
+                  <div className="flex place-items-center gap-2">
+                    {CartState?.items?.bill?.length > 1 && (
+                      <div
+                        className="btn btn-sm btn-error btn-circle btn-outline hover:!text-white"
+                        onClick={() => remove(i, 'bill_item')}
+                      >
+                        <TrashIcon />
+                      </div>
+                    )}
+                  </div>
+
                   <div className="text-primary text-lg font-bold">
                     {currencyFormat(item?.subtotal, undefined, 'Free')}
                   </div>
@@ -334,15 +371,16 @@ const Cart = ({ onUpdate }) => {
         <div className="flex place-items-center gap-1">
           {mode === 'open' ? (
             <button
-              className={`btn btn-xl btn-primary flex-1 rounded-none text-lg font-thin uppercase`}
-              onClick={handleModal}
-            >
-              Open Bill ({billCount})
-            </button>
-          ) : (
+            className={`btn btn-xl btn-primary flex-1 rounded-none text-lg font-thin uppercase`}
+            onClick={handleModal}
+          >
+            Open Bill ({billCount})
+          </button>
+
+          ): (
             <button
               className={`btn btn-xl btn-primary flex-1 rounded-none text-lg font-thin uppercase ${
-                CartState?.items?.list?.length > 0 ? '' : 'btn-disabled'
+                CartState?.items?.list?.length > 0 || CartState?.bill?.items?.length != CartState?.items?.bill?.length ? '': 'btn-disabled'
               }`}
               onClick={CartState?.bill ? onBillCreate : handleModal}
             >
@@ -352,10 +390,10 @@ const Cart = ({ onUpdate }) => {
 
           <button
             className={`btn btn-xl btn-primary flex-1 rounded-none text-lg font-thin uppercase ${
-              (CartState?.items?.list?.length > 0 && !CartState?.bill) ||
-              (CartState?.bill && CartState?.items?.list?.length === 0)
-                ? ''
-                : 'btn-disabled'
+              (!CartState?.bill && CartState?.items?.list?.length > 0)
+              ||
+              ((CartState?.bill?.items?.length == CartState?.items?.bill?.length) && CartState?.items?.list?.length === 0)
+              ? '' : 'btn-disabled'
             }`}
             onClick={() =>
               navigate('/checkout', {

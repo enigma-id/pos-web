@@ -391,7 +391,7 @@ const ShiftScreen = () => {
                 </div>
 
                 <div className="text-base-300 flex place-content-between place-items-center py-4 text-base">
-                  <div>{dateFormat(detail?.transaction_date)}</div>
+                  <div>{dateFormat(detail?.transaction_date, 'DD/MM/YYYY')}</div>
                 </div>
               </div>
             </div>

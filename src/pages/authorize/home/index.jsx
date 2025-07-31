@@ -217,6 +217,8 @@ const CatalogScreen = () => {
           </div>
         </div>
 
+        {console.log(mode, '--------------')}
+
         <div className="w-100 transition-all duration-300 ease-in-out">
           <div key={mode} className="animate-fade-slide">
             {mode === 'cart' && <Cart onUpdate={(item, index) => onShow(item, index)} />}
