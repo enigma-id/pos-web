@@ -88,7 +88,7 @@ const Navbar = () => {
                   showSummary();
                   navigate('/');
                 }
-              : undefined
+              : () => navigate('/')
           }
         >
           <div className="indicator">
