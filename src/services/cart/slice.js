@@ -158,7 +158,7 @@ function convertApiOrderToCartItem(item) {
     id: add.id,
     addon_id: add.addon.id,
     catalog_id: add.catalog.id,
-    ...(add.quantity ? { quantity: add.quantity } : {}),
+    ...(add.quantity ? { quantity: add.quantity / item.quantity } : {}),
   }));
 
   const additionalPerItem = calculateAdditionalsPerItem(additionalsGrouped);

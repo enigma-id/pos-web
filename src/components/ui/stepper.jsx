@@ -1,3 +1,5 @@
+import Input from './input';
+
 const QuantityStepper = ({ value, onChange, small, disableIncrement = false }) => {
   const increment = () => {
     if (!disableIncrement) {
@@ -11,8 +13,15 @@ const QuantityStepper = ({ value, onChange, small, disableIncrement = false }) =
 
   const isDecrementDisabled = value === 0;
 
+  const handleChangeInput = e => {
+    const raw = e.target.value.replace(/[^0-9]/g, '');
+    const parsed = raw === '' ? 0 : parseInt(raw, 10);
+
+    onChange(parsed);
+  };
+
   return (
-    <div className={`flex items-center justify-between rounded-full ${small ? 'w-25' : 'w-full'}`}>
+    <div className={`flex items-center justify-between rounded-full ${small ? 'w-32' : 'w-full'}`}>
       <button
         className={`btn btn-primary ${small ? 'btn-sm' : 'btn-lg'}`}
         disabled={isDecrementDisabled}
@@ -20,7 +29,12 @@ const QuantityStepper = ({ value, onChange, small, disableIncrement = false }) =
       >
         -
       </button>
-      <div className={`${small ? 'text-sm' : 'text-lg'} font-semibold`}>{value}</div>
+      {/* <div className={`${small ? 'text-sm' : 'text-lg'} font-semibold`}>{value}</div> */}
+      <Input
+        value={value}
+        onChange={handleChangeInput}
+        className={`-mt-2 !w-full !border-0 !bg-transparent text-center focus:!shadow-none ${small ? '!h-8 !min-h-8 !text-sm' : '!h-12 !text-lg'}`}
+      />
       <button
         className={`btn btn-primary ${small ? 'btn-sm' : 'btn-lg'}`}
         disabled={disableIncrement}
