@@ -256,13 +256,6 @@ const ShiftScreen = () => {
 
                   <div className="flex place-content-between place-items-center py-2">
                     <div>
-                      <span className="text-sm">Topup Cash</span>
-                    </div>
-                    <span className="text-sm">{currencyFormat(detail?.cash_topup)}</span>
-                  </div>
-
-                  <div className="flex place-content-between place-items-center py-2">
-                    <div>
                       <span className="text-sm">Total Sales</span>
                     </div>
                     <span className="text-sm">
@@ -303,6 +296,16 @@ const ShiftScreen = () => {
                       )}
                     </span>
                   </div>
+                </div>
+
+                <div className="border-base-200 border-b pt-4 pb-2">
+                  <div className="mb-2 text-sm font-semibold">Topup :</div>
+                  {detail?.topups?.map((item, i) => (
+                    <div key={i} className="flex place-content-between place-items-center py-2">
+                      <div className="text-sm capitalize">{item?.name}</div>
+                      <span className="text-sm">{currencyFormat(item?.nominal)}</span>
+                    </div>
+                  ))}
                 </div>
 
                 <div className="border-base-200 border-b pt-4 pb-2">

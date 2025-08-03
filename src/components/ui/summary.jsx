@@ -17,6 +17,8 @@ const Summary = ({ data }) => {
     return dateFormat(date, 'DD-MM-YYYY HH:mm');
   };
 
+  console.log('------------------------', data)
+
   return (
     <div className="sheet page-break" style={{ padding: '10px' }}>
       <div
@@ -133,19 +135,6 @@ const Summary = ({ data }) => {
               marginBottom: 5,
             }}
           >
-            <p style={{ marginBlock: 2, fontSize: 11 }}>Topup Cash</p>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>
-              {currencyFormat(data?.cash_topup, false)}
-            </p>
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 5,
-            }}
-          >
             <p style={{ marginBlock: 2, fontSize: 11 }}>Total Bill Payments</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
               {currencyFormat(data?.bill_payment, false)}
@@ -221,6 +210,39 @@ const Summary = ({ data }) => {
           </div>
         </div>
       </div>
+
+      {data?.topups && data?.topups !== null ? (
+        <div style={{ marginBottom: 10 }}>
+          <div
+            style={{
+              borderBottom: 1,
+              borderBottomStyle: 'dashed',
+              borderTop: 1,
+              borderTopStyle: 'dashed',
+              paddingBlock: 5,
+              marginBottom: 5,
+            }}
+          >
+            <p style={{ marginBlock: 2, fontSize: 11, fontWeight: 'bold', textAlign: 'center' }}>
+              ## TOPUP ##
+            </p>
+          </div>
+          {data?.topups?.map((t, idx) => (
+            <div
+              key={idx}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 5,
+              }}
+            >
+              <p style={{ marginBlock: 2, fontSize: 11, textTransform: 'uppercase' }}>{t?.name}</p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(t?.nominal, false)}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {data?.cash_payments && data?.cash_payments !== null ? (
         <div style={{ marginBottom: 10 }}>
