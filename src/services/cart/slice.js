@@ -58,7 +58,7 @@ function getCategoryDiscount(item, itemCategories) {
   if (!discount_type || !discount_value) return 0;
 
   if (discount_type === 'percentage') {
-    return Math.floor((item.subtotal * discount_value) / 100);
+    return Math.floor((item.unit_price * (discount_value / 100)));
   }
 
   if (discount_type === 'nominal') {
