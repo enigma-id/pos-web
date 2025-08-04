@@ -326,6 +326,8 @@ const CheckoutScreen = () => {
     setDiscountInputs(inputs);
   }, []);
 
+  console.log('==============================', CartState)
+
   return (
     <div className="flex h-screen flex-col">
       <div className="border-base-200 bg-base-100 flex h-16 border-t border-b">
@@ -364,24 +366,13 @@ const CheckoutScreen = () => {
                         <div>{item?.name}</div>
                         <div className="text-base-300 text-xs">
                           {currencyFormat(
-                            item?.quantity *
-                              (item?.discount_amount > 0
-                                ? item?.unit_price - item?.discount_amount / item.quantity > 0
-                                  ? item?.unit_price - item?.discount_amount / item.quantity
-                                  : 0
-                                : item?.unit_price)
+                            item?.quantity * (item?.unit_price - item?.discount_amount)
                           )}
                         </div>
                       </div>
                       <div className="pb-2 text-xs">
                         {item?.quantity} x{' '}
-                        {item?.discount_amount > 0
-                          ? currencyFormat(
-                              item?.unit_price - item?.discount_amount / item.quantity > 0
-                                ? item?.unit_price - item?.discount_amount / item.quantity
-                                : 0
-                            )
-                          : currencyFormat(item?.unit_price)}
+                        {currencyFormat(item?.unit_price - item?.discount_amount)}
                         {item?.discount_amount > 0 && (
                           <span className="text-base-300 ms-2 line-through">
                             {currencyFormat(item?.unit_price)}
@@ -436,24 +427,13 @@ const CheckoutScreen = () => {
                     <div>{item?.name}</div>
                     <div className="text-base-300 text-xs">
                       {currencyFormat(
-                        item?.quantity *
-                          (item?.discount_amount > 0
-                            ? item?.unit_price - item?.discount_amount / item.quantity > 0
-                              ? item?.unit_price - item?.discount_amount / item.quantity
-                              : 0
-                            : item?.unit_price)
+                        item?.quantity * (item?.unit_price - item?.discount_amount)
                       )}
                     </div>
                   </div>
                   <div className="pb-2 text-xs">
                     {item?.quantity} x{' '}
-                    {item?.discount_amount > 0
-                      ? currencyFormat(
-                          item?.unit_price - item?.discount_amount / item.quantity > 0
-                            ? item?.unit_price - item?.discount_amount / item.quantity
-                            : 0
-                        )
-                      : currencyFormat(item?.unit_price)}
+                    {currencyFormat(item?.unit_price - item?.discount_amount)}
                     {item?.discount_amount > 0 && (
                       <span className="text-base-300 ms-2 line-through">
                         {currencyFormat(item?.unit_price)}

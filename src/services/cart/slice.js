@@ -62,8 +62,7 @@ function getCategoryDiscount(item, itemCategories) {
   }
 
   if (discount_type === 'nominal') {
-    const itemQty = item.quantity || 0;
-    return Math.floor(discount_value * itemQty);
+    return Math.floor(discount_value);
   }
 
   return 0;
@@ -92,10 +91,11 @@ function recalculateTotals(state) {
 
   const itemWithDiscounts = allItems.map(item => {
     const discount = getCategoryDiscount(item, state.discount.category);
+
     return {
       ...item,
       discount_amount: discount,
-      final_total: Math.max(0, item.subtotal - discount),
+      final_total: Math.max(0, item.subtotal - (discount * item?.quantity)),
     };
   });
 
