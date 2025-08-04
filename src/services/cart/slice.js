@@ -54,6 +54,7 @@ function getCategoryDiscount(item, itemCategories) {
   const found = itemCategories.find(c => c.id === cat?.id);
   if (!found) return 0;
 
+
   const { discount_type, discount_value } = found;
   if (!discount_type || !discount_value) return 0;
 
@@ -62,7 +63,7 @@ function getCategoryDiscount(item, itemCategories) {
   }
 
   if (discount_type === 'nominal') {
-    return Math.floor(discount_value);
+    return Math.floor(discount_value > item?.unit_price ? item?.unit_price : discount_value);
   }
 
   return 0;
