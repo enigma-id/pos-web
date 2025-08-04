@@ -124,7 +124,12 @@ const HistoryScreen = () => {
                     <div className={`text-base ${selectedIndex === index ? 'text-primary' : ''}`}>
                       {currencyFormat(item?.total_charges)}
                     </div>
-                    <div className="text-base-300 text-xs">{item?.ticket ? item?.ticket : item?.membership ? item?.membership?.name : '-'}</div>
+                    <div className="text-base-300 text-xs">{
+                      item?.ticket ? item?.ticket :
+                      item?.membership ? item?.membership?.name :
+                      item?.note ? item?.note :
+                      '-'
+                    }</div>
                   </div>
                 </div>
                 <div className="flex flex-col place-content-between">
