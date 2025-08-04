@@ -133,7 +133,7 @@ const Summary = ({ data }) => {
               marginBottom: 5,
             }}
           >
-            <p style={{ marginBlock: 2, fontSize: 11 }}>Total Bill Payments</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Outstanding Bill Payments</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
               {currencyFormat(data?.bill_payment, false)}
             </p>
@@ -185,25 +185,9 @@ const Summary = ({ data }) => {
               marginBottom: 5,
             }}
           >
-            <p style={{ marginBlock: 2, fontSize: 11 }}>Total Bill</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Outstanding Bill</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
               {currencyFormat(data?.summary_order?.total_openbill, false)}
-            </p>
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 5,
-            }}
-          >
-            <p style={{ marginBlock: 2, fontSize: 11 }}>Total Omzet</p>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>
-              {currencyFormat(
-                data?.summary_order?.total_openbill + data?.summary_order?.total_nett,
-                false
-              )}
             </p>
           </div>
         </div>

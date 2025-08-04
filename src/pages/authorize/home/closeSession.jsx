@@ -106,7 +106,7 @@ const CloseSection = () => {
           value={currencyFormat(summaryResult?.data?.data?.cash_started || 0)}
         />
         <List
-          title="Total Bill Payments"
+          title="Outstanding Bill Payments"
           value={currencyFormat(summaryResult?.data?.data?.bill_payment || 0)}
         />
         <List
@@ -122,16 +122,9 @@ const CloseSection = () => {
           value={currencyFormat(summaryResult?.data?.data?.summary_order?.total_charges || 0)}
         />
         <List
-          title="Total Bills"
+          title="Outstanding Bills"
           value={currencyFormat(summaryResult?.data?.data?.summary_order?.total_openbill || 0)}
         />{' '}
-        <List
-          title="Total Omzet"
-          value={currencyFormat(
-            summaryResult?.data?.data?.summary_order?.total_openbill +
-              summaryResult?.data?.data?.summary_order?.total_nett || 0
-          )}
-        />
         {summaryResult?.data?.data?.topups?.length > 0 && (
           <div className="bg-accent mb-3 rounded-md p-3">
             {summaryResult?.data?.data?.topups?.map((t, i) => (

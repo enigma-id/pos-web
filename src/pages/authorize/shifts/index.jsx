@@ -249,7 +249,7 @@ const ShiftScreen = () => {
 
                   <div className="flex place-content-between place-items-center py-2">
                     <div>
-                      <span className="text-sm">Total Bill Payments</span>
+                      <span className="text-sm">Outstanding Bill Payments</span>
                     </div>
                     <span className="text-sm">{currencyFormat(detail?.bill_payment)}</span>
                   </div>
@@ -280,20 +280,10 @@ const ShiftScreen = () => {
                   </div>
                   <div className="flex place-content-between place-items-center py-2">
                     <div>
-                      <span className="text-sm">Total Bills</span>
+                      <span className="text-sm">Outstanding Bills</span>
                     </div>
                     <span className="text-sm">
                       {currencyFormat(detail?.summary_order?.total_openbill)}
-                    </span>
-                  </div>
-                  <div className="flex place-content-between place-items-center py-2">
-                    <div>
-                      <span className="text-sm">Total Omzet</span>
-                    </div>
-                    <span className="text-sm">
-                      {currencyFormat(
-                        detail?.summary_order?.total_openbill + detail?.summary_order?.total_nett
-                      )}
                     </span>
                   </div>
                 </div>
