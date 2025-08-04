@@ -17,8 +17,6 @@ const Summary = ({ data }) => {
     return dateFormat(date, 'DD-MM-YYYY HH:mm');
   };
 
-  console.log('------------------------', data)
-
   return (
     <div className="sheet page-break" style={{ padding: '10px' }}>
       <div
