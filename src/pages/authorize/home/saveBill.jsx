@@ -22,7 +22,7 @@ const BillModal = ({ mode, count, onBillCreate }) => {
     if (mode === 'create') return;
     const delayDebounceFn = setTimeout(
       () => {
-        order({ status: 'pending', search });
+        order({ status: 'pending', search, limit: 100 });
       },
       search ? 1000 : 0
     );
