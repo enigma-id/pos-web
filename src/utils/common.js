@@ -29,7 +29,12 @@ export const duration = v => {
     return '-';
   }
 
-  return start.fromNow(); // akan return dalam format relatif, seperti "2 hours ago"
+
+  if (moment().diff(start, "days") < 1) {
+    return start.fromNow(); // "3 hours ago"
+  }
+
+  return start.format("DD/MM/YYYY HH:mm");
 };
 
 export const cashList = total => {
