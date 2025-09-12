@@ -7,7 +7,7 @@ import { SearchIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useCart from '../../../services/cart/hook';
 import useOrder from '../../../services/sales/order/hook';
-import { currencyFormat, duration } from '../../../utils/common';
+import { currencyFormat, dateFormat } from '../../../utils/common';
 
 const BillModal = ({ mode, count, onBillCreate }) => {
   const FormState = useSelector(state => state?.Form);
@@ -67,7 +67,7 @@ const BillModal = ({ mode, count, onBillCreate }) => {
                 >
                   <div>
                     <div className="font-semibold">{bill?.ticket}</div>
-                    <div className="text-xs">{duration(bill?.ordered_at)}</div>
+                    <div className="text-xs">{dateFormat(bill?.ordered_at)}</div>
                   </div>
                   <div className="font-semibold">{currencyFormat(bill?.total_charges)}</div>
                 </div>

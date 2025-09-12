@@ -29,12 +29,7 @@ export const duration = v => {
     return '-';
   }
 
-
-  if (moment().diff(start, "days") < 1) {
-    return start.fromNow(); // "3 hours ago"
-  }
-
-  return start.format("DD/MM/YYYY HH:mm");
+  return start.fromNow()
 };
 
 export const cashList = total => {
