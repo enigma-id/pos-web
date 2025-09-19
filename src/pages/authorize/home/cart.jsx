@@ -153,6 +153,37 @@ const Cart = ({ onUpdate }) => {
       .filter(Boolean);
   };
 
+  const confirmSaveBil = () => {
+    openModal(
+      <>
+        <Modal.Header onClose={closeModal}>
+          <div className="text-lg font-semibold">Confirm Save Bill</div>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="mb-3 py-4">
+            <div>Are you sure?</div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <div className="btn btn-md px-10" onClick={closeModal}>
+            Cancel
+          </div>
+          <div
+            className={`btn btn-md btn-success px-10 text-white ${billResult?.isLoading ? 'btn-disabled' : ''}`}
+            onClick={onBillCreate}
+          >
+            Confirm{' '}
+            {billResult.isLoading ? (
+              <span className="loading loading-spinner loading-sm"></span>
+            ) : null}
+          </div>
+        </Modal.Footer>
+      </>,
+
+      mode === 'open' ? 'w-lg' : 'w-md'
+    );
+  }
+
   const handleModal = () => {
     openModal(
       <BillModal mode={mode} count={billCount} onBillCreate={v => onBillCreate(v)} />,
@@ -385,7 +416,7 @@ const Cart = ({ onUpdate }) => {
                 (CartState?.bill && (CartState?.bill?.items?.length != CartState?.items?.bill?.length))
                 ? '': 'btn-disabled'
               }`}
-              onClick={CartState?.bill ? onBillCreate : handleModal}
+              onClick={CartState?.bill ? confirmSaveBil : handleModal}
             >
               Save Bill
             </button>
