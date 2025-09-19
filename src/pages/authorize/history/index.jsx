@@ -181,15 +181,13 @@ const HistoryScreen = () => {
                 <PrintIcon />
                 print kitchen
               </div>
-              {Session?.user?.is_supervisor === 1 && (
-                <div
-                  className="bg-error text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
-                  onClick={() => onRefund(detail?.id)}
-                >
-                  <TrashIcon />
-                  refund
-                </div>
-              )}
+              <div
+                className="bg-error text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
+                onClick={() => onRefund(detail?.id)}
+              >
+                <TrashIcon />
+                refund
+              </div>
             </div>
           </div>
 
