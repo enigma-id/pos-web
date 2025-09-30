@@ -3,7 +3,7 @@ import React from 'react';
 import { useSelector } from 'react-redux';
 
 import CardMockup from '../../../assets/card-mockup.jpg';
-import { Remove } from '../../../components/ui';
+import { NFCField, Remove } from '../../../components/ui';
 import { PaypassIcon } from '../../../components/ui/icon';
 import Input from '../../../components/ui/input';
 import useModal from '../../../components/ui/modal/hook';
@@ -20,6 +20,23 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
   const [edit, setEdit] = React.useState(false);
+
+  const handleRead = uid => {
+    const payload = {
+      name,
+      reff_code: phone,
+      card_id: uid,
+    };
+
+    update({ id, payload });
+  };
+
+  const onScan = () => {
+    openModal(
+      <NFCField onRead={handleRead} isOpen={true} onClose={closeModal} result={updateResults} />,
+      'w-md'
+    );
+  };
 
   const onSave = async () => {
     const payload = {
@@ -78,7 +95,7 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
       <div className="flex-1">
         <div className="h-80 w-full overflow-hidden rounded-lg">
           <div
-            className="flex h-full w-full place-content-center place-items-center bg-center"
+            className="flex flex-col h-full w-full place-content-center place-items-center bg-center"
             style={{ background: `url(${CardMockup})` }}
           >
             <div
@@ -106,6 +123,16 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
                 {data?.reff_code || '-'}
               </div>
             </div>
+            {edit && (
+              <div className='mt-2'>
+               <button
+                className={`btn btn-primary h-full flex-1 rounded ${!updateResult?.isLoading ? '' : 'btn-disabled'}`}
+                onClick={onScan}
+                >
+                  Ganti Kartu Suka Bread
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
