@@ -14,6 +14,8 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
   const Session = useSelector(state => state?.Auth?.session);
   const FormState = useSelector(state => state?.Form);
 
+  const User = useSelector(state => state?.Auth?.session?.user);
+
   const { showResult, update, updateResult } = useMembership(id);
   const { openModal, closeModal } = useModal();
 
@@ -129,7 +131,7 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
                 {data?.reff_code || '-'}
               </div>
             </div>
-            {edit && (
+            {(edit && User.is_supervisor === 1) && (
               <div className='mt-2'>
                <button
                 className={`btn btn-primary h-full flex-1 rounded ${!updateResult?.isLoading ? '' : 'btn-disabled'}`}
