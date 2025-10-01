@@ -88,6 +88,7 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
       // setPhone(updateResult?.data?.data?.reff_code);
       onClose?.();
       reboot?.();
+      closeModal?.();
     }
   }, [updateResult]);
 
