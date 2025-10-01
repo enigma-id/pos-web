@@ -33,7 +33,12 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
 
   const onScan = () => {
     openModal(
-      <NFCField onRead={handleRead} isOpen={true} onClose={closeModal} result={updateResults} />,
+      <NFCField
+        onRead={handleRead}
+        isOpen={true}
+        onClose={closeModal}
+        result={updateResult}
+      />,
       'w-md'
     );
   };
