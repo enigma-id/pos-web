@@ -4,6 +4,10 @@ import { useSelector } from 'react-redux';
 import AuthorizeRouter from './pages/authorize/router.jsx';
 import UnauthorizeRouter from './pages/unauthorize/router.jsx';
 import useAuth from './services/auth/hook.js';
+import { checkAppVersion } from './utils/checkVersion.jsx';
+
+
+checkAppVersion();
 
 const App = () => {
   const isAuthenticated = useSelector(state => state.Auth?.isAuthenticated);
