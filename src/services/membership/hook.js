@@ -7,6 +7,7 @@ import {
   useDeleteMutation,
   useLazyShowQuery,
   useLazyCheckSaldoQuery,
+  useLazyGetSaldoLogQuery,
   useTopupMutation,
   useLazyGetQuery,
 } from './action';
@@ -21,6 +22,7 @@ const useMembership = id => {
   const [triggerGet, getMemberResult] = useLazyGetQuery();
   const [triggerShow, showResult] = useLazyShowQuery();
   const [triggerCheck, checkResult] = useLazyCheckSaldoQuery();
+  const [triggerSaldoLog, saldoLogResult] = useLazyGetSaldoLogQuery();
   const [topupBalance, topupResult] = useTopupMutation();
 
   const getMember = async params => {
@@ -71,6 +73,14 @@ const useMembership = id => {
     }
   };
 
+  const saldoLog = async params => {
+    try {
+      await triggerSaldoLog(params).unwrap();
+    } catch (err) {
+      dispatch($failure(err));
+    }
+  };
+
   useEffect(() => {
     if (id) {
       triggerShow(id);
@@ -92,6 +102,8 @@ const useMembership = id => {
     topup,
     topupResult,
     showResult,
+    saldoLog,
+    saldoLogResult
   };
 };
 

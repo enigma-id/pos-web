@@ -2,7 +2,7 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
 
-import { EmptySection, Kitchen, Receipt, OrderDetails, Refund } from '../../../components/ui';
+import { EmptySection, Kitchen, Receipt, OrderDetails, Refund, PrintDiscount } from '../../../components/ui';
 import { MoneysIcon, PrintIcon, SearchIcon, TrashIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useOrder from '../../../services/sales/order/hook';
@@ -29,6 +29,23 @@ const BillScreen = () => {
 
   const handleOpenPrintKitchen = () => {
     open(<Kitchen data={detail} />);
+  };
+
+  const onPrintRecipient = () => {
+    openModal(
+      <PrintDiscount
+        data={detail}
+        onClose={() => {
+          closeModal();
+        }}
+        onPrint={(v) => {
+          closeModal();
+          open(<Receipt data={v}  />);
+
+        }}
+      />,
+      'w-md'
+    );
   };
 
   const onRefund = id => {
@@ -79,6 +96,9 @@ const BillScreen = () => {
     }
   }, [showResult]);
 
+
+
+
   const data = orderResult?.data?.data || [];
   const total = orderResult?.data?.total || 0;
   const totalPages = Math.ceil(total / itemsPerPage);
@@ -127,7 +147,7 @@ const BillScreen = () => {
                   </div>
                 </div>
                 <div className="flex flex-col place-content-between">
-                  <div className="text-base-300 text-end text-sm">{item?.code}</div>
+                  <div className="text-base-300 text-end text-sm">{item?.draft_code}</div>
 
                   <div className="text-base-300 text-end text-xs">
                     {dateFormat(item?.ordered_at)}
@@ -163,7 +183,7 @@ const BillScreen = () => {
             <div className="flex h-full flex-1/2 place-content-end place-items-center">
               <div
                 className="bg-primary text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
-                onClick={handleOpenPrint}
+                onClick={onPrintRecipient}
               >
                 <PrintIcon />
                 print receipt
