@@ -14,3 +14,4 @@ export { default as Receipt } from './receipt';
 export { default as Summary } from './summary';
 export { default as Kitchen } from './kitchen';
 export { default as PrintDiscount } from './print_discount';
+export { default as CopyOrder } from './copy_order';
