@@ -11,6 +11,7 @@ import useModal from '../../../components/ui/modal/hook';
 import useTable from '../../../components/ui/table';
 import useMembership from '../../../services/membership/hook';
 import useDrawer from '../../../utils/drawer';
+import HistorySection from './history';
 
 const MembershipScreen = () => {
   const { drawerRef, open: openDrawer, close: closeDrawer, isOpen: drawerOpen } = useDrawer();
@@ -23,11 +24,16 @@ const MembershipScreen = () => {
 
   const tableConfig = React.useMemo(() => {
     return createTableConfig({
-      onClick: v => {
+      onShow: v => {
         setData(v);
         setType('detail');
         openDrawer();
       },
+      onHistory: v => {
+        setData(v);
+        setType('history');
+        openDrawer();
+      }
     });
   }, []);
 
@@ -114,7 +120,7 @@ const MembershipScreen = () => {
 
       <Drawer.Content
         drawerRef={drawerRef}
-        title={type === 'create' ? 'Create New Member' : 'Membership Details'}
+        title={type === 'create' ? 'Create New Member' : type === 'detail' ? 'Membership Details': 'Membership History'}
         close={closeDrawer}
       >
         {type === 'create' && (
@@ -134,6 +140,17 @@ const MembershipScreen = () => {
               Table.boot();
             }}
             reboot={() => {
+              Table.boot();
+            }}
+            isOpen={drawerOpen}
+          />
+        )}
+
+        {type === 'history' && data && (
+          <HistorySection
+            id={data?.id}
+            onClose={() => {
+              closeDrawer();
               Table.boot();
             }}
             isOpen={drawerOpen}

@@ -2,7 +2,17 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
 
-import { EmptySection, Kitchen, Receipt, OrderDetails, Refund } from '../../../components/ui';
+import { FaCopy } from 'react-icons/fa';
+
+import {
+  EmptySection,
+  Kitchen,
+  Receipt,
+  OrderDetails,
+  Refund,
+  PrintDiscount,
+  CopyOrder,
+} from '../../../components/ui';
 import { MoneysIcon, PrintIcon, SearchIcon, TrashIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useOrder from '../../../services/sales/order/hook';
@@ -23,12 +33,24 @@ const BillScreen = () => {
 
   const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
 
-  const handleOpenPrint = () => {
-    open(<Receipt data={detail} />);
-  };
-
   const handleOpenPrintKitchen = () => {
     open(<Kitchen data={detail} />);
+  };
+
+  const onPrintRecipient = () => {
+    openModal(
+      <PrintDiscount
+        data={detail}
+        onClose={() => {
+          closeModal();
+        }}
+        onPrint={v => {
+          closeModal();
+          open(<Receipt data={v} />);
+        }}
+      />,
+      'w-md'
+    );
   };
 
   const onRefund = id => {
@@ -36,6 +58,21 @@ const BillScreen = () => {
       <Refund
         id={id}
         onClose={() => {
+          order({ status: 'pending', search, page: currentPage, limit: itemsPerPage });
+          closeModal();
+        }}
+      />,
+      'w-md'
+    );
+  };
+
+  const onCopyOrder = () => {
+    openModal(
+      <CopyOrder
+        detail={detail}
+        orders={data}
+        onClose={closeModal}
+        onSuccess={result => {
           order({ status: 'pending', search, page: currentPage, limit: itemsPerPage });
           closeModal();
         }}
@@ -162,8 +199,16 @@ const BillScreen = () => {
           <div className="bg-base-100 h-16 w-full">
             <div className="flex h-full flex-1/2 place-content-end place-items-center">
               <div
+                className="bg-success text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
+                onClick={onCopyOrder}
+              >
+                {/* <CopyIcon /> */}
+                <FaCopy />
+                copy order
+              </div>
+              <div
                 className="bg-primary text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
-                onClick={handleOpenPrint}
+                onClick={onPrintRecipient}
               >
                 <PrintIcon />
                 print receipt

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 
-import { useCancelMutation, useLazyOrderQuery, useLazyShowQuery } from './action';
+import { useCancelMutation, useCopyMutation, useLazyOrderQuery, useLazyShowQuery } from './action';
 import { $failure } from '../../form/action';
 
 const useOrder = id => {
@@ -9,6 +9,7 @@ const useOrder = id => {
   const [triggerOrder, orderResult] = useLazyOrderQuery();
   const [triggerShow, showResult] = useLazyShowQuery();
   const [cancelMutation, cancelResult] = useCancelMutation();
+  const [copyMutation, copyResult] = useCopyMutation();
 
   const order = async (params = {}) => {
     try {
@@ -40,6 +41,16 @@ const useOrder = id => {
     }
   };
 
+  const copy = async ({ id, payload }) => {
+    try {
+      const result = await copyMutation({ id, payload }).unwrap();
+      return result;
+    } catch (error) {
+      dispatch($failure(error));
+      throw error;
+    }
+  };
+
   useEffect(() => {
     if (!id) return;
 
@@ -54,6 +65,8 @@ const useOrder = id => {
     showResult,
     cancel,
     cancelResult,
+    copy,
+    copyResult,
   };
 };
 
