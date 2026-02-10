@@ -54,6 +54,13 @@ export const memberApi = createApi({
         body: payload,
       }),
     }),
+    getSaldoLog: builder.query({
+      query: params => ({
+        url: '/saldo/log',
+        method: 'GET',
+        params,
+      }),
+    }),
   }),
 });
 
@@ -64,5 +71,6 @@ export const {
   useDeleteMutation,
   useLazyShowQuery,
   useLazyCheckSaldoQuery,
+  useLazyGetSaldoLogQuery,
   useTopupMutation,
 } = memberApi;
