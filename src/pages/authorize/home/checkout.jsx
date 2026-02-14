@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -23,6 +23,9 @@ import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
 
+import BillModal from './saveBill';
+import SuccessModal from './success';
+
 const CheckoutScreen = () => {
   const location = useLocation();
   const isBill = location.state?.is_bill;
@@ -43,6 +46,8 @@ const CheckoutScreen = () => {
     closeBillResult,
     remove,
     billItems,
+    openBill,
+    billResult,
   } = useCart();
   const { show, showResult } = useOrder();
 
@@ -110,7 +115,7 @@ const CheckoutScreen = () => {
     );
   };
 
-  const handleSubmit = async (card_id, ref) => {
+  const handlePay = async (card_id, ref) => {
     const allItems = [...(CartState?.items?.list || []), ...(CartState?.items?.bill || [])];
 
     const items = allItems?.map(item => {
@@ -190,6 +195,91 @@ const CheckoutScreen = () => {
     }
   };
 
+  const openTicket = () => {
+    openModal(<BillModal mode="create" onBillCreate={ticket => handleSaveBill(ticket)} />, 'w-md');
+  };
+
+  const handleSaveBill = async ticket => {
+    const allItems = [...(CartState?.items?.list || []), ...(CartState?.items?.bill || [])];
+
+    const items = allItems?.map(item => {
+      const base = {
+        catalog_id: item.catalog_id,
+        quantity: item.quantity,
+      };
+
+      if (CartState?.bill) {
+        base.id = item.id;
+      }
+
+      if (item?.additionals_flat?.length > 0) {
+        base.additionals = item?.additionals_flat;
+      }
+
+      if (item?.is_custom === 1) {
+        base.description = item?.name;
+        base.unit_price = item?.unit_price;
+      }
+
+      return base;
+    });
+
+    const discount_categories = CartState?.discount?.category
+      ?.filter(
+        cat => cat?.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
+      )
+      ?.map(cat => ({
+        category_id: cat.id,
+        ...(cat.discount_type === 'percentage'
+          ? { discount_percentage: cat.discount_value }
+          : { discount_value: cat.discount_value }),
+      }));
+
+    const payload = {
+      channel_id: Channel?.selectedChannel?.id,
+      items,
+    };
+
+    if (note) {
+      payload.note = note;
+    }
+
+    if (CartState?.meta?.customer) {
+      payload.membership_id = CartState?.meta?.customer?.id;
+    }
+
+    if (CartState?.discount?.cart?.type) {
+      if (CartState?.discount?.cart?.type === 'percentage') {
+        payload.discount_percentage = CartState?.discount?.cart?.value;
+      }
+
+      if (CartState?.discount?.cart?.type === 'nominal') {
+        payload.discount_value = CartState?.discount?.cart?.value;
+      }
+    }
+
+    if (discount_categories?.length > 0) {
+      payload.discount_categories = discount_categories;
+    }
+
+    payload.id = CartState?.bill?.id;
+    payload.ticket = ticket;
+
+    await openBill(payload);
+  };
+
+  React.useEffect(() => {
+    if (billResult?.isSuccess) {
+      show(billResult?.data?.data?.id);
+    }
+  }, [billResult]);
+
+  useEffect(() => {
+    if (billResult?.isSuccess && showResult?.isSuccess) {
+      openModal(<SuccessModal data={showResult?.data?.data} backToMenu />, 'w-md');
+    }
+  }, [billResult, showResult]);
+
   const handleRead = uid => {
     const params = {
       is_checkout: true,
@@ -245,7 +335,7 @@ const CheckoutScreen = () => {
             )}
           </div>
           <div className="mt-4">
-            <div className="flex h-16">
+            <div className="flex h-16 gap-4">
               <div
                 className="btn btn-lg btn-soft btn-primary mb-3 flex-1 rounded-none"
                 onClick={() => handleOpenPrint(data)}
@@ -284,15 +374,16 @@ const CheckoutScreen = () => {
   }, [checkResult]);
 
   React.useEffect(() => {
-    if (checkoutResult?.isSuccess) {
+    if (checkoutResult?.isSuccess || closeBillResult?.isSuccess) {
       setSelectedMethod(paymentMethod[0]);
-      show(checkoutResult?.data?.data?.id);
+      const id = checkoutResult?.data?.data?.id || closeBillResult?.data?.data?.id;
+      show(id);
     }
-  }, [checkoutResult]);
+  }, [checkoutResult, closeBillResult]);
 
   React.useEffect(() => {
-    if (closeBillResult?.isSuccess || (checkoutResult?.isSuccess && showResult?.isSuccess)) {
-      openSuccess(closeBillResult?.data?.data ?? showResult?.data?.data);
+    if ((closeBillResult?.isSuccess || checkoutResult?.isSuccess) && showResult?.isSuccess) {
+      openSuccess(showResult?.data?.data);
     }
   }, [checkoutResult, closeBillResult, showResult]);
 
@@ -325,6 +416,12 @@ const CheckoutScreen = () => {
 
     setDiscountInputs(inputs);
   }, []);
+
+  React.useEffect(() => {
+    if (billResult?.isSuccess || checkoutResult?.isSuccess || closeBillResult?.isSuccess) {
+      setDiscountInputs([]);
+    }
+  }, [billResult, checkoutResult, closeBillResult]);
 
   return (
     <div className="flex h-screen flex-col">
@@ -425,9 +522,8 @@ const CheckoutScreen = () => {
                     <div>{item?.name}</div>
                     <div className="text-base-300 text-xs">
                       {currencyFormat(
-                        item?.quantity *
-                        (item?.unit_price - item?.discount_amount) > 0 ?
-                          item?.unit_price - item?.discount_amount
+                        item?.quantity * (item?.unit_price - item?.discount_amount) > 0
+                          ? item?.unit_price - item?.discount_amount
                           : 0
                       )}
                     </div>
@@ -435,8 +531,9 @@ const CheckoutScreen = () => {
                   <div className="pb-2 text-xs">
                     {item?.quantity} x{' '}
                     {currencyFormat(
-                      (item?.unit_price - item?.discount_amount) > 0 ?  item?.unit_price - item?.discount_amount
-                      : 0
+                      item?.unit_price - item?.discount_amount > 0
+                        ? item?.unit_price - item?.discount_amount
+                        : 0
                     )}
                     {item?.discount_amount > 0 && (
                       <span className="text-base-300 ms-2 line-through">
@@ -714,12 +811,26 @@ const CheckoutScreen = () => {
             )}
           </div>
 
-          <div
-            className={`btn btn-primary btn-xl btn-block ${CartState?.items?.list?.count === 0 || checkoutResult?.isLoading ? 'btn-disabled' : ''}`}
-            onClick={selectedMethod?.is_nfc === 1 ? openNFC : () => handleSubmit()}
-          >
-            Pay now
-            {checkoutResult?.isLoading && <span className="loading loading-spinner"></span>}
+          <div className="flex gap-1">
+            <div
+              className={`btn btn-default btn-xl btn-block flex-1 ${CartState?.items?.list?.count === 0 || billResult?.isLoading ? 'btn-disabled' : ''}`}
+              onClick={
+                CartState?.bill ? () => handleSaveBill(CartState?.bill?.ticket) : () => openTicket()
+              }
+            >
+              Save Bill
+              {billResult?.isLoading && <span className="loading loading-spinner"></span>}
+            </div>
+
+            <div
+              className={`btn btn-primary btn-xl btn-block flex-1 ${CartState?.items?.list?.count === 0 || checkoutResult?.isLoading || closeBillResult?.isLoading ? 'btn-disabled' : ''}`}
+              onClick={selectedMethod?.is_nfc === 1 ? openNFC : () => handlePay()}
+            >
+              Pay now
+              {(checkoutResult?.isLoading || closeBillResult?.isLoading) && (
+                <span className="loading loading-spinner"></span>
+              )}
+            </div>
           </div>
         </div>
       </div>
