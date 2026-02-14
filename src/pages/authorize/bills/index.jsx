@@ -10,7 +10,6 @@ import {
   Receipt,
   OrderDetails,
   Refund,
-  PrintDiscount,
   CopyOrder,
 } from '../../../components/ui';
 import { MoneysIcon, PrintIcon, SearchIcon, TrashIcon } from '../../../components/ui/icon';
@@ -20,8 +19,6 @@ import { currencyFormat, dateFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
 
 const BillScreen = () => {
-  const Session = useSelector(state => state?.Auth?.session);
-
   const [detail, setDetail] = React.useState(null);
   const [search, setSearch] = React.useState('');
   const [selectedIndex, setSelectedIndex] = React.useState(0);
@@ -33,24 +30,12 @@ const BillScreen = () => {
 
   const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
 
-  const handleOpenPrintKitchen = () => {
-    open(<Kitchen data={detail} />);
+  const handleOpenPrintReceipt = () => {
+    open(<Receipt data={detail} />);
   };
 
-  const onPrintRecipient = () => {
-    openModal(
-      <PrintDiscount
-        data={detail}
-        onClose={() => {
-          closeModal();
-        }}
-        onPrint={v => {
-          closeModal();
-          open(<Receipt data={v} />);
-        }}
-      />,
-      'w-md'
-    );
+  const handleOpenPrintKitchen = () => {
+    open(<Kitchen data={detail} />);
   };
 
   const onRefund = id => {
@@ -208,7 +193,7 @@ const BillScreen = () => {
               </div>
               <div
                 className="bg-primary text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
-                onClick={onPrintRecipient}
+                onClick={handleOpenPrintReceipt}
               >
                 <PrintIcon />
                 print receipt

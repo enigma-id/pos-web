@@ -211,10 +211,12 @@ const Receipt = ({ data }) => {
           <p style={{ marginBlock: 2, fontSize: 11 }}>Total</p>
           <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(data?.total_charges)}</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.payment_method?.name || 'Cash'}</p>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(data?.total_payment)}</p>
-        </div>
+        {data?.total_payment > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.payment_method?.name || 'Cash'}</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(data?.total_payment)}</p>
+          </div>
+        )}
         {data?.payment_ref && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <p style={{ marginBlock: 2, fontSize: 11 }}>Ref</p>
@@ -229,7 +231,7 @@ const Receipt = ({ data }) => {
             </p>
           </div>
         )}
-        {(data?.status === 'completed' && data?.payment_method?.is_nfc == 1) && (
+        {data?.status === 'completed' && data?.payment_method?.is_nfc == 1 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <p style={{ marginBlock: 2, fontSize: 11 }}>Saldo Member</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>

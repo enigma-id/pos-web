@@ -37,12 +37,33 @@ function extractUniqueCategories(items) {
   items.forEach(item => {
     const cat = item.category ?? item.catalog?.category;
 
-    if (cat?.id != null && !map.has(cat.id)) {
-      map.set(cat.id, {
-        ...cat,
-        discount_type: null,
-        discount_value: 0,
-      });
+    const discountType =
+      item?.discount_amount > 0 ? (item.is_discount_percentage ? 'percentage' : 'nominal') : null;
+
+    const discoutnValue =
+      discountType === null
+        ? null
+        : discountType === 'percentage'
+          ? item?.discount_percentage
+          : item?.discount_amount;
+
+    if (cat?.id !== null) {
+      if (!map.has(cat.id)) {
+        map.set(cat.id, {
+          ...cat,
+          discount_type: discountType,
+          discount_value: discoutnValue,
+        });
+      } else {
+        const existing = map.get(cat.id);
+        if (existing.discount_type !== discountType || existing.discount_value !== discoutnValue) {
+          map.set(cat.id, {
+            ...existing,
+            discount_type: discountType,
+            discount_value: discoutnValue,
+          });
+        }
+      }
     }
   });
 
@@ -54,12 +75,11 @@ function getCategoryDiscount(item, itemCategories) {
   const found = itemCategories.find(c => c.id === cat?.id);
   if (!found) return 0;
 
-
   const { discount_type, discount_value } = found;
   if (!discount_type || !discount_value) return 0;
 
   if (discount_type === 'percentage') {
-    return Math.floor((item.unit_price * (discount_value / 100)));
+    return Math.floor(item.unit_price * (discount_value / 100));
   }
 
   if (discount_type === 'nominal') {
@@ -96,7 +116,7 @@ function recalculateTotals(state) {
     return {
       ...item,
       discount_amount: discount,
-      final_total: Math.max(0, item.subtotal - (discount * item?.quantity)),
+      final_total: Math.max(0, item.subtotal - discount * item?.quantity),
     };
   });
 
@@ -186,8 +206,10 @@ function convertApiOrderToCartItem(item) {
     additionals: Object.values(groupedAdditionals),
     additionals_flat: additionalsFlat,
     discount_amount: item.discount_value || 0,
+    discount_percentage: item.discount || 0,
     final_total: item.unit_bill * item.quantity,
     from_bill: true,
+    is_discount_percentage: item.is_discount_percentage,
   };
 }
 
@@ -364,6 +386,7 @@ const cartSlice = createSlice({
       state.items.bill = items.map(item => convertApiOrderToCartItem(item));
 
       const allItems = [...state.items.list, ...state.items.bill];
+
       state.discount.category = extractUniqueCategories(allItems);
       recalculateTotals(state);
     },

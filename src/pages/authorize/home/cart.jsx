@@ -58,12 +58,23 @@ const Cart = ({ onUpdate }) => {
   };
 
   const onBillCreate = async ticket => {
+    const discount_categories = CartState?.discount?.category
+      ?.filter(
+        cat => cat?.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
+      )
+      ?.map(cat => ({
+        category_id: cat.id,
+        ...(cat.discount_type === 'percentage'
+          ? { discount_percentage: cat.discount_value }
+          : { discount_value: cat.discount_value }),
+      }));
+
     const billItems = CartState?.items?.bill?.map(bi => {
       const base = {
         id: bi.id,
         catalog_id: bi.catalog_id,
         quantity: bi.quantity,
-      }
+      };
 
       if (bi?.is_custom === 1) {
         base.description = bi.name;
@@ -77,7 +88,7 @@ const Cart = ({ onUpdate }) => {
       }
 
       return base;
-    })
+    });
 
     const items = CartState?.items?.list?.map(item => {
       const base = {
@@ -107,7 +118,21 @@ const Cart = ({ onUpdate }) => {
     };
 
     if (billItems?.length > 0) {
-      payload.items = [...billItems, ...items]
+      payload.items = [...billItems, ...items];
+    }
+
+    if (CartState?.discount?.cart?.type) {
+      if (CartState?.discount?.cart?.type === 'percentage') {
+        payload.discount_percentage = CartState?.discount?.cart?.value;
+      }
+
+      if (CartState?.discount?.cart?.type === 'nominal') {
+        payload.discount_value = CartState?.discount?.cart?.value;
+      }
+    }
+
+    if (discount_categories?.length > 0) {
+      payload.discount_categories = discount_categories;
     }
 
     if (CartState?.bill?.id) {
@@ -182,7 +207,7 @@ const Cart = ({ onUpdate }) => {
 
       mode === 'open' ? 'w-lg' : 'w-md'
     );
-  }
+  };
 
   const handleModal = () => {
     openModal(
@@ -402,19 +427,19 @@ const Cart = ({ onUpdate }) => {
         <div className="flex place-items-center gap-1">
           {mode === 'open' ? (
             <button
-            className={`btn btn-xl btn-primary flex-1 rounded-none text-lg font-thin uppercase`}
-            onClick={handleModal}
-          >
-            Open Bill ({billCount})
-          </button>
-
-          ): (
+              className={`btn btn-xl btn-primary flex-1 rounded-none text-lg font-thin uppercase`}
+              onClick={handleModal}
+            >
+              Open Bill ({billCount})
+            </button>
+          ) : (
             <button
               className={`btn btn-xl btn-primary flex-1 rounded-none text-lg font-thin uppercase ${
-                (CartState?.items?.list?.length > 0)
-                ||
-                (CartState?.bill && (CartState?.bill?.items?.length != CartState?.items?.bill?.length))
-                ? '': 'btn-disabled'
+                CartState?.items?.list?.length > 0 ||
+                (CartState?.bill &&
+                  CartState?.bill?.items?.length != CartState?.items?.bill?.length)
+                  ? ''
+                  : 'btn-disabled'
               }`}
               onClick={CartState?.bill ? confirmSaveBil : handleModal}
             >
@@ -424,10 +449,11 @@ const Cart = ({ onUpdate }) => {
 
           <button
             className={`btn btn-xl btn-primary flex-1 rounded-none text-lg font-thin uppercase ${
-              (!CartState?.bill && CartState?.items?.list?.length > 0)
-              ||
-              ((CartState?.bill?.items?.length == CartState?.items?.bill?.length) && CartState?.items?.list?.length === 0)
-              ? '' : 'btn-disabled'
+              (!CartState?.bill && CartState?.items?.list?.length > 0) ||
+              (CartState?.bill?.items?.length == CartState?.items?.bill?.length &&
+                CartState?.items?.list?.length === 0)
+                ? ''
+                : 'btn-disabled'
             }`}
             onClick={() =>
               navigate('/checkout', {
@@ -437,7 +463,7 @@ const Cart = ({ onUpdate }) => {
               })
             }
           >
-            Pay
+            Checkout
           </button>
         </div>
       </div>

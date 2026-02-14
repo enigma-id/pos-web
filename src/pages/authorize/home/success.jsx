@@ -1,4 +1,4 @@
-import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { Kitchen, Receipt, Modal } from '../../../components/ui';
 import { PrintIcon } from '../../../components/ui/icon';
@@ -6,7 +6,8 @@ import useModal from '../../../components/ui/modal/hook';
 // import useOrder from '../../../services/sales/order/hook';
 import { usePrintWindow } from '../../../utils/print';
 
-const SuccessModal = ({ data }) => {
+const SuccessModal = ({ data, backToMenu }) => {
+  const navigate = useNavigate();
   const { closeModal } = useModal();
   const { open: openPrint } = usePrintWindow({ title: 'Print Preview', autoClose: true });
   //   const { show, showResult } = useOrder();
@@ -34,7 +35,16 @@ const SuccessModal = ({ data }) => {
 
   return (
     <>
-      <Modal.Header onClose={closeModal}>
+      <Modal.Header
+        onClose={
+          backToMenu
+            ? () => {
+                closeModal();
+                navigate('/');
+              }
+            : closeModal
+        }
+      >
         <div className="text-lg font-semibold tracking-wide uppercase">Bill Saved</div>
       </Modal.Header>
 
@@ -48,19 +58,32 @@ const SuccessModal = ({ data }) => {
           <p className="text-base-300 text-sm">Would you like to print to kitchen?</p>
         </div>
 
-        <div className="flex h-16 px-4">
-          <div
-            className="btn btn-lg btn-soft btn-primary mb-3 flex-1 rounded-none"
-            onClick={() => handleOpenPrint(data)}
-          >
-            <PrintIcon /> Print Receipt
+        <div className="px-4">
+          <div className="flex h-16 gap-4">
+            <div
+              className="btn btn-lg btn-soft btn-primary mb-3 flex-1 rounded-none"
+              onClick={() => handleOpenPrint(data)}
+            >
+              <PrintIcon /> Print Receipt
+            </div>
+            <div
+              className="btn btn-lg btn-soft btn-primary flex-1 rounded-none"
+              onClick={handleOpenPrintKitchen}
+            >
+              <PrintIcon /> Print Kitchen
+            </div>
           </div>
-          <div
-            className="btn btn-lg btn-soft btn-primary flex-1 rounded-none"
-            onClick={handleOpenPrintKitchen}
-          >
-            <PrintIcon /> Print Kitchen
-          </div>
+          {backToMenu && (
+            <div
+              className="btn btn-block btn-lg btn-primary mb-3"
+              onClick={() => {
+                closeModal();
+                navigate('/');
+              }}
+            >
+              Back to menu
+            </div>
+          )}
         </div>
       </Modal.Body>
     </>
