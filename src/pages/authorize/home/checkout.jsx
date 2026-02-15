@@ -369,7 +369,7 @@ const CheckoutScreen = () => {
     if (checkResult?.isSuccess) {
       // openSuccess()
       const card = checkResult?.data?.data;
-      handleSubmit(card?.card_id, card?.reff_code);
+      handlePay(card?.card_id, card?.reff_code);
     }
   }, [checkResult]);
 
