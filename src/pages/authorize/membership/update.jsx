@@ -10,7 +10,7 @@ import useModal from '../../../components/ui/modal/hook';
 import useMembership from '../../../services/membership/hook';
 import { currencyFormat } from '../../../utils/common';
 
-const DetailSession = ({ id, onClose, isOpen, reboot }) => {
+const UpdateSession = ({ id, onClose, isOpen, reboot }) => {
   const Session = useSelector(state => state?.Auth?.session);
   const FormState = useSelector(state => state?.Form);
 
@@ -21,7 +21,6 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
 
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
-  const [edit, setEdit] = React.useState(false);
 
   const handleRead = uid => {
     const payload = {
@@ -35,12 +34,7 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
 
   const onScan = () => {
     openModal(
-      <NFCField
-        onRead={handleRead}
-        isOpen={true}
-        onClose={closeModal}
-        result={updateResult}
-      />,
+      <NFCField onRead={handleRead} isOpen={true} onClose={closeModal} result={updateResult} />,
       'w-md'
     );
   };
@@ -73,7 +67,6 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
     if (isOpen === false) {
       setName(showResult?.data?.data?.name);
       setPhone(showResult?.data?.data?.reff_code);
-      setEdit(false);
     }
   }, [isOpen]);
 
@@ -103,7 +96,7 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
       <div className="flex-1">
         <div className="h-80 w-full overflow-hidden rounded-lg">
           <div
-            className="flex flex-col h-full w-full place-content-center place-items-center bg-center"
+            className="flex h-full w-full flex-col place-content-center place-items-center bg-center"
             style={{ background: `url(${CardMockup})` }}
           >
             <div
@@ -131,11 +124,11 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
                 {data?.reff_code || '-'}
               </div>
             </div>
-            {(edit && User.is_supervisor === 1) && (
-              <div className='mt-2'>
-               <button
-                className={`btn btn-primary h-full flex-1 rounded ${!updateResult?.isLoading ? '' : 'btn-disabled'}`}
-                onClick={onScan}
+            {User.is_supervisor === 1 && (
+              <div className="mt-2">
+                <button
+                  className={`btn btn-primary h-full flex-1 rounded ${!updateResult?.isLoading ? '' : 'btn-disabled'}`}
+                  onClick={onScan}
                 >
                   Ganti Kartu Suka Bread
                 </button>
@@ -145,39 +138,22 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
         </div>
 
         <div className="px-6 py-4">
-          <fieldset className="fieldset">
-            <label className="flex place-content-between place-items-center text-[14px] font-semibold tracking-wide uppercase">
-              Update Member
-              <input
-                type="checkbox"
-                checked={edit}
-                className="toggle toggle-primary"
-                onChange={() => setEdit(!edit)}
-              />
-            </label>
-          </fieldset>
           <div className="pt-4">
             <Input
               value={name}
               onChange={v => setName(v?.target?.value)}
-              disabled={!edit}
               label="Name"
               error={FormState?.errors?.name}
             />
           </div>
           <div className="pt-4">
-            <Input
-              label="Phone Number"
-              value={phone}
-              onChange={v => setPhone(v?.target?.value)}
-              disabled={!edit}
-            />
+            <Input label="Phone Number" value={phone} onChange={v => setPhone(v?.target?.value)} />
           </div>
         </div>
       </div>
       <div className="border-base-200 flex min-h-15 place-content-center place-items-center border-t">
         <button
-          className={`btn btn-primary h-full flex-1 rounded-none ${edit && !updateResult?.isLoading ? '' : 'btn-disabled'}`}
+          className={`btn btn-primary h-full flex-1 rounded-none ${!updateResult?.isLoading ? '' : 'btn-disabled'}`}
           onClick={onSave}
         >
           Save
@@ -195,4 +171,4 @@ const DetailSession = ({ id, onClose, isOpen, reboot }) => {
   );
 };
 
-export default DetailSession;
+export default UpdateSession;

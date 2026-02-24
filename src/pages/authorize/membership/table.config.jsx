@@ -2,7 +2,7 @@ import { WalletIcon } from '../../../components/ui/icon';
 import config from '../../../services/table/const';
 import { currencyFormat } from '../../../utils/common';
 
-const createTableConfig = ({ onShow, onHistory, filter = {} }) => ({
+const createTableConfig = ({ onShow, filter = {} }) => ({
   ...config,
   url: '/membership',
   filter,
@@ -29,13 +29,8 @@ const createTableConfig = ({ onShow, onHistory, filter = {} }) => ({
     },
     action: {
       component: row => (
-        <div className="flex gap-2">
-          <div className="btn btn-soft btn-primary mt-4 flex-1" onClick={() => onShow(row)}>
-            See details
-          </div>
-          <div className="btn btn-soft btn-success mt-4 flex-1" onClick={() => onHistory(row)}>
-            See History
-          </div>
+        <div className="btn btn-block btn-soft btn-primary mt-4" onClick={() => onShow(row)}>
+          See details
         </div>
       ),
     },

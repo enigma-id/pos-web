@@ -8,18 +8,10 @@ const Wrapper = ({ children }) => {
   return <div className="relative">{children}</div>;
 };
 
-const Content = ({ title, children, drawerRef, close, className }) => {
+const Content = ({ title, children, drawerRef, close, className, headerAction }) => {
   return (
     <div>
-      <input
-        id="drawer"
-        type="checkbox"
-        ref={drawerRef}
-        className="peer hidden"
-        onChange={e => {
-          if (!e.target.checked) close();
-        }}
-      />
+      <input id="drawer" type="checkbox" ref={drawerRef} className="peer hidden" disabled={true} />
       <label
         htmlFor="drawer"
         className="fixed inset-0 z-40 hidden bg-black/20 peer-checked:block"
@@ -31,9 +23,13 @@ const Content = ({ title, children, drawerRef, close, className }) => {
         <div className="flex h-screen flex-col">
           <div className="border-base-200 !bg-base-100 mb-3 flex place-content-between place-items-center border-b p-6 pb-3">
             <div className="text-[16px] font-semibold tracking-wide uppercase">{title}</div>
-            <div className="btn btn-ghost btn-sm btn-circle" onClick={close}>
-              <CloseIcon />
-            </div>
+            {headerAction !== undefined ? (
+              <div>{headerAction}</div>
+            ) : (
+              <div className="btn btn-ghost btn-sm btn-circle" onClick={close}>
+                <CloseIcon />
+              </div>
+            )}
           </div>
           {children}
         </div>

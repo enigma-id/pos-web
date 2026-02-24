@@ -1,15 +1,15 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import React from 'react';
 
 import CardMockup from '../../../assets/card-mockup.jpg';
 import { NFCField, OrderDetails, Remove } from '../../../components/ui';
-import { PaypassIcon } from '../../../components/ui/icon';
+import { PaypassIcon, WalletIcon } from '../../../components/ui/icon';
 import Input from '../../../components/ui/input';
 import useModal from '../../../components/ui/modal/hook';
 import useMembership from '../../../services/membership/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 import useOrder from '../../../services/sales/order/hook';
+import { LuWallet } from 'react-icons/lu';
 
 const HistorySection = ({ id }) => {
   const [logs, setLogs] = React.useState([]);
@@ -21,16 +21,22 @@ const HistorySection = ({ id }) => {
 
   const observerRef = React.useRef(null);
   const loadMoreRef = React.useRef(null);
+  const isLoadingRef = React.useRef(false);
+  const logsLengthRef = React.useRef(0);
+  const isTriggeringRef = React.useRef(false);
+  const processedIdsRef = React.useRef(new Set());
+  const hasMoreRef = React.useRef(true);
 
   const { saldoLog, showResult, saldoLogResult } = useMembership(id);
-  const { show: orderShow, showResult: orderShowResult} = useOrder();
+  const { show: orderShow, showResult: orderShowResult } = useOrder();
 
   const LIMIT = 25;
 
-  useEffect(() => {
+  React.useEffect(() => {
     setLogs([]);
     setPage(1);
     setHasMore(true);
+    processedIdsRef.current.clear();
   }, [id]);
 
   // Fetch history
@@ -38,51 +44,119 @@ const HistorySection = ({ id }) => {
     saldoLog({
       membership_id: id,
       page,
-      limit: LIMIT
+      limit: LIMIT,
     });
-  }, []);
+  }, [id, page]);
 
   React.useEffect(() => {
     if (saldoLogResult?.isSuccess) {
       const res = saldoLogResult?.data || {};
       const newData = res?.data || [];
 
-      setLogs((prev) => [...prev, ...newData]);
+      // Filter data yang belum pernah diproses berdasarkan ID
+      const filteredData = newData.filter(item => {
+        const id = item?.id;
+        if (!id) return true;
+        const isDuplicate = processedIdsRef.current.has(id);
+        if (!isDuplicate) {
+          processedIdsRef.current.add(id);
+        }
+        return !isDuplicate;
+      });
+
+      // Skip jika tidak ada data baru
+      if (filteredData.length === 0) return;
+
+      setLogs(prev => [...prev, ...filteredData]);
 
       if (newData.length < LIMIT) {
         setHasMore(false);
       }
+
+      // Reset isTriggeringRef setelah data berhasil ditambahkan
+      isTriggeringRef.current = false;
     }
-  }, [saldoLogResult]);
+  }, [saldoLogResult, page]);
+
+  // Sync refs
+  React.useEffect(() => {
+    const wasLoading = isLoadingRef.current;
+    const isLoading = saldoLogResult?.isLoading || false;
+    isLoadingRef.current = isLoading;
+
+    if (!isLoading && wasLoading) {
+      isTriggeringRef.current = false;
+    }
+  }, [saldoLogResult?.isLoading]);
+
+  React.useEffect(() => {
+    hasMoreRef.current = hasMore;
+  }, [hasMore]);
+
+  const prevLogsLengthRef = React.useRef(0);
+  React.useEffect(() => {
+    logsLengthRef.current = logs.length;
+
+    // Reconnect observer setelah data baru masuk (untuk trigger intersection check)
+    if (logs.length > 0 && observerRef.current) {
+      const target = loadMoreRef.current;
+      if (target) {
+        observerRef.current.unobserve(target);
+        observerRef.current.observe(target);
+      }
+    }
+    prevLogsLengthRef.current = logs.length;
+  }, [logs.length]);
 
   // Infinite scroll observer
+  const containerRef = React.useRef(null);
+
   React.useEffect(() => {
-    if (!hasMore) return;
+    // Skip jika di mode detail order
+    if (selectedOrder) return;
 
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !saldoLogResult?.isLoading) {
-          setPage((prev) => prev + 1);
-        }
-      },
-      { threshold: 1 }
-    );
+    const target = loadMoreRef.current;
+    const container = containerRef.current;
+    if (!target || !container) return;
 
-    if (loadMoreRef.current) {
-      observerRef.current.observe(loadMoreRef.current);
+    // Cleanup observer lama jika ada
+    if (observerRef.current) {
+      observerRef.current.disconnect();
     }
 
-    return () => observerRef.current?.disconnect();
-  }, [hasMore, saldoLogResult?.isLoading]);
+    const observer = new IntersectionObserver(
+      entries => {
+        const entry = entries[0];
+        if (
+          entry.isIntersecting &&
+          hasMoreRef.current &&
+          !isLoadingRef.current &&
+          !isTriggeringRef.current &&
+          logsLengthRef.current > 0
+        ) {
+          isTriggeringRef.current = true;
+          setTimeout(() => setPage(prev => prev + 1), 0);
+        }
+      },
+      { threshold: 0.1, root: container, rootMargin: '100px' }
+    );
 
-  const handleClickLog = (item) => {
+    observer.observe(target);
+    observerRef.current = observer;
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [selectedOrder]); // Re-init observer ketika berubah tampilan
+
+  const handleClickLog = item => {
     if (item?.ref_type !== 'sales_order') return;
-      setSelectedOrder(null);          // reset UI
-      setSelectedOrderId(item.ref_id); // simpan intent user
-      orderShow(item.ref_id);          // fetch
+    setSelectedOrder(null); // reset UI
+    setSelectedOrderId(item.ref_id); // simpan intent user
+    orderShow(item.ref_id); // fetch
   };
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (
       orderShowResult?.isSuccess &&
       orderShowResult?.data?.data &&
@@ -90,11 +164,7 @@ const HistorySection = ({ id }) => {
     ) {
       setSelectedOrder(orderShowResult.data.data);
     }
-  }, [
-    orderShowResult?.isSuccess,
-    orderShowResult?.data,
-    selectedOrderId
-  ]);
+  }, [orderShowResult?.isSuccess, orderShowResult?.data, selectedOrderId]);
 
   if (showResult?.isLoading) return <div>loading...</div>;
 
@@ -102,22 +172,22 @@ const HistorySection = ({ id }) => {
 
   if (selectedOrder) {
     return (
-      <div className="space-y-4 bg-base-200 -mt-3 flex flex-col px-2 h-full overflow-y-auto">
+      <div className="bg-base-200 -mt-3 flex h-full flex-col space-y-4 overflow-y-auto px-2">
         {/* Header */}
-        <div className="flex items-center gap-3 mt-2 ">
+        <div className="mt-2 flex items-center gap-3">
           <button
             className="btn btn-ghost btn-sm"
             onClick={() => {
-              setSelectedOrder(null)
-              setSelectedOrderId(null)
+              setSelectedOrder(null);
+              setSelectedOrderId(null);
             }}
           >
             ← Kembali
           </button>
-          <h2 className="font-semibold text-lg">Detail Order</h2>
+          <h2 className="text-lg font-semibold">Detail Order</h2>
         </div>
 
-        <div className='overflow-y-auto flex-1'>
+        <div className="flex-1 overflow-y-auto">
           <OrderDetails data={selectedOrder} />
         </div>
       </div>
@@ -126,21 +196,30 @@ const HistorySection = ({ id }) => {
 
   return (
     // tambahkan disini css meggunakan daiysiui dan css tailwind
-     <div className="space-y-4 overflow-y-auto px-2">
+    <div ref={containerRef} className="flex-1 space-y-4 overflow-y-auto px-2">
       {/* ===== Header Info ===== */}
-      <div className="px-4 py-3 border-b">
-         <div className="mt-2 flex justify-between items-center">
-          <span className="text-sm text-gray-500">Nama</span>
-          <span className="font-semibold text-gray-900">
-          {data?.name || '-'}
-          </span>
-        </div>
-
-        <div className="mt-2 flex justify-between items-center">
-          <span className="text-sm text-gray-500">Sisa Saldo</span>
+      <div className="px-4 py-2">
+        <div className="flex gap-2">
+          <LuWallet className="h-6 w-6" />
           <span className="text-lg font-bold text-green-600">
             {currencyFormat(data?.saldo || 0)}
           </span>
+        </div>
+
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-sm text-gray-500">No Tel</span>
+          <span className="">:</span>
+          <span className="text-gray-900">{data?.reff_code || '-'}</span>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-sm text-gray-500">Member No</span>
+          <span className="">:</span>
+          <span className="text-gray-900">{data?.card_id || '-'}</span>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-sm text-gray-500">Member Since</span>
+          <span className="">:</span>
+          <span className="text-gray-900">{dateFormat(data?.created_at, 'DD/MM/YYYY')}</span>
         </div>
       </div>
 
@@ -148,45 +227,46 @@ const HistorySection = ({ id }) => {
         <div
           key={index}
           onClick={() => handleClickLog(item)}
-          className="bg-white rounded-xl p-4 shadow-sm border border-gray-100"
+          className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm"
         >
           {/* Title & Amount */}
-          <div className="flex justify-between items-start mb-1">
+          <div className="mb-1 flex items-start justify-between">
             <h3 className="font-semibold text-gray-900">
-              {item?.ref_type === 'bonus' ? 'Bonus' : item?.ref_type === 'top-up' ? 'Topup' : `${item?.ref_code}`}
+              {item?.ref_type === 'bonus'
+                ? 'Bonus'
+                : item?.ref_type === 'top-up'
+                  ? 'Topup'
+                  : `${item?.ref_code}`}
             </h3>
-            <span className={`font-semibold ${item?.nominal < 0 ? 'text-red-600' : 'text-green-600'}`}>
+            <span
+              className={`font-semibold ${item?.nominal < 0 ? 'text-red-600' : 'text-green-600'}`}
+            >
               {currencyFormat(item?.nominal)}
             </span>
           </div>
 
           {/* Description */}
-          <p className="text-sm text-gray-600 leading-snug capitalize">
-            {(item?.ref_type === 'bonus' || item?.ref_type === 'top-up') ? `${item?.ref_code}` : 'Sales Order'}
-
+          <p className="text-sm leading-snug text-gray-600 capitalize">
+            {item?.ref_type === 'bonus' || item?.ref_type === 'top-up'
+              ? `${item?.ref_code}`
+              : 'Sales Order'}
           </p>
 
           {/* Date */}
-          <p className="text-xs text-gray-400 mt-1">
-            {dateFormat(item?.recorded_at)}
-          </p>
+          <p className="mt-1 text-xs text-gray-400">{dateFormat(item?.recorded_at)}</p>
         </div>
       ))}
 
       {/* Loader */}
       {saldoLogResult?.isLoading && (
-        <div className="text-center text-sm text-gray-400 py-4">
-          Memuat data...
-        </div>
+        <div className="py-4 text-center text-sm text-gray-400">Memuat data...</div>
       )}
       {/* Sentinel */}
       {hasMore && <div ref={loadMoreRef} className="h-4" />}
 
       {/* End */}
       {!hasMore && (
-        <div className="text-center text-xs text-gray-400 py-3">
-          Semua riwayat ditampilkan
-        </div>
+        <div className="py-3 text-center text-xs text-gray-400">Semua riwayat ditampilkan</div>
       )}
     </div>
   );

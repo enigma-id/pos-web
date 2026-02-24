@@ -2,8 +2,6 @@
 import React from 'react';
 
 import CardContent from './card.content';
-import CreateSection from './create';
-import DetailSession from './detail';
 import createTableConfig from './table.config';
 import { Drawer, Modal, NFCField } from '../../../components/ui';
 import { CardSearchIcon, PlusIcon } from '../../../components/ui/icon';
@@ -11,7 +9,8 @@ import useModal from '../../../components/ui/modal/hook';
 import useTable from '../../../components/ui/table';
 import useMembership from '../../../services/membership/hook';
 import useDrawer from '../../../utils/drawer';
-import HistorySection from './history';
+import DrawerCreate from './drawer.create';
+import DrawerDetail from './drawer.detail';
 
 const MembershipScreen = () => {
   const { drawerRef, open: openDrawer, close: closeDrawer, isOpen: drawerOpen } = useDrawer();
@@ -19,7 +18,7 @@ const MembershipScreen = () => {
   const { checkSaldo, checkResult } = useMembership();
   const { openModal, closeModal } = useModal();
 
-  const [type, setType] = React.useState('detail');
+  const [type, setType] = React.useState('');
   const [data, setData] = React.useState(null);
 
   const tableConfig = React.useMemo(() => {
@@ -29,11 +28,6 @@ const MembershipScreen = () => {
         setType('detail');
         openDrawer();
       },
-      onHistory: v => {
-        setData(v);
-        setType('history');
-        openDrawer();
-      }
     });
   }, []);
 
@@ -118,45 +112,9 @@ const MembershipScreen = () => {
         <Table.Pagination />
       </div>
 
-      <Drawer.Content
-        drawerRef={drawerRef}
-        title={type === 'create' ? 'Create New Member' : type === 'detail' ? 'Membership Details': 'Membership History'}
-        close={closeDrawer}
-      >
-        {type === 'create' && (
-          <CreateSection
-            onClose={() => {
-              closeDrawer();
-              Table.boot();
-            }}
-          />
-        )}
+      <DrawerCreate type={type} onClose={() => setType('')} onRefresh={() => Table.boot()} />
 
-        {type === 'detail' && data && (
-          <DetailSession
-            id={data?.id}
-            onClose={() => {
-              closeDrawer();
-              Table.boot();
-            }}
-            reboot={() => {
-              Table.boot();
-            }}
-            isOpen={drawerOpen}
-          />
-        )}
-
-        {type === 'history' && data && (
-          <HistorySection
-            id={data?.id}
-            onClose={() => {
-              closeDrawer();
-              Table.boot();
-            }}
-            isOpen={drawerOpen}
-          />
-        )}
-      </Drawer.Content>
+      <DrawerDetail membership={data} type={type} onClose={() => setType('')} />
     </Drawer.Wrapper>
   );
 };
