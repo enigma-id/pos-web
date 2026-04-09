@@ -18,6 +18,7 @@ import {
 import Keypad from '../../../components/ui/keypad';
 import useModal from '../../../components/ui/modal/hook';
 import useCart from '../../../services/cart/hook';
+import useOutlet from '../../../services/outlet/hooks';
 import useMembership from '../../../services/membership/hook';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
@@ -50,6 +51,8 @@ const CheckoutScreen = () => {
     billResult,
   } = useCart();
   const { show, showResult } = useOrder();
+
+  const { getServiceCharge } = useOutlet();
 
   const { checkSaldo, checkResult } = useMembership();
   const { open: openPrint } = usePrintWindow({ title: 'Print Preview', autoClose: true });
@@ -395,6 +398,7 @@ const CheckoutScreen = () => {
     };
 
     getMethod();
+    getServiceCharge();
   }, []);
 
   React.useEffect(() => {
@@ -727,19 +731,33 @@ const CheckoutScreen = () => {
             </div>
           </div>
           <div className="py-4 text-base font-semibold">Payment summary</div>
-          <div className="bg-accent flex place-content-between place-items-center rounded-lg px-4 py-4 text-base font-semibold">
-            <div>Total Amount</div>
-            <div>
-              {CartState?.discount?.cart?.value || CartState?.discount?.cart?.amount > 0 ? (
-                <div className="text-base">
-                  <span className="me-2 text-xs !font-thin line-through">
-                    {currencyFormat(CartState?.meta?.subtotal)}
+          <div className="bg-accent flex flex-col rounded-lg px-4 py-4 text-base font-semibold">
+            {CartState?.meta?.service_charge_percentage > 0 && (
+              <div className="mb-3 flex place-content-between place-items-center">
+                <div>
+                  Service{' '}
+                  <span className="me-2 text-xs !font-thin">
+                    {`(${CartState?.meta?.service_charge_percentage}%)`}
                   </span>
-                  {currencyFormat(CartState?.meta?.grand_total)}
                 </div>
-              ) : (
-                currencyFormat(CartState?.meta?.grand_total)
-              )}
+                <div>{currencyFormat(CartState?.meta?.service_charge_value)}</div>
+              </div>
+            )}
+
+            <div className="flex place-content-between place-items-center">
+              <div>Total Amount</div>
+              <div>
+                {CartState?.discount?.cart?.value || CartState?.discount?.cart?.amount > 0 ? (
+                  <div className="text-base">
+                    <span className="me-2 text-xs !font-thin line-through">
+                      {currencyFormat(CartState?.meta?.subtotal)}
+                    </span>
+                    {currencyFormat(CartState?.meta?.grand_total)}
+                  </div>
+                ) : (
+                  currencyFormat(CartState?.meta?.grand_total)
+                )}
+              </div>
             </div>
           </div>
         </div>

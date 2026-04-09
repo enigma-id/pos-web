@@ -6,6 +6,7 @@ import { authReducer } from './auth/slice';
 import { cartApi } from './cart/action';
 import { cartReducer } from './cart/slice';
 import { catalogApi } from './catalog/action';
+import { outletApi } from './outlet/action';
 import { formReducer } from './form/slice';
 import { memberApi } from './membership/action';
 import { salesChannelApi } from './sales/channel/action';
@@ -22,6 +23,7 @@ const apiReducers = {
   [salesOrderApi.reducerPath]: salesOrderApi.reducer,
   [salesChannelApi.reducerPath]: salesChannelApi.reducer,
   [catalogApi.reducerPath]: catalogApi.reducer,
+  [outletApi.reducerPath]: outletApi.reducer,
   [cartApi.reducerPath]: cartApi.reducer,
   [tableApi.reducerPath]: tableApi.reducer,
   [memberApi.reducerPath]: memberApi.reducer,

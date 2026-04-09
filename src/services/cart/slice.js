@@ -143,6 +143,8 @@ function recalculateTotals(state) {
   state.meta.subtotal = subtotalAll;
   state.discount.cart.amount = cartDiscount;
   state.meta.grand_total = Math.max(0, subtotalAll - cartDiscount);
+
+  recalculateGrandTotalWithServiceCharge(state);
 }
 
 function convertApiOrderToCartItem(item) {
@@ -228,6 +230,23 @@ function calculateAdditionalsPerItem(additionals = []) {
   }, 0);
 }
 
+function recalculateGrandTotalWithServiceCharge(state) {
+  console.log(
+    'Recalculating grand total with service charge, state:',
+    JSON.parse(JSON.stringify(state))
+  );
+  if (state.meta.service_charge_percentage > 0) {
+    state.meta.service_charge_value = Math.floor(
+      (state.meta.subtotal - state.discount.cart.amount) *
+        (state.meta.service_charge_percentage / 100)
+    );
+  } else {
+    state.meta.service_charge_value = 0;
+  }
+
+  state.meta.grand_total += state.meta.service_charge_value;
+}
+
 // Initial State
 const defineInitialState = () => ({
   items: {
@@ -247,6 +266,8 @@ const defineInitialState = () => ({
     subtotal: 0,
     grand_total: 0,
     subtotal_list: 0,
+    service_charge_percentage: 0,
+    service_charge_value: 0,
     customer: null,
   },
   bill: null,
@@ -372,6 +393,12 @@ const cartSlice = createSlice({
       state.meta.customer = action.payload;
     },
 
+    changeServiceCharge: (state, action) => {
+      state.meta.service_charge_percentage = action.payload;
+
+      recalculateTotals(state);
+    },
+
     selectedBill: (state, action) => {
       const bill = action.payload;
 
@@ -438,6 +465,7 @@ export const {
   resetCart,
   removeItem,
   customer,
+  changeServiceCharge,
   updateCategoryDiscount,
   updateCartDiscount,
   selectedBill,

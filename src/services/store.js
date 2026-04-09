@@ -5,6 +5,7 @@ import storage from 'redux-persist/lib/storage'; // ⬅ localStorage untuk web
 import { authApi } from './auth/action';
 import { cartApi } from './cart/action';
 import { catalogApi } from './catalog/action';
+import { outletApi } from './outlet/action';
 import { memberApi } from './membership/action';
 import rootReducer from './reducer';
 import { salesChannelApi } from './sales/channel/action';
@@ -21,6 +22,7 @@ const persistConfig = {
     'salesOrderApi',
     'salesChannelApi',
     'catalogApi',
+    'outletApi',
     'cartApi',
     'tableApi',
     'memberApi',
@@ -34,6 +36,7 @@ const persistedReducer = persistReducer(persistConfig, rootReducer);
 const apiMiddleware = [
   authApi.middleware,
   catalogApi.middleware,
+  outletApi.middleware,
   salesSessionApi.middleware,
   salesOrderApi.middleware,
   salesChannelApi.middleware,

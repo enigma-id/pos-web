@@ -159,7 +159,7 @@ const ShiftScreen = () => {
                         {item?.cashier?.name}
                       </div>
                       <div className="text-base-300 text-xs">
-                        {dateFormat(item?.transaction_date, 'DD/MM/YYYY')} {' '}
+                        {dateFormat(item?.transaction_date, 'DD/MM/YYYY')}{' '}
                         {dateFormat(item?.started_at, 'HH:mm')} -{' '}
                         {dateFormat(item?.finished_at, 'HH:mm', '(ongoing)')}
                       </div>
@@ -273,6 +273,25 @@ const ShiftScreen = () => {
                   <div className="flex place-content-between place-items-center py-2">
                     <div>
                       <span className="text-sm">Total After Discount</span>
+                    </div>
+                    <span className="text-sm">
+                      {currencyFormat(
+                        detail?.summary_order?.total_charges -
+                          detail?.summary_order?.total_service_charge
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex place-content-between place-items-center py-2">
+                    <div>
+                      <span className="text-sm">Total Service</span>
+                    </div>
+                    <span className="text-sm">
+                      {currencyFormat(detail?.summary_order?.total_service_charge)}
+                    </span>
+                  </div>
+                  <div className="flex place-content-between place-items-center py-2">
+                    <div>
+                      <span className="text-sm">Grand Total</span>
                     </div>
                     <span className="text-sm">
                       {currencyFormat(detail?.summary_order?.total_charges)}

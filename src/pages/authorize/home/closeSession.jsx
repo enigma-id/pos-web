@@ -119,6 +119,19 @@ const CloseSection = () => {
         />
         <List
           title="Total After Discount"
+          value={currencyFormat(
+            summaryResult?.data?.data?.summary_order?.total_charges -
+              summaryResult?.data?.data?.summary_order?.total_service_charge || 0
+          )}
+        />
+        <List
+          title="Total Service"
+          value={currencyFormat(
+            summaryResult?.data?.data?.summary_order?.total_service_charge || 0
+          )}
+        />
+        <List
+          title="Grand Total"
           value={currencyFormat(summaryResult?.data?.data?.summary_order?.total_charges || 0)}
         />
         <List
@@ -128,11 +141,7 @@ const CloseSection = () => {
         {summaryResult?.data?.data?.topups?.length > 0 && (
           <div className="bg-accent mb-3 rounded-md p-3">
             {summaryResult?.data?.data?.topups?.map((t, i) => (
-              <List
-                key={i}
-                title={`Topup ${t?.name}`}
-                value={currencyFormat(t?.nominal || 0)}
-              />
+              <List key={i} title={`Topup ${t?.name}`} value={currencyFormat(t?.nominal || 0)} />
             ))}
           </div>
         )}
