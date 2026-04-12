@@ -734,12 +734,7 @@ const CheckoutScreen = () => {
           <div className="bg-accent flex flex-col rounded-lg px-4 py-4 text-base font-semibold">
             {CartState?.meta?.service_charge_percentage > 0 && (
               <div className="mb-3 flex place-content-between place-items-center">
-                <div>
-                  Service{' '}
-                  <span className="me-2 text-xs !font-thin">
-                    {`(${CartState?.meta?.service_charge_percentage}%)`}
-                  </span>
-                </div>
+                <div>Service </div>
                 <div>{currencyFormat(CartState?.meta?.service_charge_value)}</div>
               </div>
             )}

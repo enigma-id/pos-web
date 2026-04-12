@@ -209,9 +209,7 @@ const Receipt = ({ data }) => {
       >
         {data?.service_charge_value > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>
-              Service <span style={{ fontSize: 9 }}>{`(${data?.service_charge}%)`}</span>
-            </p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Service</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
               {currencyFormat(data?.service_charge_value)}
             </p>

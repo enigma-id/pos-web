@@ -158,10 +158,7 @@ const OrderDetails = ({ data }) => {
       <div className="border-base-200 border-b py-4">
         {data?.service_charge_value > 0 && (
           <div className="flex place-content-between place-items-center text-base">
-            <div>
-              Service{' '}
-              <span className="me-2 text-xs !font-thin">{`(${data?.service_charge}%)`}</span>
-            </div>
+            <div>Service </div>
             <div>{currencyFormat(data?.service_charge_value)}</div>
           </div>
         )}
