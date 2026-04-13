@@ -731,15 +731,15 @@ const CheckoutScreen = () => {
             </div>
           </div>
           <div className="py-4 text-base font-semibold">Payment summary</div>
-          <div className="bg-accent flex flex-col rounded-lg px-4 py-4 text-base font-semibold">
+          <div className="bg-accent flex flex-col rounded-lg px-4 py-4 text-base">
             {CartState?.meta?.service_charge_percentage > 0 && (
-              <div className="mb-3 flex place-content-between place-items-center">
+              <div className="mb-3 flex place-content-between place-items-center text-xs">
                 <div>Service </div>
                 <div>{currencyFormat(CartState?.meta?.service_charge_value)}</div>
               </div>
             )}
 
-            <div className="flex place-content-between place-items-center">
+            <div className="flex place-content-between place-items-center font-semibold">
               <div>Total Amount</div>
               <div>
                 {CartState?.discount?.cart?.value || CartState?.discount?.cart?.amount > 0 ? (

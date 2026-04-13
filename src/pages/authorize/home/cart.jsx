@@ -11,6 +11,7 @@ import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
 import { currencyFormat } from '../../../utils/common';
+import useOutlet from '../../../services/outlet/hooks';
 
 const Cart = ({ onUpdate }) => {
   const navigate = useNavigate();
@@ -21,6 +22,8 @@ const Cart = ({ onUpdate }) => {
   const { openModal, closeModal } = useModal();
 
   const { reset, remove, onCount, countResult, cartItems, openBill, billResult } = useCart();
+
+  const { getServiceCharge } = useOutlet();
 
   const getMode = () => {
     const isOpen =
@@ -241,10 +244,16 @@ const Cart = ({ onUpdate }) => {
     openModal(<SuccessModal data={data} />, 'w-md');
   };
 
+  const handleReset = () => {
+    reset();
+    getServiceCharge();
+  };
+
   React.useEffect(() => {
     if (billResult?.isSuccess) {
       onCount();
       handleModalPrint(billResult?.data?.data);
+      getServiceCharge();
     }
   }, [billResult]);
 
@@ -256,6 +265,7 @@ const Cart = ({ onUpdate }) => {
 
   React.useEffect(() => {
     onCount();
+    getServiceCharge();
   }, []);
 
   const billCount = countResult?.data?.data;
@@ -269,7 +279,10 @@ const Cart = ({ onUpdate }) => {
           <h2 className="text-lg font-bold">Order Details</h2>
         </div>
         {(CartState?.items?.count > 0 || CartState?.bill) && (
-          <div className="bg-error cursor-pointer place-content-center px-6" onClick={reset}>
+          <div
+            className="bg-error cursor-pointer place-content-center px-6"
+            onClick={() => handleReset()}
+          >
             <div className="flex place-items-center gap-2 text-center text-lg text-white">
               <TrashIcon className="h-5 w-5" /> Clear
             </div>
@@ -408,21 +421,30 @@ const Cart = ({ onUpdate }) => {
 
       {/* Footer */}
       <div className="border-base-200 border-t pt-4">
-        <div className="mb-3 flex place-content-between place-items-center px-4">
-          <div className="text-base">Total Cart</div>
-          <div className="text-primary text-xl font-bold">
-            {currencyFormat(CartState?.meta?.subtotal_list)}
-          </div>
-        </div>
-
-        {CartState?.bill && (
+        {(CartState?.meta?.subtotal_list > 0 || CartState?.bill?.total_bill > 0) && (
           <div className="mb-3 flex place-content-between place-items-center px-4">
             <div className="text-base">Subtotal</div>
-            <div className="text-primary text-xl font-bold">
-              {currencyFormat(CartState?.meta?.subtotal)}
+            <div className="text-md font-semibold">
+              {currencyFormat(CartState?.meta?.subtotal_list + (CartState?.bill?.total_bill || 0))}
             </div>
           </div>
         )}
+
+        {CartState?.meta?.service_charge_value > 0 && (
+          <div className="mb-3 flex place-content-between place-items-center px-4">
+            <div className="text-base">Service</div>
+            <div className="text-md font-semibold">
+              {currencyFormat(CartState?.meta?.service_charge_value)}
+            </div>
+          </div>
+        )}
+
+        <div className="mb-3 flex place-content-between place-items-center px-4">
+          <div className="text-base font-semibold">Total</div>
+          <div className="text-primary text-xl font-bold">
+            {currencyFormat(CartState?.meta?.grand_total)}
+          </div>
+        </div>
 
         <div className="flex place-items-center gap-1">
           {mode === 'open' ? (

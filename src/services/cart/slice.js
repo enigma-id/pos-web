@@ -404,7 +404,7 @@ const cartSlice = createSlice({
 
       state.bill = bill;
       state.meta.customer = bill?.membership ?? null;
-      state.meta.subtotal = bill?.total_bill ?? 0;
+      recalculateTotals(state);
     },
 
     setBillItems: (state, action) => {
