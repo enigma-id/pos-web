@@ -175,6 +175,35 @@ const Summary = ({ data }) => {
           >
             <p style={{ marginBlock: 2, fontSize: 11 }}>After Discount</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
+              {currencyFormat(
+                data?.summary_order?.total_charges - data?.summary_order?.total_service_charge,
+                false
+              )}
+            </p>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 5,
+            }}
+          >
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Total Service</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>
+              {currencyFormat(data?.summary_order?.total_service_charge, false)}
+            </p>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 5,
+            }}
+          >
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Grand Total</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>
               {currencyFormat(data?.summary_order?.total_charges, false)}
             </p>
           </div>
