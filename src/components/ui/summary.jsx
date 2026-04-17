@@ -3,7 +3,6 @@ import React from 'react';
 import { currencyFormat, dateFormat } from '../../utils/common';
 
 const Summary = ({ data }) => {
-  console.log('Summary data:', data);
   if (!data) return;
 
   const formatFinishedAt = dateString => {

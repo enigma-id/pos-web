@@ -12,16 +12,20 @@ import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
 import { currencyFormat } from '../../../utils/common';
 import useOutlet from '../../../services/outlet/hooks';
+import UpdateTicket from './updateTicket';
 
 const Cart = ({ onUpdate }) => {
   const navigate = useNavigate();
   const CartState = useSelector(state => state?.Cart);
   const FormState = useSelector(state => state?.Form);
   const Channel = useSelector(state => state?.SalesChannel);
+
+  const [updateTicket, setUpdateTicket] = React.useState(false);
   const { showCustomer } = useSidebar();
   const { openModal, closeModal } = useModal();
 
-  const { reset, remove, onCount, countResult, cartItems, openBill, billResult } = useCart();
+  const { reset, remove, onCount, countResult, cartItems, openBill, billResult, onBillSelected } =
+    useCart();
 
   const { getServiceCharge } = useOutlet();
 
@@ -114,7 +118,7 @@ const Cart = ({ onUpdate }) => {
     });
 
     const payload = {
-      ticket: CartState?.bill ? CartState?.bill?.ticket : ticket,
+      ticket: ticket,
       membership_id: CartState?.meta?.customer?.id,
       channel_id: Channel?.selectedChannel?.id,
       items: items,
@@ -244,6 +248,18 @@ const Cart = ({ onUpdate }) => {
     openModal(<SuccessModal data={data} />, 'w-md');
   };
 
+  const handleModalUpdateTicket = data => {
+    setUpdateTicket(true);
+    openModal(
+      <UpdateTicket
+        data={data}
+        isLoading={billResult?.isLoading}
+        onSubmit={v => onBillCreate(v)}
+      />,
+      'w-md'
+    );
+  };
+
   const handleReset = () => {
     reset();
     getServiceCharge();
@@ -251,9 +267,14 @@ const Cart = ({ onUpdate }) => {
 
   React.useEffect(() => {
     if (billResult?.isSuccess) {
-      onCount();
-      handleModalPrint(billResult?.data?.data);
-      getServiceCharge();
+      if (updateTicket) {
+        closeModal();
+        onBillSelected(billResult?.data?.data);
+      } else {
+        onCount();
+        handleModalPrint(billResult?.data?.data);
+        getServiceCharge();
+      }
     }
   }, [billResult]);
 
@@ -307,67 +328,79 @@ const Cart = ({ onUpdate }) => {
       )}
 
       {CartState?.bill && (
-        <div className="collapse-arrow bg-accent collapse rounded-none">
-          <input type="checkbox" name="my-accordion-2" />
-          <div className="collapse-title border-base-200 border-b text-base font-semibold">
-            <div className="">
-              <div className="flex place-content-between place-items-center">
-                <div>Bill name: </div>
-                <div className="text-base-content font-semibold">{CartState?.bill?.ticket}</div>
-              </div>
-              <div className="flex place-content-between place-items-center">
-                <div>Total bill: </div>
-                <div className="text-base-content font-semibold">
-                  {currencyFormat(CartState?.bill?.total_bill)}
+        <>
+          <div className="border-base-200 bg-accent relative grid w-full grid-cols-[1fr_auto] place-items-center overflow-hidden p-[16px] pb-0">
+            <div className="grid w-full grid-cols-[1fr_1fr] font-semibold">
+              <div>Bill name: </div>
+              <div className="text-base-content text-end">{CartState?.bill?.ticket}</div>
+            </div>
+
+            <div
+              className="btn btn-xs btn-primary btn-circle btn-outline ms-2"
+              onClick={() => handleModalUpdateTicket(CartState?.bill)}
+            >
+              <EditIcon className="h-4 w-4" />
+            </div>
+          </div>
+
+          <div className="collapse-arrow bg-accent collapse rounded-none">
+            <input type="checkbox" name="my-accordion-2" />
+            <div className="collapse-title border-base-200 border-b text-base font-semibold">
+              <div className="">
+                <div className="flex place-content-between place-items-center">
+                  <div>Total bill: </div>
+                  <div className="text-base-content font-semibold">
+                    {currencyFormat(CartState?.bill?.total_bill)}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-          <div className="collapse-content border-base-200 !max-h-64 !min-h-0 !overflow-auto border-b pb-0">
-            {CartState?.items?.bill?.map((item, i) => (
-              <div key={i} className="border-base-200 border-b py-4">
-                <div className="flex place-content-between place-items-center">
-                  <div>
-                    <span className="bg-base-content rounded-lg px-3 py-1 text-white">
-                      {item?.quantity}
+            <div className="collapse-content border-base-200 !max-h-64 !min-h-0 !overflow-auto border-b pb-0">
+              {CartState?.items?.bill?.map((item, i) => (
+                <div key={i} className="border-base-200 border-b py-4">
+                  <div className="flex place-content-between place-items-center">
+                    <div>
+                      <span className="bg-base-content rounded-lg px-3 py-1 text-white">
+                        {item?.quantity}
+                      </span>
+                      <span className="ps-2 text-base font-semibold uppercase">{item?.name}</span>
+                    </div>
+                    <span className="text-base-300 text-xs">
+                      {currencyFormat(item?.quantity * item?.unit_price, undefined)}
                     </span>
-                    <span className="ps-2 text-base font-semibold uppercase">{item?.name}</span>
-                  </div>
-                  <span className="text-base-300 text-xs">
-                    {currencyFormat(item?.quantity * item?.unit_price, undefined)}
-                  </span>
-                </div>
-
-                {item?.additionals?.length > 0 && (
-                  <div className="border-base-200 ms-3.5 border-s py-2 ps-6">
-                    {renderAdditionals(item).map((line, idx) => (
-                      <div key={idx} className="mb-2">
-                        {line}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="mt-2 flex place-content-between place-items-center">
-                  <div className="flex place-items-center gap-2">
-                    {CartState?.items?.bill?.length > 1 && (
-                      <div
-                        className="btn btn-sm btn-error btn-circle btn-outline hover:!text-white"
-                        onClick={() => remove(i, 'bill_item')}
-                      >
-                        <TrashIcon />
-                      </div>
-                    )}
                   </div>
 
-                  <div className="text-primary text-lg font-bold">
-                    {currencyFormat(item?.subtotal, undefined, 'Free')}
+                  {item?.additionals?.length > 0 && (
+                    <div className="border-base-200 ms-3.5 border-s py-2 ps-6">
+                      {renderAdditionals(item).map((line, idx) => (
+                        <div key={idx} className="mb-2">
+                          {line}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-2 flex place-content-between place-items-center">
+                    <div className="flex place-items-center gap-2">
+                      {CartState?.items?.bill?.length > 1 && (
+                        <div
+                          className="btn btn-sm btn-error btn-circle btn-outline hover:!text-white"
+                          onClick={() => remove(i, 'bill_item')}
+                        >
+                          <TrashIcon />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-primary text-lg font-bold">
+                      {currencyFormat(item?.subtotal, undefined, 'Free')}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       <div className="flex-1 overflow-y-auto px-6 py-4">

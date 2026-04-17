@@ -24,7 +24,7 @@ import {
 } from './slice';
 import { useLazyGetCatalogDetailQuery } from '../catalog/action';
 import { $failure } from '../form/action';
-import useOrder from '../sales/order/hook';
+import { useLazyShowQuery } from '../sales/order/action';
 
 const useCart = catalog_id => {
   const dispatch = useDispatch();
@@ -38,7 +38,7 @@ const useCart = catalog_id => {
   const [triggerPaymentMethod] = useLazyGetMethodQuery();
   const [triggerCountBill, countResult] = useLazyGetBillQuery();
 
-  const { show, showResult } = useOrder();
+  const [showOrder] = useLazyShowQuery();
 
   // All cart items
   const cartItems = useSelector(state => state?.Cart?.items?.list || []);
@@ -227,9 +227,25 @@ const useCart = catalog_id => {
     }
   };
 
+  const isBillSelected = useRef(false);
   const onBillSelected = async data => {
-    if (!data) return;
-    show(data?.id);
+    if (isBillSelected.current) return;
+    isBillSelected.current = true;
+
+    try {
+      const res = await showOrder({ id: data?.id }).unwrap();
+      if (res?.status === 'success') {
+        billItems(res?.data?.items);
+
+        dispatch(selectedBill(res?.data));
+
+        shwoSetDiscount(res?.data);
+      }
+    } catch (error) {
+      dispatch($failure(error));
+    } finally {
+      isBillSelected.current = false;
+    }
   };
 
   const billItems = data => {
@@ -244,16 +260,6 @@ const useCart = catalog_id => {
       dispatch(updateCartDiscount({ discount_type: discountType, discount_value: discountValue }));
     }
   };
-
-  useEffect(() => {
-    if (showResult?.isSuccess) {
-      billItems(showResult?.data?.data?.items);
-
-      dispatch(selectedBill(showResult?.data?.data));
-
-      shwoSetDiscount(showResult?.data?.data);
-    }
-  }, [showResult]);
 
   useEffect(() => {
     if (catalog_id) {
