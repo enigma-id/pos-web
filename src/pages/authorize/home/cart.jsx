@@ -202,7 +202,7 @@ const Cart = ({ onUpdate }) => {
           </div>
           <div
             className={`btn btn-md btn-success px-10 text-white ${billResult?.isLoading ? 'btn-disabled' : ''}`}
-            onClick={onBillCreate}
+            onClick={() => onBillCreate(CartState?.bill?.ticket)}
           >
             Confirm{' '}
             {billResult.isLoading ? (
