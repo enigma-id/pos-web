@@ -2,6 +2,8 @@
 import React from 'react';
 
 import CardContent from './card.content';
+import DrawerCreate from './drawer.create';
+import DrawerDetail from './drawer.detail';
 import createTableConfig from './table.config';
 import { Drawer, Modal, NFCField } from '../../../components/ui';
 import { CardSearchIcon, PlusIcon } from '../../../components/ui/icon';
@@ -9,11 +11,9 @@ import useModal from '../../../components/ui/modal/hook';
 import useTable from '../../../components/ui/table';
 import useMembership from '../../../services/membership/hook';
 import useDrawer from '../../../utils/drawer';
-import DrawerCreate from './drawer.create';
-import DrawerDetail from './drawer.detail';
 
 const MembershipScreen = () => {
-  const { drawerRef, open: openDrawer, close: closeDrawer, isOpen: drawerOpen } = useDrawer();
+  const {  open: openDrawer, isOpen: drawerOpen } = useDrawer();
 
   const { checkSaldo, checkResult } = useMembership();
   const { openModal, closeModal } = useModal();

@@ -1,15 +1,14 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
+import { LuWallet } from 'react-icons/lu';
 
 import CardMockup from '../../../assets/card-mockup.jpg';
 import { NFCField, OrderDetails, Remove } from '../../../components/ui';
 import { PaypassIcon, WalletIcon } from '../../../components/ui/icon';
 import Input from '../../../components/ui/input';
-import useModal from '../../../components/ui/modal/hook';
 import useMembership from '../../../services/membership/hook';
-import { currencyFormat, dateFormat } from '../../../utils/common';
 import useOrder from '../../../services/sales/order/hook';
-import { LuWallet } from 'react-icons/lu';
+import { currencyFormat, dateFormat } from '../../../utils/common';
 
 const HistorySection = ({ id }) => {
   const [logs, setLogs] = React.useState([]);
@@ -41,11 +40,12 @@ const HistorySection = ({ id }) => {
 
   // Fetch history
   React.useEffect(() => {
-    saldoLog({
-      membership_id: id,
+    const params = {
       page,
-      limit: LIMIT,
-    });
+      limit: LIMIT
+    }
+
+    saldoLog({id, params});
   }, [id, page]);
 
   React.useEffect(() => {
@@ -232,9 +232,9 @@ const HistorySection = ({ id }) => {
           {/* Title & Amount */}
           <div className="mb-1 flex items-start justify-between">
             <h3 className="font-semibold text-gray-900">
-              {item?.ref_type === 'bonus'
+              {item?.reference_type === 'bonus'
                 ? 'Bonus'
-                : item?.ref_type === 'top-up'
+                : item?.reference_type === 'top-up'
                   ? 'Topup'
                   : `${item?.ref_code}`}
             </h3>
@@ -247,8 +247,8 @@ const HistorySection = ({ id }) => {
 
           {/* Description */}
           <p className="text-sm leading-snug text-gray-600 capitalize">
-            {item?.ref_type === 'bonus' || item?.ref_type === 'top-up'
-              ? `${item?.ref_code}`
+            {item?.reference_type === 'bonus' || item?.reference_type === 'top-up'
+              ? `${item?.payment_type}`
               : 'Sales Order'}
           </p>
 

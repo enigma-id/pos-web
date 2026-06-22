@@ -28,11 +28,17 @@ const useSession = () => {
   const start = async data => {
     try {
       const res = await startMutation(data).unwrap();
-      if (res?.status === 'success') {
+      if (res?.message === 'success') {
         refreshCatalog();
         dispatch(resetCart());
         // dispatch(clearSelectedChannel());
-        summary();
+
+        // If it was an offline session start, we manually set the session as active
+        if (res?.data?.is_offline_session) {
+          dispatch(checkSession());
+        } else {
+          summary();
+        }
       }
     } catch (err) {
       dispatch($failure(err));
@@ -43,7 +49,7 @@ const useSession = () => {
     try {
       const res = await endMutation(data).unwrap();
 
-      if (res?.status === 'success') {
+      if (res?.message === 'success') {
         refreshCatalog();
         dispatch(resetCart());
       }
@@ -54,10 +60,13 @@ const useSession = () => {
 
   const summary = async () => {
     try {
-      await triggerSummary().unwrap();
-      dispatch(checkSession());
+      const res = await triggerSummary().unwrap();
+      if (res?.data) {
+        dispatch(checkSession());
+      } else {
+        dispatch(invalidateSession());
+      }
     } catch (err) {
-      dispatch(invalidateSession());
       if (import.meta.env.DEV) {
         console.error('error:', err);
       }

@@ -3,7 +3,9 @@ import React from 'react';
 import { currencyFormat, dateFormat } from '../../utils/common';
 
 const Receipt = ({ data }) => {
+  console.log("receipt", data)
   const [discountMap, setDiscountMap] = React.useState([]);
+
 
   const groupedCategories = items => {
     const group = {};
@@ -69,7 +71,7 @@ const Receipt = ({ data }) => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p style={{ marginBlock: 2, fontSize: 11 }}>Cashier</p>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.session?.cashier?.name}</p>
+          <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.session?.cashier?.name || data?.session?.name}</p>
         </div>
 
         {data?.note && (

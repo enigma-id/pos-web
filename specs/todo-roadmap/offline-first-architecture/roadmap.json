@@ -1,0 +1,21 @@
+{
+  "status": "in-progress", 
+  "dag": {
+    "parallelGroups": [], 
+    "roots": []
+  }, 
+  "kanban": {
+    "in-progress": [], 
+    "done": [], 
+    "review": [], 
+    "todo": []
+  }, 
+  "description": "Comprehensive roadmap for offline-first architecture", 
+  "title": "Offline-First POS System", 
+  "tasks": [], 
+  "statistics": {
+    "completionPercentage": 0, 
+    "totalTasks": 0
+  }, 
+  "sddVersion": "4.0"
+}

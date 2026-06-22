@@ -34,7 +34,7 @@ const useTable = (name, config) => {
     try {
       const res = await triggerFetch({ url: state.url, table: state }).unwrap();
 
-      const isSuccess = res?.status === 'success';
+      const isSuccess = res?.message === 'success';
       const data = isSuccess && Array.isArray(res?.data) ? res?.data : [];
       const total = isSuccess && typeof res?.total === 'number' ? res?.total : data?.length;
       const isEmpty = data?.length === 0;

@@ -9,24 +9,22 @@ export const cartApi = createApi({
     checkout: builder.mutation({
       query: payload => {
         return {
-          url: '/sales/order/direct-pay',
+          url: '/sales/order',
           method: 'POST',
           body: payload,
         };
       },
     }),
-    bill: builder.mutation({
-      query: payload => {
-        return {
-          url: '/sales/order/open-bill',
-          method: 'POST',
-          body: payload,
-        };
-      },
+    getBill: builder.query({
+      query: params => ({
+        url: '/sales/order/openbill',
+        method: 'GET',
+        params,
+      }),
     }),
     closeBill: builder.mutation({
       query: ({ id, payload }) => ({
-        url: `/sales/order/${id}/close-bill`,
+        url: `/sales/order/${id}/checkout`,
         method: 'PUT',
         body: payload,
       }),
@@ -40,14 +38,7 @@ export const cartApi = createApi({
     }),
     getMethod: builder.query({
       query: params => ({
-        url: '/sales/payment',
-        method: 'GET',
-        params,
-      }),
-    }),
-    getBill: builder.query({
-      query: params => ({
-        url: '/sales/order/open-bill',
+        url: '/payment-method',
         method: 'GET',
         params,
       }),
@@ -57,7 +48,6 @@ export const cartApi = createApi({
 
 export const {
   useCheckoutMutation,
-  useBillMutation,
   useCloseBillMutation,
   useUpdateMutation,
   useLazyGetMethodQuery,

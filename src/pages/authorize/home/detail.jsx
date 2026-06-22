@@ -73,6 +73,8 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
       subtotal: calculateSubtotal(),
     };
 
+    console.log(formattedItem)
+
     if (mode === 'edit') {
       change(editKey, formattedItem, type);
     } else {

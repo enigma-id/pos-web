@@ -35,7 +35,7 @@ function extractUniqueCategories(items) {
   const map = new Map();
 
   items.forEach(item => {
-    const cat = item.category ?? item.catalog?.category;
+    const cat = { id: item.category_id, name: item.category_name };
 
     const discountType =
       item?.discount_amount > 0 ? (item.is_discount_percentage ? 'percentage' : 'nominal') : null;
@@ -71,7 +71,7 @@ function extractUniqueCategories(items) {
 }
 
 function getCategoryDiscount(item, itemCategories) {
-  const cat = item.category ?? item.catalog.category;
+  const cat = { id: item.category_id, name: item.category_name };
   const found = itemCategories.find(c => c.id === cat?.id);
   if (!found) return 0;
 
@@ -151,27 +151,29 @@ function convertApiOrderToCartItem(item) {
   const groupedAdditionals = {};
 
   for (const add of item.additionals || []) {
-    const addonId = add.addon.id;
+    const addon = add.addon || {};
+    const addonId = addon.id || add.addon_id;
     if (!addonId) continue;
 
     if (!groupedAdditionals[addonId]) {
       groupedAdditionals[addonId] = {
         id: addonId,
-        name: add.addon.name || '',
-        type: add.addon.type || '',
+        name: addon.name || add.name || '',
+        type: addon.type || add.addon_type || '',
         childs: [],
       };
     }
 
     const qty = add.quantity > 0 ? add.quantity / item.quantity : 0;
+    const addCatalog = add.catalog || {};
 
     groupedAdditionals[addonId].childs.push({
       id: add.id,
-      catalog_id: add.catalog.id,
-      name: add.catalog.name,
-      unit_price: add.unit_nett,
+      catalog_id: addCatalog.id || add.catalog_id,
+      name: addCatalog.name || add.name || '',
+      unit_price: addCatalog.unit_price || add.unit_nett || 0,
       quantity: qty,
-      selected: add.quantity > 0 || add.addon_type !== 'quantity',
+      selected: add.quantity > 0 || (addon.type || add.addon_type) !== 'quantity',
     });
   }
 
@@ -179,8 +181,8 @@ function convertApiOrderToCartItem(item) {
 
   const additionalsFlat = (item.additionals || []).map(add => ({
     id: add.id,
-    addon_id: add.addon.id,
-    catalog_id: add.catalog.id,
+    addon_id: add.addon?.id || add.addon_id,
+    catalog_id: add.catalog?.id || add.catalog_id,
     ...(add.quantity ? { quantity: add.quantity / item.quantity } : {}),
   }));
 
@@ -205,7 +207,7 @@ function convertApiOrderToCartItem(item) {
     quantity: item.quantity,
     subtotal,
     catalog_id: item.catalog.id,
-    additionals: Object.values(groupedAdditionals),
+    additionals: additionalsGrouped,
     additionals_flat: additionalsFlat,
     discount_amount: item.discount_value || 0,
     discount_percentage: item.discount || 0,
@@ -222,29 +224,90 @@ function calculateAdditionalsPerItem(additionals = []) {
     return (
       total +
       childs.reduce((sum, child) => {
-        // const isSelected = type === 'quantity' ? (child.quantity || 0) > 0 : !!child.selected;
-        // const quantity = type === 'quantity' ? child.quantity || 0 : 1;
-        return sum + child.unit_price * child.quantity;
+        return sum + (child.unit_price || 0) * (child.quantity || 0);
       }, 0)
     );
   }, 0);
 }
 
 function recalculateGrandTotalWithServiceCharge(state) {
-  console.log(
-    'Recalculating grand total with service charge, state:',
-    JSON.parse(JSON.stringify(state))
-  );
   if (state.meta.service_charge_percentage > 0) {
     state.meta.service_charge_value = Math.floor(
       (state.meta.subtotal - state.discount.cart.amount) *
         (state.meta.service_charge_percentage / 100)
     );
   } else {
-    state.meta.service_charge_value = 0;
+    // If percentage is 0, preserve existing value if it was set manually from preview
+    // but only if it's already there. Otherwise reset to 0.
+    if (!state.meta.service_charge_value) {
+      state.meta.service_charge_value = 0;
+    }
   }
 
   state.meta.grand_total += state.meta.service_charge_value;
+}
+
+// Convert offline queue item (open-bill) to cart item format
+function convertOfflineQueueItemToCartItem(item) {
+  const additionalsGrouped = {};
+  const rawAdditionals = Array.isArray(item?.additionals) ? item.additionals : [];
+
+  rawAdditionals.forEach(add => {
+    const addon = add.addon || {};
+    const addonId = addon.id || add.addon_id;
+    if (!addonId) return;
+
+    if (!additionalsGrouped[addonId]) {
+      additionalsGrouped[addonId] = {
+        id: addonId,
+        name: addon.name || add.name || '',
+        type: addon.type || add.addon_type || '',
+        childs: [],
+      };
+    }
+
+    const addCatalog = add.catalog || {};
+    additionalsGrouped[addonId].childs.push({
+      id: add?.id,
+      catalog_id: addCatalog.id || add?.catalog_id,
+      name: addCatalog.name || add?.name || '',
+      unit_price: addCatalog.unit_price || add?.unit_nett || 0,
+      quantity: add?.quantity || 1,
+      selected: true,
+    });
+  });
+
+  const additionalsFlat = rawAdditionals.map(add => ({
+    addon_id: add.addon?.id || add?.addon_id,
+    catalog_id: add.catalog?.id || add?.catalog_id,
+    quantity: add?.quantity || 1,
+  }));
+
+  const unitPrice = Number(item?.unit_price ?? item?.unit_nett) || 0;
+  const qty = Number(item?.quantity) || 1;
+
+  const additionalsGroupedArray = Object.values(additionalsGrouped);
+  const additionalPerItem = calculateAdditionalsPerItem(additionalsGroupedArray);
+  const subtotal = (unitPrice + additionalPerItem) * qty;
+
+  return {
+    id: item?.id || Date.now(),
+    catalog_id: item?.catalog_id,
+    category: item?.category || { id: item?.category_id || 0 },
+    name: item?.description || item?.name || 'Item',
+    unit_price: unitPrice,
+    quantity: qty,
+    subtotal,
+    final_total: subtotal,
+    is_custom: item?.is_custom || 0,
+    is_vatable: item?.is_vatable || 0,
+    additionals: additionalsGroupedArray,
+    additionals_flat: additionalsFlat,
+    discount_amount: 0,
+    discount_percentage: 0,
+    from_bill: true,
+    from_offline_queue: true,
+  };
 }
 
 // Initial State
@@ -456,6 +519,63 @@ const cartSlice = createSlice({
 
       recalculateTotals(state);
     },
+
+    loadOfflineBill: (state, action) => {
+      const queueItem = action.payload;
+      const preview = queueItem?.transaction_preview || {};
+      const body = queueItem?.body || {};
+
+      // Set bill metadata from preview, falling back to body
+      state.bill = {
+        id: null,
+        ticket: preview?.ticket || body?.ticket || '',
+        total_bill: preview?.total_charges || preview?.total_bill || 0,
+        membership:
+          preview?.membership || (body?.membership_id ? { id: body.membership_id } : null),
+        from_offline_queue: true,
+        queue_id: queueItem?.id,
+      };
+
+      // Reset cart items
+      state.items.list = [];
+      state.items.bill = [];
+
+      // Use items from transaction_preview if available (they are in Order Item format)
+      if (Array.isArray(preview?.items) && preview.items.length > 0) {
+        state.items.bill = preview.items.map(item => convertApiOrderToCartItem(item));
+      } else {
+        // Fallback to body items (raw format)
+        const rawItems = Array.isArray(body?.items) ? body.items : [];
+        state.items.bill = rawItems.map(item => convertOfflineQueueItemToCartItem(item));
+      }
+
+      state.items.count = 0; // bill items don't count as new items
+
+      // Set customer
+      if (preview?.membership) {
+        state.meta.customer = preview.membership;
+      } else if (body?.membership_id) {
+        state.meta.customer = { id: body.membership_id };
+      }
+
+      // Apply cart discount
+      const isPercentage = preview?.is_discount_percentage || body?.discount_percentage > 0;
+      const discountVal =
+        preview?.discount_value || body?.discount_percentage || body?.discount_value || 0;
+
+      if (discountVal > 0) {
+        state.discount.cart = {
+          type: isPercentage ? 'percentage' : 'nominal',
+          value: discountVal,
+          amount: 0,
+        };
+      }
+
+      // Extract categories and recalculate
+      const allItems = [...state.items.list, ...state.items.bill];
+      state.discount.category = extractUniqueCategories(allItems);
+      recalculateTotals(state);
+    },
   },
 });
 
@@ -472,6 +592,7 @@ export const {
   setBillItems,
   changeBillItem,
   removeBillItem,
+  loadOfflineBill,
 } = cartSlice.actions;
 
 export const cartReducer = cartSlice.reducer;

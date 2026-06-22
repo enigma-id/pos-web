@@ -13,20 +13,20 @@ export const authApi = createApi({
     login: builder.mutation({
       fixedCacheKey: 'login',
       query: payload => ({
-        url: '/auth/signin',
+        url: '/auth/login',
         method: 'POST',
         body: payload,
       }),
     }),
     getUser: builder.query({
       query: () => ({
-        url: '/auth/me',
+        url: '/profile/me',
         method: 'GET',
       }),
     }),
     update: builder.mutation({
       query: payload => ({
-        url: '/auth/me',
+        url: '/profile/me',
         method: 'PUT',
         body: payload,
       }),

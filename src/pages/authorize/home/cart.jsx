@@ -5,22 +5,25 @@ import { useNavigate } from 'react-router-dom';
 
 import BillModal from './saveBill';
 import SuccessModal from './success';
+import UpdateTicket from './updateTicket';
 import { Modal } from '../../../components/ui';
 import { AddUserIcon, EditIcon, TrashIcon, UserIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
-import { currencyFormat } from '../../../utils/common';
+import { buildOfflineTransactionPayload, updateQueueItem } from '../../../services/offline';
 import useOutlet from '../../../services/outlet/hooks';
-import UpdateTicket from './updateTicket';
+import { currencyFormat } from '../../../utils/common';
 
 const Cart = ({ onUpdate }) => {
   const navigate = useNavigate();
   const CartState = useSelector(state => state?.Cart);
   const FormState = useSelector(state => state?.Form);
   const Channel = useSelector(state => state?.SalesChannel);
+  const session = useSelector((s) => s.Auth?.session)
 
   const [updateTicket, setUpdateTicket] = React.useState(false);
+  const saveBillOfflineDataRef = React.useRef(null);
   const { showCustomer } = useSidebar();
   const { openModal, closeModal } = useModal();
 
@@ -146,7 +149,28 @@ const Cart = ({ onUpdate }) => {
       payload.id = CartState?.bill?.id;
     }
 
-    await openBill(payload);
+    const cartSnapshot = JSON.parse(JSON.stringify(CartState || {}));
+    if (!cartSnapshot?.meta) {
+      cartSnapshot.meta = {};
+    }
+    cartSnapshot.meta.ticket = ticket;
+
+    saveBillOfflineDataRef.current = buildOfflineTransactionPayload({
+      cartState: cartSnapshot,
+      selectedChannel: Channel?.selectedChannel ? { ...Channel.selectedChannel } : null,
+      paymentMethod: null,
+      paymentRef: '',
+      note: ticket || '',
+      queueMeta: {
+        requestBody: payload,
+      },
+      authSession: session,
+    });
+
+    await openBill({
+      ...payload,
+      __offlinePreview: saveBillOfflineDataRef.current,
+    });
   };
 
   const renderAdditionals = item => {
@@ -245,7 +269,38 @@ const Cart = ({ onUpdate }) => {
   };
 
   const handleModalPrint = data => {
-    openModal(<SuccessModal data={data} />, 'w-md');
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    const isQueued = Boolean(data?.offline_queued);
+
+    let printData = data;
+    if (isOffline && saveBillOfflineDataRef.current) {
+      printData = {
+        ...saveBillOfflineDataRef.current,
+        id: data?.id || saveBillOfflineDataRef.current.id,
+      };
+    }
+
+    if (isQueued && printData?.id) {
+      updateQueueItem(printData.id, {
+        transaction_preview: {
+          ...printData,
+          items: printData.items || [],
+          session: {
+            ...printData.session,
+            cashier: {
+              name: printData.session?.name || printData.session?.cashier?.name || '-',
+            },
+          },
+          status: 'pending',
+        },
+      });
+    }
+
+    openModal(<SuccessModal data={printData} />, 'w-md');
+
+    if (isOffline && saveBillOfflineDataRef.current) {
+      saveBillOfflineDataRef.current = null;
+    }
   };
 
   const handleModalUpdateTicket = data => {
@@ -267,12 +322,14 @@ const Cart = ({ onUpdate }) => {
 
   React.useEffect(() => {
     if (billResult?.isSuccess) {
+      const billData = billResult?.data?.data || {};
+
       if (updateTicket) {
         closeModal();
-        onBillSelected(billResult?.data?.data);
+        onBillSelected(billData);
       } else {
         onCount();
-        handleModalPrint(billResult?.data?.data);
+        handleModalPrint(billData);
         getServiceCharge();
       }
     }

@@ -83,6 +83,16 @@ export const clearSalesCache = () => {
   localStorage.removeItem(SALES_CACHE_KEY);
 };
 
+export const setPaymentMethodsCache = (channelId, methods) => {
+  const key = `payment_methods_${channelId ?? 'default'}`;
+  setSalesCacheValue(key, methods || []);
+};
+
+export const getPaymentMethodsCache = channelId => {
+  const key = `payment_methods_${channelId ?? 'default'}`;
+  return getSalesCacheValue(key) || [];
+};
+
 //
 // Grouped cache: cache_catalog
 //
@@ -127,11 +137,16 @@ export const getOrFetchCatalog = async (key, fetcher) => {
   }
 };
 
+export const getCatalogDetailCacheKey = (id, channelId) => `${channelId}_${id}`;
+
+export const getCatalogDetailByCategoryCacheKey = (id, channelId, categoryId) =>
+  `${channelId}_${categoryId ?? 'all'}_${id}`;
+
 export const setCatalogDetailCache = (id, channelId, data) => {
   const raw = getCatalogCacheRaw();
   const current = raw?.detail_catalog || {};
 
-  const key = `${channelId}_${id}`;
+  const key = getCatalogDetailCacheKey(id, channelId);
   const updatedDetail = { ...current, [key]: data };
 
   setCatalogCacheRaw({ ...raw, detail_catalog: updatedDetail });
@@ -139,8 +154,35 @@ export const setCatalogDetailCache = (id, channelId, data) => {
 
 export const getCatalogDetailCache = (id, channelId) => {
   const cache = getCatalogCacheRaw();
-  const key = `${channelId}_${id}`;
+  const key = getCatalogDetailCacheKey(id, channelId);
   return cache?.detail_catalog?.[key] || null;
+};
+
+export const setCatalogDetailCacheByCategory = (id, channelId, categoryId, data) => {
+  const raw = getCatalogCacheRaw();
+  const current = raw?.detail_catalog_by_category || {};
+  const key = getCatalogDetailByCategoryCacheKey(id, channelId, categoryId);
+  const updated = { ...current, [key]: data };
+
+  setCatalogCacheRaw({ ...raw, detail_catalog_by_category: updated });
+};
+
+export const getCatalogDetailCacheByCategory = (id, channelId, categoryId) => {
+  const cache = getCatalogCacheRaw();
+  const key = getCatalogDetailByCategoryCacheKey(id, channelId, categoryId);
+
+  const exact = cache?.detail_catalog_by_category?.[key] || null;
+  if (exact) return exact;
+
+  const allByCategory = cache?.detail_catalog_by_category || {};
+  const fallbackPrefix = `${channelId}_`;
+  const fallbackSuffix = `_${id}`;
+
+  const fallbackKey = Object.keys(allByCategory).find(
+    k => k.startsWith(fallbackPrefix) && k.endsWith(fallbackSuffix)
+  );
+
+  return fallbackKey ? allByCategory[fallbackKey] : null;
 };
 
 export const clearCatalogCache = () => {

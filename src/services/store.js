@@ -5,8 +5,8 @@ import storage from 'redux-persist/lib/storage'; // ⬅ localStorage untuk web
 import { authApi } from './auth/action';
 import { cartApi } from './cart/action';
 import { catalogApi } from './catalog/action';
-import { outletApi } from './outlet/action';
 import { memberApi } from './membership/action';
+import { outletApi } from './outlet/action';
 import rootReducer from './reducer';
 import { salesChannelApi } from './sales/channel/action';
 import { salesOrderApi } from './sales/order/action';
@@ -17,6 +17,7 @@ const persistConfig = {
   key: 'root',
   storage, // ⬅ pakai localStorage
   blacklist: [
+    'Offline',
     'authApi',
     'salesSessionApi',
     'salesOrderApi',

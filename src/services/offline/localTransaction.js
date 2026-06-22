@@ -1,0 +1,303 @@
+const toIsoNow = () => new Date().toISOString();
+
+const toNumber = value => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const buildCatalogFromItem = item => ({
+  id: item?.catalog_id ?? item?.id ?? 0,
+  category: item?.category || {
+    id: item?.category_id ?? 0,
+    brand_id: item?.category?.brand_id ?? 0,
+    ref_id: item?.category_id ?? 0,
+    name: item?.category?.name || 'Unknown',
+  },
+  brand_id: item?.brand_id ?? 0,
+  ref_id: item?.ref_id ?? item?.catalog_id ?? item?.id ?? 0,
+  code: item?.code || '',
+  name: item?.name || item?.description || 'Item',
+  base_price: toNumber(item?.base_price ?? item?.unit_price),
+  image: item?.image || '',
+  is_custom: item?.is_custom ?? 0,
+  is_vatable: item?.is_vatable ?? 0,
+  is_active: item?.is_active ?? 1,
+  is_additional: item?.is_additional ?? 0,
+  is_deleted: item?.is_deleted ?? 0,
+});
+
+const buildAdditionalsFromItem = item => {
+  const rawAdditionals = Array.isArray(item?.additionals) ? item.additionals : [];
+
+  const groupedFromCart = [];
+  rawAdditionals.forEach(group => {
+    const childs = Array.isArray(group?.childs) ? group.childs : [];
+    childs.forEach(child => {
+      const itemQty = toNumber(item?.quantity) || 1;
+      const childQty = toNumber(child?.quantity);
+      const selected = Boolean(child?.selected) || childQty > 0;
+      if (!selected) return;
+
+      groupedFromCart.push({
+        addon_id: group?.id ?? null,
+        catalog_id: child?.catalog_id ?? child?.id ?? null,
+        quantity: childQty * itemQty,
+        unit_nett: toNumber(child?.unit_price),
+        addon: {
+          id: group?.id ?? null,
+          name: group?.name || '',
+          type: group?.type || '',
+        },
+        catalog: {
+          id: child?.catalog_id ?? child?.id ?? null,
+          name: child?.name || '',
+          unit_price: toNumber(child?.unit_price),
+        },
+      });
+    });
+  });
+
+  const sourceAdditionals = groupedFromCart;
+
+  return sourceAdditionals.map((addon, idx) => {
+    return {
+      id: addon?.id ?? `${item?.id ?? item?.catalog_id ?? 'item'}-addon-${idx}`,
+      addon_id: addon?.addon_id ?? addon?.addon?.id ?? null,
+      catalog_id: addon?.catalog_id ?? addon?.catalog?.id ?? null,
+      quantity: toNumber(addon?.quantity),
+      unit_nett: toNumber(addon?.unit_nett ?? addon?.price),
+      note: addon?.note || '',
+      addon: addon?.addon || null,
+      catalog: addon?.catalog || null,
+    };
+  });
+};
+
+const normalizeRequestItem = requestItem => ({
+  catalog_id: requestItem?.catalog_id ?? requestItem?.id ?? 0,
+  id: requestItem?.id,
+  quantity: requestItem?.quantity ?? 1,
+  unit_price: requestItem?.unit_price ?? requestItem?.unit_nett ?? requestItem?.unit_bill ?? 0,
+  description: requestItem?.description || '',
+  additionals_flat: Array.isArray(requestItem?.additionals) ? requestItem.additionals : [],
+  additionals: Array.isArray(requestItem?.additionals) ? requestItem.additionals : [],
+  additionals_catalog_map: Array.isArray(requestItem?.additionals_catalog_map)
+    ? requestItem.additionals_catalog_map
+    : [],
+  is_custom: requestItem?.is_custom ?? 0,
+  name: requestItem?.name || requestItem?.description || 'Item',
+});
+
+const buildAdditionalsCatalogMapFromCartItem = cartItem => {
+  const groups = Array.isArray(cartItem?.additionals) ? cartItem.additionals : [];
+  const map = [];
+
+  groups.forEach(group => {
+    const childs = Array.isArray(group?.childs) ? group.childs : [];
+    childs.forEach(child => {
+      const qty = toNumber(child?.quantity);
+      const selected = Boolean(child?.selected) || qty > 0;
+      if (!selected) return;
+
+      map.push({
+        addon_id: group?.id ?? null,
+        catalog_id: child?.catalog_id ?? child?.id ?? null,
+        addon: group
+          ? {
+              id: group?.id ?? null,
+              name: group?.name || '',
+              type: group?.type || '',
+            }
+          : null,
+        catalog: {
+          id: child?.catalog_id ?? child?.id ?? null,
+          name: child?.name || '',
+          unit_price: toNumber(child?.unit_price),
+        },
+      });
+    });
+  });
+
+  return map;
+};
+
+const enrichRequestItemsFromCartSnapshot = (requestItems, snapshotItems) => {
+  if (!Array.isArray(requestItems) || requestItems.length === 0) return requestItems;
+  if (!Array.isArray(snapshotItems) || snapshotItems.length === 0) return requestItems;
+
+  const usedIndices = new Set();
+
+  return requestItems.map(reqItem => {
+    const reqCatalogId = reqItem?.catalog_id ?? reqItem?.id;
+    const reqQty = toNumber(reqItem?.quantity) || 1;
+
+    let matchedIndex = -1;
+    for (let i = 0; i < snapshotItems.length; i += 1) {
+      if (usedIndices.has(i)) continue;
+      const snap = snapshotItems[i];
+      const snapCatalogId = snap?.catalog_id ?? snap?.id;
+      const snapQty = toNumber(snap?.quantity) || 1;
+      if (snapCatalogId === reqCatalogId && snapQty === reqQty) {
+        matchedIndex = i;
+        break;
+      }
+    }
+
+    if (matchedIndex === -1) {
+      for (let i = 0; i < snapshotItems.length; i += 1) {
+        if (usedIndices.has(i)) continue;
+        const snap = snapshotItems[i];
+        const snapCatalogId = snap?.catalog_id ?? snap?.id;
+        if (snapCatalogId === reqCatalogId) {
+          matchedIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (matchedIndex === -1) return reqItem;
+
+    usedIndices.add(matchedIndex);
+    const matched = snapshotItems[matchedIndex];
+    const generatedMap = buildAdditionalsCatalogMapFromCartItem(matched);
+
+    if (!generatedMap.length) return reqItem;
+
+    const currentMap = Array.isArray(reqItem?.additionals_catalog_map)
+      ? reqItem.additionals_catalog_map
+      : [];
+
+    return {
+      ...reqItem,
+      additionals_catalog_map: currentMap.length > 0 ? currentMap : generatedMap,
+    };
+  });
+};
+
+const buildOrderItem = (item, index, orderId) => {
+  const unitNett = toNumber(item?.unit_nett ?? item?.unit_price ?? item?.price);
+  const qty = toNumber(item?.quantity) || 1;
+  const discountValue = toNumber(item?.discount_value ?? item?.discount_amount);
+  const unitBill = Math.max(0, unitNett - discountValue);
+
+  return {
+    id: Date.now() + index,
+    order_id: orderId,
+    catalog: buildCatalogFromItem(item),
+    additional_id: null,
+    description: item?.description || '',
+    quantity: qty,
+    unit_base: toNumber(item?.base_price ?? unitNett),
+    unit_gross: unitBill,
+    unit_taxed: unitBill,
+    unit_tax: 0,
+    unit_nett: unitNett,
+    discount: 0,
+    discount_value: discountValue,
+    unit_bill: unitBill,
+    is_discount_percentage: 0,
+    additionals: buildAdditionalsFromItem(item),
+  };
+};
+
+export const buildOfflineTransactionPayload = ({
+  cartState,
+  selectedChannel,
+  paymentMethod,
+  paymentRef,
+  note,
+  queueMeta,
+  authSession,
+}) => {
+  const now = toIsoNow();
+  const localId = Date.now();
+  const orderId = localId;
+
+  const listItems = cartState?.items?.list || [];
+  const billItems = cartState?.items?.bill || [];
+  const snapshotItems = [...listItems, ...billItems];
+  const requestItemsRaw = Array.isArray(queueMeta?.requestBody?.items)
+    ? queueMeta.requestBody.items.map(normalizeRequestItem)
+    : [];
+  const requestItems = enrichRequestItemsFromCartSnapshot(requestItemsRaw, snapshotItems);
+  const allItems = snapshotItems.length > 0 ? snapshotItems : requestItems;
+
+  const normalizedItems = allItems.map((item, idx) => buildOrderItem(item, idx, orderId));
+
+  const totalsFromItems = normalizedItems.reduce(
+    (acc, item) => {
+      const qty = toNumber(item?.quantity) || 1;
+      acc.subtotal_tax += toNumber(item?.unit_tax) * qty;
+      acc.subtotal_taxed += toNumber(item?.unit_taxed) * qty;
+      acc.subtotal_gross += toNumber(item?.unit_gross) * qty;
+      acc.subtotal_nett += toNumber(item?.unit_nett) * qty;
+      acc.total_bill += toNumber(item?.unit_bill) * qty;
+      acc.discount_value += toNumber(item?.discount_value) * qty;
+      return acc;
+    },
+    {
+      subtotal_tax: 0,
+      subtotal_taxed: 0,
+      subtotal_gross: 0,
+      subtotal_nett: 0,
+      total_bill: 0,
+      discount_value: 0,
+    }
+  );
+
+  const discountValue =
+    toNumber(cartState?.discount?.cart?.amount) || totalsFromItems.discount_value;
+  const serviceChargeValue = toNumber(cartState?.meta?.service_charge_value);
+  const subtotalTax = toNumber(cartState?.meta?.subtotal_tax) || totalsFromItems.subtotal_tax;
+  const subtotalTaxed = toNumber(cartState?.meta?.subtotal_taxed) || totalsFromItems.subtotal_taxed;
+  const subtotalGross = toNumber(cartState?.meta?.subtotal_gross) || totalsFromItems.subtotal_gross;
+  const subtotalNett = toNumber(cartState?.meta?.subtotal) || totalsFromItems.subtotal_nett;
+  const totalBill =
+    toNumber(cartState?.meta?.total_bill) || totalsFromItems.total_bill || subtotalNett;
+  const totalCharges = toNumber(cartState?.meta?.grand_total) || totalBill + serviceChargeValue;
+  const totalPayment =
+    toNumber(queueMeta?.requestBody?.total_payment) ||
+    toNumber(cartState?.meta?.grand_total) ||
+    totalCharges;
+  const session = authSession?.user;
+
+  console.log('authSession', session);
+  console.log('selectedChannel', selectedChannel);
+
+  return {
+    id: orderId,
+    paid_session_id: session?.id || null,
+    session,
+    channel: selectedChannel,
+    code: `OFF-${localId}`,
+    payment_ref: paymentRef || '',
+    payment_method: paymentMethod || { id: 0, name: 'Cash', is_nfc: 0 },
+    membership: cartState?.membership || null,
+    ticket:
+      queueMeta?.requestBody?.ticket || cartState?.meta?.ticket || cartState?.bill?.ticket || '',
+    status: 'completed',
+    subtotal_tax: subtotalTax,
+    subtotal_taxed: subtotalTaxed,
+    subtotal_gross: subtotalGross,
+    subtotal_nett: subtotalNett,
+    total_bill: totalBill,
+    discount: discountValue > 0 ? 1 : 0,
+    discount_value: discountValue,
+    service_charge: toNumber(cartState?.meta?.service_charge_percentage),
+    service_charge_value: serviceChargeValue,
+    total_charges: totalCharges,
+    total_payment: totalPayment,
+    cost_goods: 0,
+    note: note || '',
+    ordered_at: now,
+    paid_at: now,
+    is_discount_percentage: cartState?.discount?.cart?.type === 'percentage' ? 1 : 0,
+    items: normalizedItems,
+    offline_queued: true,
+    offline_meta: {
+      queue_id: queueMeta?.id || null,
+      local_created_at: now,
+      sync_status: 'pending',
+    },
+  };
+};

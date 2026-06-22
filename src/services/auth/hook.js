@@ -18,6 +18,7 @@ const useAuth = () => {
   const signin = async data => {
     try {
       const res = await loginMutation(data).unwrap();
+      console.log(res);
       dispatch(login(res?.data));
     } catch (error) {
       dispatch($failure(error));
@@ -28,6 +29,7 @@ const useAuth = () => {
     try {
       const res = await triggerGetUser().unwrap();
       dispatch(session(res?.data));
+      console.log('getUser', res?.data);
     } catch (error) {
       if (import.meta.env.DEV) {
         console.error('error:', error);

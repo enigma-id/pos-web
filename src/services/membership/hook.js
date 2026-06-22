@@ -65,17 +65,17 @@ const useMembership = id => {
     }
   };
 
-  const topup = async payload => {
+  const topup = async ({ id, payload }) => {
     try {
-      await topupBalance(payload).unwrap();
+      await topupBalance({ id, payload }).unwrap();
     } catch (err) {
       dispatch($failure(err));
     }
   };
 
-  const saldoLog = async params => {
+  const saldoLog = async ({ id, params }) => {
     try {
-      await triggerSaldoLog(params).unwrap();
+      await triggerSaldoLog({ id, params }).unwrap();
     } catch (err) {
       dispatch($failure(err));
     }
@@ -103,7 +103,7 @@ const useMembership = id => {
     topupResult,
     showResult,
     saldoLog,
-    saldoLogResult
+    saldoLogResult,
   };
 };
 

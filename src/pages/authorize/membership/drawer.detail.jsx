@@ -1,16 +1,15 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState } from 'react';
-import { useSelector } from 'react-redux';
-
-import { CloseIcon, HistoryIcon, PlusIcon, RefreshIcon } from '../../../components/ui/icon';
-import { Drawer } from '../../../components/ui';
-import HistorySection from './history';
-import useDrawer from '../../../utils/drawer';
 import { FiSettings } from 'react-icons/fi';
+
+import HistorySection from './history';
 import UpdateSession from './update';
+import { Drawer } from '../../../components/ui';
+import { CloseIcon, HistoryIcon, PlusIcon, RefreshIcon } from '../../../components/ui/icon';
+import useDrawer from '../../../utils/drawer';
 
 const DrawerDetail = ({ type, membership, onClose }) => {
-  const { drawerRef, open: openDrawer, close: closeDrawer, isOpen: drawerOpen } = useDrawer();
+  const { drawerRef, open: openDrawer, close: closeDrawer, } = useDrawer();
 
   const [refType, setRefType] = useState('');
 

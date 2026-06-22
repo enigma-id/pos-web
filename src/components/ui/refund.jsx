@@ -8,12 +8,14 @@ import useOrder from '../../services/sales/order/hook';
 const Refund = ({ id, onClose }) => {
   const FormState = useSelector(state => state?.Form);
   const [pin, setPin] = React.useState('');
+  const [reason, setReason] = React.useState('');
 
   const { cancel, cancelResult } = useOrder();
 
   const onCancel = () => {
     const payload = {
-      pin,
+      cancelled_reason: reason,
+      password: pin,
     };
 
     cancel({ id, payload });
@@ -23,6 +25,7 @@ const Refund = ({ id, onClose }) => {
     if (cancelResult?.isSuccess) {
       onClose?.();
       setPin('');
+      setReason('');
     }
   }, [cancelResult]);
 
@@ -35,12 +38,18 @@ const Refund = ({ id, onClose }) => {
         <div className="mb-3 py-4">
           <div>Are you sure you want to refund this transaction?</div>
           <div className="mb-3">Cash amount on hand will be recalculated.</div>
+          <Input
+            label="Reason"
+            value={reason}
+            onChange={e => setReason(e?.target?.value)}
+            error={FormState?.errors?.cancelled_reason}
+          />
 
           <Input
             label="Enter PIN"
             value={pin}
             onChange={e => setPin(e?.target?.value)}
-            error={FormState?.errors?.pin}
+            error={FormState?.errors?.password}
             type="password"
           />
         </div>

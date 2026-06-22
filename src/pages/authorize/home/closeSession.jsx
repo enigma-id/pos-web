@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
+import { useSelector } from 'react-redux';
 
 import { Input, Modal, Summary } from '../../../components/ui';
 import { BackIcon } from '../../../components/ui/icon';
@@ -12,6 +13,7 @@ import { usePrintWindow } from '../../../utils/print';
 
 const CloseSection = () => {
   const { summary, summaryResult, end, endResult } = useSession();
+  const pendingCount = useSelector(state => state?.Offline?.pendingCount || 0);
   const { onLogout } = useAuth();
 
   const { showCart } = useSidebar();
@@ -31,8 +33,42 @@ const CloseSection = () => {
   };
 
   const onSubmit = async () => {
+    if (pendingCount > 0) {
+      openModal(
+        <>
+          <Modal.Header onClose={closeModal}>
+            <div className="text-[16px] font-semibold tracking-wide">Pending Sync Warning</div>
+          </Modal.Header>
+          <Modal.Body>
+            <div className="p-6">
+              <div className="mb-4 text-sm">
+                There are <b>{pendingCount}</b> transaction(s) still pending sync.
+                Ending session now may leave sales unsynced.
+              </div>
+              <div className="flex place-content-end gap-3">
+                <button className="btn btn-outline" onClick={closeModal}>
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-warning"
+                  onClick={() => {
+                    closeModal();
+                    const payload = { cash_finished: Number(cash) };
+                    end(payload);
+                  }}
+                >
+                  End Session Anyway
+                </button>
+              </div>
+            </div>
+          </Modal.Body>
+        </>
+      );
+      return;
+    }
+
     const payload = {
-      cash: Number(cash),
+      cash_finished: Number(cash),
     };
 
     end(payload);

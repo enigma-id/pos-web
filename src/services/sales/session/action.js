@@ -8,15 +8,15 @@ export const salesSessionApi = createApi({
   endpoints: builder => ({
     start: builder.mutation({
       query: payload => ({
-        url: '/sales/session/start',
+        url: '/sales/session',
         method: 'POST',
         body: payload,
       }),
     }),
     end: builder.mutation({
       query: payload => ({
-        url: '/sales/session/end',
-        method: 'POST',
+        url: '/sales/session/close',
+        method: 'PUT',
         body: payload,
       }),
     }),

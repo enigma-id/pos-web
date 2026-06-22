@@ -14,6 +14,8 @@ import {
   setCatalogCacheValue,
   getCatalogDetailCache,
   setCatalogDetailCache,
+  getCatalogDetailCacheByCategory,
+  setCatalogDetailCacheByCategory,
 } from '../../utils/cache';
 import { $failure } from '../form/action';
 
@@ -32,6 +34,44 @@ const useCatalog = () => {
   const [triggerPricing] = useLazyGetCatalogPricingQuery();
   const [triggerCategories, categoriesResult] = useLazyGetCategoriesQuery();
   const [triggerCatalogDetail] = useLazyGetCatalogDetailQuery();
+
+  const prewarmCatalogDetails = useCallback(
+    async ({ catalogList, channelId, categoryId }) => {
+      if (!channelId || !Array.isArray(catalogList) || catalogList.length === 0) return;
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+
+      const targetCategoryId = categoryId ?? 0;
+      const toPrefetch = catalogList.slice(0, 30);
+
+      await Promise.allSettled(
+        toPrefetch.map(async item => {
+          const catalogId = item?.id ?? item?.catalog_id;
+          if (!catalogId) return;
+
+          const cachedByCategory = getCatalogDetailCacheByCategory(
+            catalogId,
+            channelId,
+            targetCategoryId
+          );
+          if (cachedByCategory) return;
+
+          const cachedLegacy = getCatalogDetailCache(catalogId, channelId);
+          if (cachedLegacy) {
+            setCatalogDetailCacheByCategory(catalogId, channelId, targetCategoryId, cachedLegacy);
+            return;
+          }
+
+          const res = await triggerCatalogDetail({ id: catalogId, channel_id: channelId }).unwrap();
+          const data = res?.data;
+          if (data) {
+            setCatalogDetailCache(catalogId, channelId, data);
+            setCatalogDetailCacheByCategory(catalogId, channelId, targetCategoryId, data);
+          }
+        })
+      );
+    },
+    [triggerCatalogDetail]
+  );
 
   const create = async payload => {
     try {
@@ -65,16 +105,18 @@ const useCatalog = () => {
 
     const catalogData = await getOrFetchCatalog(catalogKey, async () => {
       const res = await triggerPricing({
-        channel_id: selectedChannel.id,
+        sales_channel_id: selectedChannel.id,
       }).unwrap();
       return res?.data || [];
     });
 
     const categoryData = await getOrFetchCatalog(categoryKey, async () => {
       const res = await triggerCategories().unwrap();
+      console.log('category data', res);
       const data = res?.data || [];
       return [{ id: 0, name: 'All Category' }, ...data];
     });
+    console.log('categoryData', categoryData);
 
     setAllCatalog(catalogData);
     setCategories(categoryData);
@@ -94,7 +136,13 @@ const useCatalog = () => {
     setSearchTerm(cachedSearch);
     setFilteredCatalog(filtered);
     setIsLoading(false);
-  }, [selectedChannel, triggerPricing, triggerCategories, applyFilter]);
+
+    prewarmCatalogDetails({
+      catalogList: filtered,
+      channelId: selectedChannel.id,
+      categoryId: activeCategory?.id ?? 0,
+    });
+  }, [selectedChannel, triggerPricing, triggerCategories, applyFilter, prewarmCatalogDetails]);
 
   const onSelectCategory = useCallback(
     category => {
@@ -125,23 +173,33 @@ const useCatalog = () => {
   }, [applyFilter, searchTerm]);
 
   const getDetail = useCallback(
-    async ({ id, channel_id = selectedChannel.id }) => {
-      const cached = getCatalogDetailCache(id, channel_id);
-      if (cached) return cached;
+    async ({ id, channel_id = selectedChannel.id, category_id }) => {
+      const resolvedCategoryId = category_id ?? selectedCategory?.id ?? 0;
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+
+      const cachedByCategory = getCatalogDetailCacheByCategory(id, channel_id, resolvedCategoryId);
+      const cachedLegacy = getCatalogDetailCache(id, channel_id);
+
+      if (isOffline) {
+        return cachedByCategory || cachedLegacy || null;
+      }
 
       try {
         const res = await triggerCatalogDetail({ id, channel_id }).unwrap();
         const data = res?.data || null;
         if (data) {
           setCatalogDetailCache(id, channel_id, data);
+          setCatalogDetailCacheByCategory(id, channel_id, resolvedCategoryId, data);
+          return data;
         }
-        return data;
+
+        return cachedByCategory || cachedLegacy || null;
       } catch (e) {
         console.log('Error fetching catalog detail:', e);
-        return null;
+        return cachedByCategory || cachedLegacy || null;
       }
     },
-    [triggerCatalogDetail, selectedChannel]
+    [triggerCatalogDetail, selectedChannel, selectedCategory]
   );
 
   const refreshCatalog = useCallback(async () => {
@@ -150,7 +208,7 @@ const useCatalog = () => {
     setIsLoading(true);
 
     try {
-      const resCatalog = await triggerPricing({ channel_id: selectedChannel.id }).unwrap();
+      const resCatalog = await triggerPricing({ sales_channel_id: selectedChannel.id }).unwrap();
       const resCategory = await triggerCategories().unwrap();
       const d = resCategory?.data || [];
       const catalogData = resCatalog?.data || [];
@@ -171,12 +229,18 @@ const useCatalog = () => {
       setAllCatalog(catalogData);
       setCategories(categoryData);
       setFilteredCatalog(catalogData); // tampilkan semua tanpa filter
+
+      prewarmCatalogDetails({
+        catalogList: catalogData,
+        channelId: selectedChannel.id,
+        categoryId: fallbackCategory?.id ?? 0,
+      });
     } catch (error) {
       console.log('Error refreshing catalog:', error);
     }
 
     setIsLoading(false);
-  }, [selectedChannel, triggerPricing, triggerCategories]);
+  }, [selectedChannel, triggerPricing, triggerCategories, prewarmCatalogDetails]);
 
   const getCategory = async () => {
     try {

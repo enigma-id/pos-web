@@ -42,21 +42,21 @@ export const memberApi = createApi({
     }),
     checkSaldo: builder.query({
       query: params => ({
-        url: `/saldo/cek`,
+        url: `/balance`,
         method: 'GET',
         params,
       }),
     }),
     topup: builder.mutation({
-      query: payload => ({
-        url: '/saldo/top-up',
+      query: ({ id, payload }) => ({
+        url: `/balance/${id}/topup`,
         method: 'POST',
         body: payload,
       }),
     }),
     getSaldoLog: builder.query({
-      query: params => ({
-        url: '/saldo/log',
+      query: ({ id, params }) => ({
+        url: `/balance/${id}/log`,
         method: 'GET',
         params,
       }),

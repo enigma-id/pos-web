@@ -38,7 +38,7 @@ const Kitchen = ({ data }) => {
           }}
         >
           <p style={{ marginBlock: 2, fontSize: 12 }}>Cashier</p>
-          <p style={{ marginBlock: 2, fontSize: 12 }}>{data?.session?.cashier?.name}</p>
+          <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.session?.cashier?.name || data?.session?.name}</p>
         </div>
         {data?.note && (
           <div

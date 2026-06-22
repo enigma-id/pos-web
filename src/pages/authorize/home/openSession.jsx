@@ -15,7 +15,7 @@ const OpenSection = () => {
 
   const onSubmit = async () => {
     const payload = {
-      cash: parseFloat(cash),
+      cash_started: parseFloat(cash) || 0,
     };
 
     start(payload);

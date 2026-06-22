@@ -1,9 +1,7 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
 import {
-  useBillMutation,
   useCheckoutMutation,
   useCloseBillMutation,
   useLazyGetBillQuery,
@@ -22,6 +20,13 @@ import {
   changeBillItem,
   addItem,
 } from './slice';
+import {
+  getPaymentMethodsCache,
+  setPaymentMethodsCache,
+  getCatalogDetailCache,
+  getCatalogDetailCacheByCategory,
+  getCatalogCacheValue,
+} from '../../utils/cache';
 import { useLazyGetCatalogDetailQuery } from '../catalog/action';
 import { $failure } from '../form/action';
 import { useLazyShowQuery } from '../sales/order/action';
@@ -33,12 +38,12 @@ const useCart = catalog_id => {
 
   const [triggerCatalogDetail, catalogDetailResult] = useLazyGetCatalogDetailQuery();
   const [checkoutMutation, checkoutResult] = useCheckoutMutation();
-  const [billMutation, billResult] = useBillMutation();
   const [closeBillMutation, closeBillResult] = useCloseBillMutation();
   const [triggerPaymentMethod] = useLazyGetMethodQuery();
   const [triggerCountBill, countResult] = useLazyGetBillQuery();
 
   const [showOrder] = useLazyShowQuery();
+  const [offlineCatalogDetail, setOfflineCatalogDetail] = useState(null);
 
   // All cart items
   const cartItems = useSelector(state => state?.Cart?.items?.list || []);
@@ -68,20 +73,6 @@ const useCart = catalog_id => {
   };
 
   const isBillRunning = useRef(false);
-  const openBill = async data => {
-    if (isBillRunning.current) return;
-    isBillRunning.current = true;
-
-    try {
-      const res = await billMutation(data).unwrap();
-      if (res?.status === 'success') dispatch(resetCart());
-    } catch (error) {
-      dispatch($failure(error));
-    } finally {
-      isBillRunning.current = false;
-    }
-  };
-
   const closeBill = async (id, payload) => {
     try {
       const res = await closeBillMutation({ id, payload }).unwrap();
@@ -94,9 +85,22 @@ const useCart = catalog_id => {
   };
 
   const getPaymentMethod = async () => {
-    const req = await triggerPaymentMethod().unwrap();
-    const data = req?.data || [];
-    return [{ id: 0, name: 'Cash' }, ...data];
+    const channelId = selectedChannel?.id ?? 'default';
+    const fallback = getPaymentMethodsCache(channelId);
+
+    try {
+      const req = await triggerPaymentMethod().unwrap();
+      const data = req?.data || [];
+      setPaymentMethodsCache(channelId, data);
+      return data;
+    } catch (error) {
+      if ((fallback || []).length > 0) {
+        return fallback;
+      }
+
+      dispatch($failure(error));
+      return [];
+    }
   };
 
   const add = catalog => {
@@ -262,16 +266,33 @@ const useCart = catalog_id => {
   };
 
   useEffect(() => {
-    if (catalog_id) {
-      triggerCatalogDetail({
-        id: catalog_id,
-        channel_id: selectedChannel?.id,
-      });
+    if (!catalog_id || !selectedChannel?.id) return;
+
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    const selectedCategory = getCatalogCacheValue('selected_category');
+    const resolvedCategoryId = selectedCategory?.id ?? 0;
+
+    if (isOffline) {
+      const byCategory = getCatalogDetailCacheByCategory(
+        catalog_id,
+        selectedChannel.id,
+        resolvedCategoryId
+      );
+      const legacy = getCatalogDetailCache(catalog_id, selectedChannel.id);
+
+      setOfflineCatalogDetail(byCategory || legacy || null);
+      return;
     }
-  }, [catalog_id, selectedChannel]);
+
+    setOfflineCatalogDetail(null);
+    triggerCatalogDetail({
+      id: catalog_id,
+      channel_id: selectedChannel?.id,
+    });
+  }, [catalog_id, selectedChannel, triggerCatalogDetail]);
 
   return {
-    catalogDetail: catalogDetailResult?.data?.data,
+    catalogDetail: offlineCatalogDetail || catalogDetailResult?.data?.data,
     isLoading: catalogDetailResult.isFetching,
     error: catalogDetailResult.error,
     isItemInCart,
@@ -280,8 +301,6 @@ const useCart = catalog_id => {
     getPaymentMethod,
     checkout,
     checkoutResult,
-    openBill,
-    billResult,
     closeBill,
     closeBillResult,
     reset,

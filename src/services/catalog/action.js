@@ -16,7 +16,7 @@ export const catalogApi = createApi({
 
     getCatalogPricing: builder.query({
       query: ({ page = 1, limit = 10000000, ...params }) => ({
-        url: '/catalog/pricing',
+        url: '/catalog',
         method: 'GET',
         params: {
           page,
@@ -28,7 +28,7 @@ export const catalogApi = createApi({
 
     getCategories: builder.query({
       query: () => ({
-        url: '/catalog/category',
+        url: '/category',
         method: 'GET',
       }),
     }),
@@ -38,7 +38,7 @@ export const catalogApi = createApi({
         url: `/catalog/${id}`,
         method: 'GET',
         params: {
-          channel_id: channel_id,
+          sales_channel_id: channel_id,
         },
       }),
     }),

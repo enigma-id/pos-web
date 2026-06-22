@@ -6,9 +6,10 @@ import { authReducer } from './auth/slice';
 import { cartApi } from './cart/action';
 import { cartReducer } from './cart/slice';
 import { catalogApi } from './catalog/action';
-import { outletApi } from './outlet/action';
 import { formReducer } from './form/slice';
 import { memberApi } from './membership/action';
+import { offlineReducer } from './offline/slice';
+import { outletApi } from './outlet/action';
 import { salesChannelApi } from './sales/channel/action';
 import { channelReducer } from './sales/channel/slice';
 import { salesOrderApi } from './sales/order/action';
@@ -37,6 +38,7 @@ const rootReducer = combineReducers({
   SalesChannel: channelReducer,
   Cart: cartReducer,
   Table: tableReducer,
+  Offline: offlineReducer,
   ...apiReducers,
 });
 

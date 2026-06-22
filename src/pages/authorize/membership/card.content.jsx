@@ -17,12 +17,11 @@ const CardContent = ({ data, onClose }) => {
 
   const handleTopup = () => {
     const payload = {
-      card_id: data?.card_id,
       nominal: Number(value) || 0,
       payment_type: method,
     };
 
-    topup(payload);
+    topup({id: data?.id, payload });
   };
 
   // Jika sukses, tutup modal

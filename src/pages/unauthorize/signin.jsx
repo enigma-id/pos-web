@@ -17,7 +17,7 @@ const SigninScreen = () => {
     e.preventDefault();
 
     const payload = {
-      username: user,
+      identifier: user,
       password: password,
     };
 
@@ -30,14 +30,14 @@ const SigninScreen = () => {
         <figure>
           <img src={logo} alt="logo" className="mx-auto h-auto w-96" />
         </figure>
-        <div className="card-body !min-w-96">
+        <div className="card-body min-w-96!">
           <form onSubmit={handleSubmit}>
             <div className="mb-3">
               <Input
                 id="username"
                 label="Username"
                 required
-                error={FormState?.errors?.username}
+                error={FormState?.errors?.identifier}
                 value={user}
                 type="text"
                 onChange={e => setUser(e.target.value)}

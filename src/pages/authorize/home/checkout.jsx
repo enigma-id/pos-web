@@ -1,9 +1,11 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import React from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import DetailScreen from './detail';
+import BillModal from './saveBill';
+import SuccessModal from './success';
 import { Input, Kitchen, Modal, NFCField, Receipt } from '../../../components/ui';
 import {
   BackIcon,
@@ -18,22 +20,23 @@ import {
 import Keypad from '../../../components/ui/keypad';
 import useModal from '../../../components/ui/modal/hook';
 import useCart from '../../../services/cart/hook';
-import useOutlet from '../../../services/outlet/hooks';
 import useMembership from '../../../services/membership/hook';
+import { buildOfflineTransactionPayload, updateQueueItem, setWarning } from '../../../services/offline';
+import useOutlet from '../../../services/outlet/hooks';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
 
-import BillModal from './saveBill';
-import SuccessModal from './success';
 
 const CheckoutScreen = () => {
   const location = useLocation();
   const isBill = location.state?.is_bill;
 
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const CartState = useSelector(state => state?.Cart);
   const Channel = useSelector(state => state?.SalesChannel);
+  const session = useSelector((s) => s.Auth?.session)
 
   const dropdownRef = React.useRef(null);
 
@@ -47,8 +50,6 @@ const CheckoutScreen = () => {
     closeBillResult,
     remove,
     billItems,
-    openBill,
-    billResult,
   } = useCart();
   const { show, showResult } = useOrder();
 
@@ -67,6 +68,7 @@ const CheckoutScreen = () => {
   const [note, setNote] = React.useState('');
 
   const [selectedMethod, setSelectedMethod] = React.useState(null);
+  const checkoutSnapshotRef = React.useRef(null);
 
   const renderAdditionals = item => {
     return (item?.additionals || [])
@@ -118,7 +120,16 @@ const CheckoutScreen = () => {
     );
   };
 
-  const handlePay = async (card_id, ref) => {
+  const handlePay = async (card) => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    const isCashPayment = selectedMethod?.id === 0;
+    const cashTotalPayment = Number(pay) || 0;
+
+    if (isOffline && isCashPayment && cashTotalPayment <= 0) {
+      dispatch(setWarning('Please fill total payment first.'));
+      return;
+    }
+
     const allItems = [...(CartState?.items?.list || []), ...(CartState?.items?.bill || [])];
 
     const items = allItems?.map(item => {
@@ -133,6 +144,33 @@ const CheckoutScreen = () => {
 
       if (item?.additionals_flat?.length > 0) {
         base.additionals = item?.additionals_flat;
+      }
+
+      if (Array.isArray(item?.additionals) && item.additionals.length > 0) {
+        base.additionals_catalog_map = item.additionals
+          .flatMap((group, groupIndex) => {
+            const childs = Array.isArray(group?.childs) ? group.childs : [];
+            return childs
+              .filter(child =>
+                group?.type === 'quantity' ? (child?.quantity || 0) > 0 : !!child?.selected
+              )
+              .map((child, childIndex) => ({
+                index: `${groupIndex}-${childIndex}`,
+                addon_id: group?.id ?? null,
+                catalog_id: child?.catalog_id ?? child?.id ?? null,
+                addon: {
+                  id: group?.id ?? null,
+                  name: group?.name || '',
+                  type: group?.type || '',
+                },
+                catalog: {
+                  id: child?.catalog_id ?? child?.id ?? null,
+                  name: child?.name || '',
+                  unit_price: Number(child?.unit_price) || 0,
+                },
+              }));
+          })
+          .filter(entry => entry.catalog_id != null);
       }
 
       if (item?.is_custom === 1) {
@@ -155,9 +193,10 @@ const CheckoutScreen = () => {
       }));
 
     const payload = {
-      channel_id: Channel?.selectedChannel?.id,
+      status: "completed",
+      sales_channel_id: Channel?.selectedChannel?.id,
       payment_method_id: selectedMethod?.id,
-      payment_ref: selectedMethod?.id === 0 ? '' : paymentRef,
+      payment_ref: paymentRef,
       total_payment:
         selectedMethod?.id === 0 ? Number(pay) || 0 : CartState?.meta?.grand_total || 0,
       items,
@@ -182,16 +221,25 @@ const CheckoutScreen = () => {
     }
 
     if (discount_categories?.length > 0) {
-      payload.discount_categories = discount_categories;
+      payload.category_discounts = discount_categories;
     }
 
-    if (card_id) {
-      payload.card_id = card_id;
-      payload.payment_ref = ref;
+    if (card) {
+      payload.membership_id = card?.id;
+      payload.card_id = card?.card_id;
+      payload.payment_ref = card?.reff_code;
     }
+
+    checkoutSnapshotRef.current = {
+      cartState: JSON.parse(JSON.stringify(CartState || {})),
+      selectedChannel: Channel?.selectedChannel ? { ...Channel.selectedChannel } : null,
+      paymentMethod: selectedMethod ? { ...selectedMethod } : null,
+      paymentRef: selectedMethod?.id === 0 ? '' : paymentRef,
+      note,
+      requestBody: payload,
+    };
 
     if (isBill) {
-      // setBillID(CartState?.bill?.id);
       await closeBill(CartState?.bill?.id, payload);
     } else {
       await checkout(payload);
@@ -239,8 +287,9 @@ const CheckoutScreen = () => {
       }));
 
     const payload = {
-      channel_id: Channel?.selectedChannel?.id,
+      sales_channel_id: Channel?.selectedChannel?.id,
       items,
+      status: 'pending'
     };
 
     if (note) {
@@ -262,26 +311,39 @@ const CheckoutScreen = () => {
     }
 
     if (discount_categories?.length > 0) {
-      payload.discount_categories = discount_categories;
+      payload.category_discounts = discount_categories;
     }
 
     payload.id = CartState?.bill?.id;
     payload.ticket = ticket;
 
-    await openBill(payload);
+    checkoutSnapshotRef.current = {
+      cartState: JSON.parse(JSON.stringify(CartState || {})),
+      selectedChannel: Channel?.selectedChannel ? { ...Channel.selectedChannel } : null,
+      paymentMethod: selectedMethod ? { ...selectedMethod } : null,
+      paymentRef: selectedMethod?.id === 0 ? '' : paymentRef,
+      note,
+      requestBody: payload,
+      authSession: session?.user,
+    };
+
+    await checkout({
+      ...payload,
+      __offlinePreview: checkoutSnapshotRef.current,
+    });
   };
 
-  React.useEffect(() => {
-    if (billResult?.isSuccess) {
-      show(billResult?.data?.data?.id);
-    }
-  }, [billResult]);
+  // React.useEffect(() => {
+  //   if (checkoutResult?.isSuccess) {
+  //     show(checkoutResult?.data?.data?.id);
+  //   }
+  // }, [checkoutResult?.isSuccess, show]);
 
-  useEffect(() => {
-    if (billResult?.isSuccess && showResult?.isSuccess) {
-      openModal(<SuccessModal data={showResult?.data?.data} backToMenu />, 'w-md');
-    }
-  }, [billResult, showResult]);
+  // useEffect(() => {
+  //   if (showResult?.isSuccess) {
+  //     openModal(<SuccessModal data={showResult?.data?.data} backToMenu />, 'w-md');
+  //   }
+  // }, [showResult?.isSuccess, showResult?.data?.data, openModal]);
 
   const handleRead = uid => {
     const params = {
@@ -372,23 +434,81 @@ const CheckoutScreen = () => {
     if (checkResult?.isSuccess) {
       // openSuccess()
       const card = checkResult?.data?.data;
-      handlePay(card?.card_id, card?.reff_code);
+      handlePay(card);
     }
   }, [checkResult]);
 
   React.useEffect(() => {
+    const checkoutData = checkoutResult?.data?.data || {};
+    const closeBillData = closeBillResult?.data?.data || {};
+    const isQueued = Boolean(checkoutData?.offline_queued || closeBillData?.offline_queued);
+
     if (checkoutResult?.isSuccess || closeBillResult?.isSuccess) {
+      if (isQueued) {
+        dispatch(
+          setWarning('Payment queued offline. It will sync automatically when network is restored.')
+        );
+
+        const queueMeta = checkoutData?.offline_meta || closeBillData?.offline_meta || {};
+
+        const snapshot = checkoutSnapshotRef.current || {};
+        const offlineData = buildOfflineTransactionPayload({
+          cartState: snapshot?.cartState || CartState,
+          selectedChannel: Channel?.selectedChannel,
+          paymentMethod: snapshot?.paymentMethod || selectedMethod,
+          paymentRef: snapshot?.paymentRef ?? paymentRef,
+          note: snapshot?.note ?? note,
+          authSession: session,
+          queueMeta: {
+            ...queueMeta,
+            requestBody: snapshot?.requestBody || null,
+          },
+        });
+
+        const queueId = queueMeta?.id || checkoutData?.id || closeBillData?.id;
+        if (queueId) {
+          updateQueueItem(queueId, {
+            transaction_preview: {
+              ...offlineData,
+              items: offlineData.items || [],
+              session: {
+                ...offlineData.session,
+                cashier: {
+                  name: offlineData.session?.name || '-',
+                },
+              },
+            },
+          });
+        }
+
+        openModal(<SuccessModal data={offlineData} backToMenu />, 'w-md');
+        return;
+      }
+
       setSelectedMethod(paymentMethod[0]);
-      const id = checkoutResult?.data?.data?.id || closeBillResult?.data?.data?.id;
-      show(id);
+      const id = checkoutData?.id || closeBillData?.id;
+      if (id) {
+        show(id);
+      }
     }
-  }, [checkoutResult, closeBillResult]);
+  }, [checkoutResult?.isSuccess, closeBillResult?.isSuccess]);
 
   React.useEffect(() => {
-    if ((closeBillResult?.isSuccess || checkoutResult?.isSuccess) && showResult?.isSuccess) {
+    const checkoutData = checkoutResult?.data?.data || {};
+    const closeBillData = closeBillResult?.data?.data || {};
+    const isQueued = Boolean(checkoutData?.offline_queued || closeBillData?.offline_queued);
+
+    if (!isQueued && (closeBillResult?.isSuccess || checkoutResult?.isSuccess) && showResult?.isSuccess) {
       openSuccess(showResult?.data?.data);
     }
-  }, [checkoutResult, closeBillResult, showResult]);
+  }, [
+    checkoutResult?.isSuccess,
+    closeBillResult?.isSuccess,
+    checkoutResult?.data?.data?.offline_queued,
+    closeBillResult?.data?.data?.offline_queued,
+    showResult?.isSuccess,
+    showResult?.data?.data,
+  ]);
 
   React.useEffect(() => {
     const getMethod = async () => {
@@ -422,10 +542,10 @@ const CheckoutScreen = () => {
   }, []);
 
   React.useEffect(() => {
-    if (billResult?.isSuccess || checkoutResult?.isSuccess || closeBillResult?.isSuccess) {
+    if (checkoutResult?.isSuccess || closeBillResult?.isSuccess) {
       setDiscountInputs([]);
     }
-  }, [billResult, checkoutResult, closeBillResult]);
+  }, [checkoutResult, closeBillResult]);
 
   return (
     <div className="flex h-screen flex-col">
@@ -792,7 +912,7 @@ const CheckoutScreen = () => {
                         setIsOpen(false);
                       }}
                     >
-                      {method?.id == 0 ? (
+                      {method?.provider === "cash" ? (
                         <MoneyIcon className="h-8" />
                       ) : (
                         <CardIcon className="h-8" />
@@ -806,7 +926,7 @@ const CheckoutScreen = () => {
           </div>
 
           <div className="flex-1">
-            {selectedMethod?.id === 0 ? (
+            {selectedMethod?.provider === "cash" ? (
               <Keypad
                 payment={selectedMethod?.id}
                 onChange={v => setPay(v)}
@@ -826,18 +946,18 @@ const CheckoutScreen = () => {
 
           <div className="flex gap-1">
             <div
-              className={`btn btn-default btn-xl btn-block flex-1 ${CartState?.items?.list?.count === 0 || billResult?.isLoading ? 'btn-disabled' : ''}`}
+              className={`btn btn-default btn-xl btn-block flex-1 ${CartState?.items?.list?.count === 0 || checkoutResult?.isLoading ? 'btn-disabled' : ''}`}
               onClick={
                 CartState?.bill ? () => handleSaveBill(CartState?.bill?.ticket) : () => openTicket()
               }
             >
               Save Bill
-              {billResult?.isLoading && <span className="loading loading-spinner"></span>}
+              {checkoutResult?.isLoading && <span className="loading loading-spinner"></span>}
             </div>
 
             <div
               className={`btn btn-primary btn-xl btn-block flex-1 ${CartState?.items?.list?.count === 0 || checkoutResult?.isLoading || closeBillResult?.isLoading ? 'btn-disabled' : ''}`}
-              onClick={selectedMethod?.is_nfc === 1 ? openNFC : () => handlePay()}
+              onClick={selectedMethod?.is_member_payment ? openNFC : () => handlePay()}
             >
               Pay now
               {(checkoutResult?.isLoading || closeBillResult?.isLoading) && (
