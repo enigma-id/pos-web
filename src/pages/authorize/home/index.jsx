@@ -209,7 +209,7 @@ const CatalogScreen = () => {
               <RefreshIcon />
             </div>
 
-            {User?.is_supervisor === 1 && (
+            {User?.is_supervisor === true && (
               <div className="btn btn-circle btn-xl btn-primary" onClick={openDrawer}>
                 <PlusIcon />
               </div>

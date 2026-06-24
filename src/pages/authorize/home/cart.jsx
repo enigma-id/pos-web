@@ -12,7 +12,7 @@ import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
 import { buildOfflineTransactionPayload, updateQueueItem } from '../../../services/offline';
-import useOutlet from '../../../services/outlet/hooks';
+// import useOutlet from '../../../services/outlet/hooks';
 import { currencyFormat } from '../../../utils/common';
 
 const Cart = ({ onUpdate }) => {
@@ -27,14 +27,14 @@ const Cart = ({ onUpdate }) => {
   const { showCustomer } = useSidebar();
   const { openModal, closeModal } = useModal();
 
-  const { reset, remove, onCount, countResult, cartItems, openBill, billResult, onBillSelected } =
+  const { reset, remove, bill, billResult, cartItems, onBillSelected, checkout, checkoutResult, update, updateResult } =
     useCart();
 
-  const { getServiceCharge } = useOutlet();
+  // const { getServiceCharge } = useOutlet();
 
   const getMode = () => {
     const isOpen =
-      billCount > 0 && CartState?.items?.list?.length === 0 && CartState?.bill === null;
+      data?.length > 0 && CartState?.items?.list?.length === 0 && CartState?.bill === null;
 
     return isOpen ? 'open' : 'create';
   };
@@ -68,14 +68,17 @@ const Cart = ({ onUpdate }) => {
   };
 
   const onBillCreate = async ticket => {
-    const discount_categories = CartState?.discount?.category
-      ?.filter(
-        cat => cat?.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
-      )
-      ?.map(cat => ({
-        category_id: cat.id,
-        ...(cat.discount_type === 'percentage'
-          ? { discount_percentage: cat.discount_value }
+    const discount_categories = CartState?.bill?.category_discounts?.filter(
+      (cat) =>
+        cat &&
+        (
+          (cat.is_discount_percentage && cat.discount_percentage > 0) ||
+          (!cat.is_discount_percentage && cat.discount_value > 0)
+        )
+      )?.map((cat) => ({
+        category_id: cat.category_id,
+        ...(cat.is_discount_percentage
+          ? { discount_percentage: cat.discount_percentage }
           : { discount_value: cat.discount_value }),
       }));
 
@@ -121,10 +124,11 @@ const Cart = ({ onUpdate }) => {
     });
 
     const payload = {
-      ticket: ticket,
+      bill_name: ticket,
       membership_id: CartState?.meta?.customer?.id,
-      channel_id: Channel?.selectedChannel?.id,
-      items: items,
+      sales_channel_id: Channel?.selectedChannel?.id,
+      status: "pending",
+      items,
     };
 
     if (billItems?.length > 0) {
@@ -142,12 +146,9 @@ const Cart = ({ onUpdate }) => {
     }
 
     if (discount_categories?.length > 0) {
-      payload.discount_categories = discount_categories;
+      payload.category_discounts = discount_categories;
     }
 
-    if (CartState?.bill?.id) {
-      payload.id = CartState?.bill?.id;
-    }
 
     const cartSnapshot = JSON.parse(JSON.stringify(CartState || {}));
     if (!cartSnapshot?.meta) {
@@ -167,10 +168,14 @@ const Cart = ({ onUpdate }) => {
       authSession: session,
     });
 
-    await openBill({
-      ...payload,
-      __offlinePreview: saveBillOfflineDataRef.current,
-    });
+    if (CartState?.bill?.id) {
+      payload.bill_name = CartState?.bill?.bill_name;
+
+      await update({id: CartState?.bill?.id, payload, __offlinePreview: saveBillOfflineDataRef.current})
+
+    } else {
+      await checkout({...payload, __offlinePreview: saveBillOfflineDataRef.current})
+    }
   };
 
   const renderAdditionals = item => {
@@ -242,7 +247,7 @@ const Cart = ({ onUpdate }) => {
 
   const handleModal = () => {
     openModal(
-      <BillModal mode={mode} count={billCount} onBillCreate={v => onBillCreate(v)} />,
+      <BillModal mode={mode} count={data?.length} onBillCreate={v => onBillCreate(v)} />,
       mode === 'open' ? 'w-lg' : 'w-md'
     );
   };
@@ -317,36 +322,42 @@ const Cart = ({ onUpdate }) => {
 
   const handleReset = () => {
     reset();
-    getServiceCharge();
+    // getServiceCharge();
   };
 
   React.useEffect(() => {
-    if (billResult?.isSuccess) {
-      const billData = billResult?.data?.data || {};
+    if (checkoutResult?.isSuccess || updateResult?.isSuccess) {
+
+      const billData = checkoutResult?.data?.data || updateResult?.data?.data || {};
 
       if (updateTicket) {
         closeModal();
         onBillSelected(billData);
       } else {
-        onCount();
+        bill();
         handleModalPrint(billData);
-        getServiceCharge();
+        // getServiceCharge();
       }
+
+      checkoutResult?.reset();
+      updateResult?.reset();
+
     }
-  }, [billResult]);
+  }, [checkoutResult, updateResult]);
 
   React.useEffect(() => {
-    if (billResult?.isError) {
+    if (checkoutResult?.isError) {
       handleModalError();
+      checkoutResult?.reset();
     }
-  }, [billResult]);
+  }, [checkoutResult]);
 
   React.useEffect(() => {
-    onCount();
-    getServiceCharge();
+    bill();
+    // getServiceCharge();
   }, []);
 
-  const billCount = countResult?.data?.data;
+  const data = billResult?.data?.data;
 
   const mode = getMode();
 
@@ -389,7 +400,7 @@ const Cart = ({ onUpdate }) => {
           <div className="border-base-200 bg-accent relative grid w-full grid-cols-[1fr_auto] place-items-center overflow-hidden p-[16px] pb-0">
             <div className="grid w-full grid-cols-[1fr_1fr] font-semibold">
               <div>Bill name: </div>
-              <div className="text-base-content text-end">{CartState?.bill?.ticket}</div>
+              <div className="text-base-content text-end">{CartState?.bill?.bill_name}</div>
             </div>
 
             <div
@@ -542,7 +553,7 @@ const Cart = ({ onUpdate }) => {
               className={`btn btn-xl btn-primary flex-1 rounded-none text-lg font-thin uppercase`}
               onClick={handleModal}
             >
-              Open Bill ({billCount})
+              Open Bill ({data?.length})
             </button>
           ) : (
             <button

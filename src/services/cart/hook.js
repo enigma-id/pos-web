@@ -3,8 +3,9 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import {
   useCheckoutMutation,
-  useCloseBillMutation,
   useLazyGetBillQuery,
+  useCloseBillMutation,
+  useUpdateMutation,
   useLazyGetMethodQuery,
 } from './action';
 import {
@@ -19,6 +20,7 @@ import {
   changeItem,
   changeBillItem,
   addItem,
+  changeServiceCharge,
 } from './slice';
 import {
   getPaymentMethodsCache,
@@ -26,6 +28,7 @@ import {
   getCatalogDetailCache,
   getCatalogDetailCacheByCategory,
   getCatalogCacheValue,
+  setSalesCacheValue,
 } from '../../utils/cache';
 import { useLazyGetCatalogDetailQuery } from '../catalog/action';
 import { $failure } from '../form/action';
@@ -40,13 +43,16 @@ const useCart = catalog_id => {
   const [checkoutMutation, checkoutResult] = useCheckoutMutation();
   const [closeBillMutation, closeBillResult] = useCloseBillMutation();
   const [triggerPaymentMethod] = useLazyGetMethodQuery();
-  const [triggerCountBill, countResult] = useLazyGetBillQuery();
+  const [triggerBill, billResult] = useLazyGetBillQuery();
+  const [updateMutation, updateResult] = useUpdateMutation();
 
   const [showOrder] = useLazyShowQuery();
   const [offlineCatalogDetail, setOfflineCatalogDetail] = useState(null);
 
   // All cart items
   const cartItems = useSelector(state => state?.Cart?.items?.list || []);
+
+  const charge = useSelector(state => state?.Auth?.session?.sales_session?.outlet?.service_charges);
 
   // Cek apakah item sudah ada
   const existingIndex = cartItems.findIndex(item => item?.id === catalog_id);
@@ -55,6 +61,8 @@ const useCart = catalog_id => {
 
   const reset = () => {
     dispatch(resetCart());
+    setSalesCacheValue('service_charge', charge);
+    dispatch(changeServiceCharge(charge));
   };
 
   const isCheckoutRunning = useRef(false);
@@ -64,7 +72,7 @@ const useCart = catalog_id => {
 
     try {
       const res = await checkoutMutation(data).unwrap();
-      if (res?.status === 'success') dispatch(resetCart());
+      if (res?.message === 'success') reset();
     } catch (error) {
       dispatch($failure(error));
     } finally {
@@ -76,7 +84,7 @@ const useCart = catalog_id => {
   const closeBill = async (id, payload) => {
     try {
       const res = await closeBillMutation({ id, payload }).unwrap();
-      if (res?.status === 'success') dispatch(resetCart());
+      if (res?.message === 'success') reset();
     } catch (error) {
       dispatch($failure(error));
     } finally {
@@ -221,13 +229,24 @@ const useCart = catalog_id => {
     );
   };
 
-  const onCount = async () => {
+  const bill = async () => {
     try {
-      await triggerCountBill().unwrap();
+      await triggerBill().unwrap();
     } catch (error) {
       if (import.meta.env.DEV) {
         console.error('error:', error);
       }
+    }
+  };
+
+  const update = async ({ id, payload }) => {
+    try {
+      const res = await updateMutation({ id, payload }).unwrap();
+      if (res?.message === 'success') reset();
+      return res;
+    } catch (error) {
+      dispatch($failure(error));
+      throw error;
     }
   };
 
@@ -238,12 +257,12 @@ const useCart = catalog_id => {
 
     try {
       const res = await showOrder({ id: data?.id }).unwrap();
-      if (res?.status === 'success') {
+      if (res?.message === 'success') {
         billItems(res?.data?.items);
 
         dispatch(selectedBill(res?.data));
 
-        shwoSetDiscount(res?.data);
+        showSetDiscount(res?.data);
       }
     } catch (error) {
       dispatch($failure(error));
@@ -256,7 +275,7 @@ const useCart = catalog_id => {
     dispatch(setBillItems(data));
   };
 
-  const shwoSetDiscount = data => {
+  const showSetDiscount = data => {
     if (data?.discount_value > 0) {
       const discountType = data?.is_discount_percentage ? 'percentage' : 'nominal';
       const discountValue = discountType === 'percentage' ? data?.discount : data?.discount_value;
@@ -311,10 +330,12 @@ const useCart = catalog_id => {
     setCustomer,
     onChangeDiscount,
     onChangeCartDiscount,
-    onCount,
-    countResult,
+    bill,
+    billResult,
     onBillSelected,
     billItems,
+    update,
+    updateResult,
   };
 };
 

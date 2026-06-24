@@ -40,7 +40,7 @@ const Keypad = ({ onChange, payment, subtotal }) => {
   };
 
   React.useEffect(() => {
-    if (payment === 0) {
+    if (payment === 'cash') {
       const list = cashList(subtotal);
       setMoneyList(list);
     }

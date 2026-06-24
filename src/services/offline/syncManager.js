@@ -67,7 +67,6 @@ const executeQueuedRequest = async item => {
     params: item.params,
     headers: {
       ...(item.headers || {}),
-      ...(item.idempotencyKey ? { 'X-Idempotency-Key': item.idempotencyKey } : {}),
       ...(item.token ? { Authorization: `Bearer ${item.token}` } : {}),
     },
     __skipOfflineQueue: true,
@@ -89,52 +88,73 @@ const markFailed = async (item, message) => {
   });
 };
 
+// 1. Add a Set to track items currently being synced
+const syncingItems = new Set();
+
+// ... existing code ...
+
 const processItem = async item => {
-  await updateQueueItem(item.id, { status: 'syncing' });
-
-  for (let attempt = item.retryCount || 0; attempt < MAX_RETRY; attempt += 1) {
-    const result = await executeQueuedRequest(item);
-
-    if (!result?.error) {
-      await updateQueueItem(item.id, { status: 'completed', retryCount: attempt });
-      await sleep(REMOVE_DELAY);
-      await removeFromQueue(item.id);
-      return { ok: true };
-    }
-
-    const status = getStatusCode(result.error);
-    if (status === 401) {
-      await markFailed(item, 'Authentication expired. Please login again.');
-      if (storeRef) {
-        storeRef.dispatch(setOfflineError('Session expired during sync. Please login again.'));
-      }
-      return { ok: false, stop: true };
-    }
-
-    if (!shouldRetry(result.error)) {
-      await markFailed(item, result?.error?.data?.message || 'Client error, not retried');
-      return { ok: false };
-    }
-
-    const nextRetryCount = attempt + 1;
-    await updateQueueItem(item.id, {
-      retryCount: nextRetryCount,
-      status: 'pending',
-      lastError: result?.error?.data?.message || 'Retrying due to server/network issue',
-    });
-
-    const delay = BASE_DELAY * 2 ** attempt;
-    await sleep(delay);
+  // 2. Check if this specific item is already being processed
+  if (syncingItems.has(item.id)) {
+    console.log(`Sync already in progress for item: ${item.id}`);
+    return { ok: false };
   }
 
-  await markFailed(item, 'Max retries reached');
-  return { ok: false };
+  // 3. Add to lock
+  syncingItems.add(item.id);
+
+  try {
+    await updateQueueItem(item.id, { status: 'syncing' });
+
+    for (let attempt = item.retryCount || 0; attempt < MAX_RETRY; attempt += 1) {
+      const result = await executeQueuedRequest(item);
+
+      if (!result?.error) {
+        await updateQueueItem(item.id, { status: 'completed', retryCount: attempt });
+        await sleep(REMOVE_DELAY);
+        await removeFromQueue(item.id);
+        return { ok: true };
+      }
+
+      const status = getStatusCode(result.error);
+      if (status === 401) {
+        await markFailed(item, 'Authentication expired. Please login again.');
+        if (storeRef) {
+          storeRef.dispatch(setOfflineError('Session expired during sync. Please login again.'));
+        }
+        return { ok: false, stop: true };
+      }
+
+      if (!shouldRetry(result.error)) {
+        await markFailed(item, result?.error?.data?.message || 'Client error, not retried');
+        return { ok: false };
+      }
+
+      const nextRetryCount = attempt + 1;
+      await updateQueueItem(item.id, {
+        retryCount: nextRetryCount,
+        status: 'pending',
+        lastError: result?.error?.data?.message || 'Retrying due to server/network issue',
+      });
+
+      const delay = BASE_DELAY * 2 ** attempt;
+      await sleep(delay);
+    }
+
+    await markFailed(item, 'Max retries reached');
+    return { ok: false };
+  } finally {
+    // 4. Always remove from lock in finally block
+    syncingItems.delete(item.id);
+  }
 };
 
 const sortPendingQueue = items => {
   return [...items].sort((a, b) => {
-    const isStartA = String(a.url).includes('/sales/session') && !String(a.url).includes('/sales/session/close');
-    const isStartB = String(b.url).includes('/sales/session') && !String(b.url).includes('/sales/session/close');
+    const isStartA =
+      String(a.url).includes('/sales/session') && !String(a.url).includes('/sales/session/close');
+    const isStartB =
+      String(b.url).includes('/sales/session') && !String(b.url).includes('/sales/session/close');
     const isEndA = String(a.url).includes('/sales/session/close');
     const isEndB = String(b.url).includes('/sales/session/close');
 
@@ -169,7 +189,9 @@ export const syncNow = async () => {
 
       const result = await processItem(current);
 
-      const isStartSession = String(current.url).includes('/sales/session') && !String(current.url).includes('/sales/session/close');
+      const isStartSession =
+        String(current.url).includes('/sales/session') &&
+        !String(current.url).includes('/sales/session/close');
       if (isStartSession && !result?.ok) {
         if (storeRef) {
           storeRef.dispatch(setOfflineError('Start session failed. Sync halted.'));

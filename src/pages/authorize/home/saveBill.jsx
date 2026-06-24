@@ -6,31 +6,21 @@ import { Input, Modal } from '../../../components/ui';
 import { SearchIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useCart from '../../../services/cart/hook';
-import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 
 const BillModal = ({ mode, count, onBillCreate }) => {
   const FormState = useSelector(state => state?.Form);
   const { closeModal } = useModal();
-  const [search, setSearch] = React.useState('');
   const [ticket, setTicket] = React.useState('');
-  const { billResult, onBillSelected } = useCart();
+  const { bill, billResult, onBillSelected } = useCart();
 
-  const { order, orderResult } = useOrder();
 
   React.useEffect(() => {
     if (mode === 'create') return;
-    const delayDebounceFn = setTimeout(
-      () => {
-        order({ status: 'pending', search, limit: 100 });
-      },
-      search ? 1000 : 0
-    );
+    bill();
+  }, [mode]);
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [mode, search]);
-
-  const billData = orderResult?.data?.data || [];
+  const billData = billResult?.data?.data || [];
 
   return (
     <>
@@ -42,7 +32,7 @@ const BillModal = ({ mode, count, onBillCreate }) => {
       <Modal.Body full={mode === 'open'}>
         {mode === 'open' ? (
           <>
-            <div className="border-base-200 relative !min-h-16 w-full place-content-center place-items-center border-b">
+            {/* <div className="border-base-200 relative !min-h-16 w-full place-content-center place-items-center border-b">
               <div className="absolute top-1/3 left-4">
                 <SearchIcon />
               </div>
@@ -54,7 +44,7 @@ const BillModal = ({ mode, count, onBillCreate }) => {
                 onChange={e => setSearch(e.target.value)}
                 className="!min-h-16 w-full pl-15 focus-visible:!outline-none"
               />
-            </div>
+            </div> */}
             <div className="min-h-0 flex-1 overflow-y-auto">
               {billData?.map((bill, idx) => (
                 <div
@@ -66,8 +56,8 @@ const BillModal = ({ mode, count, onBillCreate }) => {
                   }}
                 >
                   <div>
-                    <div className="font-semibold">{bill?.ticket}</div>
-                    <div className="text-xs">{dateFormat(bill?.ordered_at)}</div>
+                    <div className="font-semibold">{bill?.bill_name || "-"} </div>
+                    <div className="text-xs">{dateFormat(bill?.created_at)}</div>
                   </div>
                   <div className="font-semibold">{currencyFormat(bill?.total_charges)}</div>
                 </div>

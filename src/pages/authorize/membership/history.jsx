@@ -40,13 +40,15 @@ const HistorySection = ({ id }) => {
 
   // Fetch history
   React.useEffect(() => {
-    const params = {
+    if (showResult.isSuccess) {
+      const params = {
       page,
       limit: LIMIT
     }
-
-    saldoLog({id, params});
-  }, [id, page]);
+      setLogs([])
+      saldoLog({ id, params });
+    }
+  }, [showResult, id, page]);
 
   React.useEffect(() => {
     if (saldoLogResult?.isSuccess) {
@@ -69,8 +71,12 @@ const HistorySection = ({ id }) => {
 
       setLogs(prev => [...prev, ...filteredData]);
 
-      if (newData.length < LIMIT) {
-        setHasMore(false);
+      if (res?.meta) {
+        setHasMore(res.meta.has_next);
+      } else {
+        if (newData.length < LIMIT) {
+          setHasMore(false);
+        }
       }
 
       // Reset isTriggeringRef setelah data berhasil ditambahkan
@@ -231,12 +237,12 @@ const HistorySection = ({ id }) => {
         >
           {/* Title & Amount */}
           <div className="mb-1 flex items-start justify-between">
-            <h3 className="font-semibold text-gray-900">
+            <h3 className="font-semibold text-gray-900 capitalize">
               {item?.reference_type === 'bonus'
                 ? 'Bonus'
                 : item?.reference_type === 'top-up'
                   ? 'Topup'
-                  : `${item?.ref_code}`}
+                  : `${item?.reference_type}`}
             </h3>
             <span
               className={`font-semibold ${item?.nominal < 0 ? 'text-red-600' : 'text-green-600'}`}
@@ -249,7 +255,7 @@ const HistorySection = ({ id }) => {
           <p className="text-sm leading-snug text-gray-600 capitalize">
             {item?.reference_type === 'bonus' || item?.reference_type === 'top-up'
               ? `${item?.payment_type}`
-              : 'Sales Order'}
+              : ''}
           </p>
 
           {/* Date */}

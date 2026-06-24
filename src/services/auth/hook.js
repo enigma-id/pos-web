@@ -2,8 +2,13 @@ import { useDispatch } from 'react-redux';
 
 import { useLoginMutation, useUpdateMutation, useLazyGetUserQuery } from './action';
 import { login, logout, session } from './slice';
-import { clearCatalogCache, clearSalesCache } from '../../utils/cache';
-import { resetCart } from '../cart/slice';
+import {
+  clearCatalogCache,
+  clearSalesCache,
+  getSalesCacheValue,
+  setSalesCacheValue,
+} from '../../utils/cache';
+import { changeServiceCharge, resetCart } from '../cart/slice';
 import { $failure } from '../form/action';
 import { clearSelectedChannel } from '../sales/channel/slice';
 import { invalidateSession } from '../sales/session/slice';
@@ -18,8 +23,8 @@ const useAuth = () => {
   const signin = async data => {
     try {
       const res = await loginMutation(data).unwrap();
-      console.log(res);
       dispatch(login(res?.data));
+      getUser();
     } catch (error) {
       dispatch($failure(error));
     }
@@ -29,10 +34,16 @@ const useAuth = () => {
     try {
       const res = await triggerGetUser().unwrap();
       dispatch(session(res?.data));
-      console.log('getUser', res?.data);
+
+      const charge = res?.data?.sales_session?.outlet?.service_charges;
+      setSalesCacheValue('service_charge', charge);
+      dispatch(changeServiceCharge(charge));
     } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error('error:', error);
+      const cachedCharge = getSalesCacheValue('service_charge');
+      if (cachedCharge !== null && cachedCharge !== undefined) {
+        dispatch(changeServiceCharge(cachedCharge));
+      } else {
+        console.log('Error fetching:', error);
       }
     }
   };

@@ -33,8 +33,10 @@ function flattenAdditionals(additionals = []) {
 
 function extractUniqueCategories(items) {
   const map = new Map();
+  console.log('items', items);
 
   items.forEach(item => {
+    console.log('category discount', item);
     const cat = { id: item.category_id, name: item.category_name };
 
     const discountType =
@@ -67,6 +69,7 @@ function extractUniqueCategories(items) {
     }
   });
 
+  console.log('map discount', map.values());
   return Array.from(map.values());
 }
 
@@ -471,6 +474,7 @@ const cartSlice = createSlice({
     },
 
     setBillItems: (state, action) => {
+      // console.log("payload",)
       const items = action.payload;
 
       state.items.bill = items.map(item => convertApiOrderToCartItem(item));

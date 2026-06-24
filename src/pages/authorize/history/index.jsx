@@ -12,6 +12,7 @@ import {
 import { MoneysIcon, PrintIcon, SearchIcon, TrashIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useOrder from '../../../services/sales/order/hook';
+import useSession from '../../../services/sales/session/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
 
@@ -19,12 +20,13 @@ const HistoryScreen = () => {
   const Session = useSelector(state => state?.Auth?.session);
 
   const [detail, setDetail] = React.useState(null);
-  const [search, setSearch] = React.useState('');
+  // const [search, setSearch] = React.useState('');
   const [selectedIndex, setSelectedIndex] = React.useState(0);
-  const [currentPage, setCurrentPage] = React.useState(1);
-  const itemsPerPage = 25;
+  const [data, setData] = React.useState([]);
 
-  const { order, orderResult, show, showResult } = useOrder();
+  const { show, showResult } = useSession();
+  const { show: showOrder, showResult: showOrderResult } = useOrder();
+
   const { openModal, closeModal } = useModal();
 
   const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
@@ -41,7 +43,7 @@ const HistoryScreen = () => {
       <Refund
         id={id}
         onClose={() => {
-          order({ status: 'completed', search, page: currentPage, limit: itemsPerPage });
+          show(Session?.sales_session?.id)
           closeModal();
         }}
       />,
@@ -50,47 +52,37 @@ const HistoryScreen = () => {
   };
 
   React.useEffect(() => {
-    setCurrentPage(1);
-  }, [search]);
-
-  React.useEffect(() => {
-    const delayDebounceFn = setTimeout(
-      () => {
-        order({ status: 'completed', search, page: currentPage, limit: itemsPerPage });
-      },
-      search ? 1000 : 0
-    );
-    return () => clearTimeout(delayDebounceFn);
-  }, [search, currentPage]);
-
-  React.useEffect(() => {
-    if (orderResult?.isSuccess) {
-      setSelectedIndex(0);
-      setDetail(null);
+    if (Session?.sales_session) {
+      show(Session?.sales_session?.id)
     }
-  }, [orderResult]);
+  }, [Session]);
 
-  React.useEffect(() => {
-    if (orderResult?.isSuccess) {
-      show(orderResult?.data?.data?.[selectedIndex]?.id);
-    }
-  }, [orderResult, selectedIndex]);
 
   React.useEffect(() => {
     if (showResult?.isSuccess) {
-      setDetail(showResult?.data?.data);
+      setSelectedIndex(0);
+      setData(showResult?.data?.data?.orders);
     }
   }, [showResult]);
 
-  const data = orderResult?.data?.data || [];
-  const total = orderResult?.data?.total || 0;
-  const totalPages = Math.ceil(total / itemsPerPage);
+  React.useEffect(() => {
+    if (showResult?.isSuccess && data?.length > 0) {
+      showOrder(data[selectedIndex]?.id);
+    }
+  }, [showResult, data, selectedIndex]);
+
+  React.useEffect(() => {
+    if (showOrderResult?.isSuccess) {
+      setDetail(showOrderResult?.data?.data)
+    }
+  }, [showOrderResult]);
+
 
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
       <div className="border-base-200 flex w-100 flex-col overflow-y-auto border-r border-l bg-white">
-        <div className="h-16">
+        {/* <div className="h-16">
           <div className="border-base-200 relative flex h-full w-full items-center border-b border-l">
             <div className="absolute left-4">
               <SearchIcon />
@@ -101,10 +93,10 @@ const HistoryScreen = () => {
               placeholder="Search..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="h-full w-full pl-15 focus-visible:!outline-none"
+              className="h-full w-full pl-15 focus-visible:outline-none!"
             />
           </div>
-        </div>
+        </div> */}
 
         <div className="flex-1 overflow-y-auto">
           {data?.map((item, index) => (
@@ -136,29 +128,12 @@ const HistoryScreen = () => {
                   <div className="text-base-300 text-end text-sm">{item?.code}</div>
 
                   <div className="text-base-300 text-end text-xs">
-                    {dateFormat(item?.ordered_at)}
+                    {dateFormat(item?.created_at)}
                   </div>
                 </div>
               </div>
             </div>
           ))}
-        </div>
-
-        <div className="border-base-200 flex justify-end gap-4 border-t p-4">
-          <button
-            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-            disabled={currentPage === 1}
-            className="disabled:btn-disabled btn"
-          >
-            Prev
-          </button>
-          <button
-            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-            disabled={currentPage === totalPages || data?.length === 0}
-            className="disabled:btn-disabled btn"
-          >
-            Next
-          </button>
         </div>
       </div>
 

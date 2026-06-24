@@ -192,8 +192,6 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
             const createdAt = preview?.created_at || item?.createdAt;
             const status = statusConfig[item.status] || statusConfig.pending;
             const itemsList = preview?.items || [];
-            console.log("preview", preview)
-            console.log("itemsList", itemsList)
 
             // Specialized rendering for Session Start/End
             const isSession = apiType === 'start' || apiType === 'end';

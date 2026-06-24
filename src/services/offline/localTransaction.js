@@ -192,10 +192,10 @@ const buildOrderItem = (item, index, orderId) => {
     unit_taxed: unitBill,
     unit_tax: 0,
     unit_nett: unitNett,
-    discount: 0,
+    discount_percentage: 0,
     discount_value: discountValue,
     unit_bill: unitBill,
-    is_discount_percentage: 0,
+    is_discount_percentage: false,
     additionals: buildAdditionalsFromItem(item),
   };
 };
@@ -245,8 +245,7 @@ export const buildOfflineTransactionPayload = ({
     }
   );
 
-  const discountValue =
-    toNumber(cartState?.discount?.cart?.amount) || totalsFromItems.discount_value;
+  const discountValue = toNumber(cartState?.discount?.cart?.amount);
   const serviceChargeValue = toNumber(cartState?.meta?.service_charge_value);
   const subtotalTax = toNumber(cartState?.meta?.subtotal_tax) || totalsFromItems.subtotal_tax;
   const subtotalTaxed = toNumber(cartState?.meta?.subtotal_taxed) || totalsFromItems.subtotal_taxed;
@@ -261,8 +260,22 @@ export const buildOfflineTransactionPayload = ({
     totalCharges;
   const session = authSession?.user;
 
-  console.log('authSession', session);
-  console.log('selectedChannel', selectedChannel);
+  const category_discounts = cartState?.discount?.category?.map(d => ({
+    category_id: d?.id,
+    is_discount_percentage: d?.discount_type === 'nominal' ? false : true,
+    discount_percentage: d?.discount_type === 'nominal' ? 0 : d?.discount_value,
+    discount_value: d?.discount_type === 'nominal' ? d?.discount_value : 0,
+    id: '',
+    order_id: '',
+  }));
+
+  // category_id: 'f391ae77-c393-4170-bde0-1707fbd79e91';
+  // discount_percentage: 0;
+  // discount_value: 5000;
+  // id: '9930ee69-1aa2-4498-b856-5c168f3ef8d0';
+  // is_discount_percentage: false;
+  // order_id: 'c6a5cf80-5b4d-41b8-8b95-9c2d66742226';
+  console.log('cartState', cartState);
 
   return {
     id: orderId,
@@ -273,16 +286,22 @@ export const buildOfflineTransactionPayload = ({
     payment_ref: paymentRef || '',
     payment_method: paymentMethod || { id: 0, name: 'Cash', is_nfc: 0 },
     membership: cartState?.membership || null,
-    ticket:
-      queueMeta?.requestBody?.ticket || cartState?.meta?.ticket || cartState?.bill?.ticket || '',
+    category_discounts,
+    bill_name:
+      queueMeta?.requestBody?.bill_name ||
+      cartState?.meta?.bill_name ||
+      cartState?.bill?.bill_name ||
+      '',
     status: 'completed',
     subtotal_tax: subtotalTax,
     subtotal_taxed: subtotalTaxed,
     subtotal_gross: subtotalGross,
     subtotal_nett: subtotalNett,
     total_bill: totalBill,
-    discount: discountValue > 0 ? 1 : 0,
-    discount_value: discountValue,
+    discount_percentage: cartState?.discount?.cart?.type === 'percentage' ? discountValue : 0,
+    discount_value: cartState?.discount?.cart?.type === 'nominal' ? discountValue : 0,
+    is_discount_percentage: cartState?.discount?.cart?.type === 'percentage' ? true : false,
+    is_category_discount: category_discounts?.length > 0 ? true : false,
     service_charge: toNumber(cartState?.meta?.service_charge_percentage),
     service_charge_value: serviceChargeValue,
     total_charges: totalCharges,
@@ -291,7 +310,6 @@ export const buildOfflineTransactionPayload = ({
     note: note || '',
     ordered_at: now,
     paid_at: now,
-    is_discount_percentage: cartState?.discount?.cart?.type === 'percentage' ? 1 : 0,
     items: normalizedItems,
     offline_queued: true,
     offline_meta: {

@@ -30,7 +30,7 @@ export const cartApi = createApi({
       }),
     }),
     update: builder.mutation({
-      query: ({ id, ...payload }) => ({
+      query: ({ id, payload }) => ({
         url: `/sales/order/${id}`,
         method: 'PUT',
         body: payload,
@@ -48,8 +48,8 @@ export const cartApi = createApi({
 
 export const {
   useCheckoutMutation,
+  useLazyGetBillQuery,
   useCloseBillMutation,
   useUpdateMutation,
   useLazyGetMethodQuery,
-  useLazyGetBillQuery,
 } = cartApi;

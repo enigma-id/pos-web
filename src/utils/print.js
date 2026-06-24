@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -96,19 +95,19 @@ export function usePrintWindow({
       }
       rootRef.current.render(content);
 
-      // Auto print setelah render + delay kecil agar DOM siap
-      setTimeout(() => {
-        printWindow.current?.focus();
-        printWindow.current?.print();
+      // // Auto print setelah render + delay kecil agar DOM siap
+      // setTimeout(() => {
+      //   printWindow.current?.focus();
+      //   printWindow.current?.print();
 
-        // Optional: auto-close setelah print
-        if (autoClose) {
-          setTimeout(() => {
-            printWindow.current?.close();
-            // printWindow.current.onafterprint = () => printWindow.current?.close();
-          }, 300);
-        }
-      }, 500);
+      //   // Optional: auto-close setelah print
+      //   if (autoClose) {
+      //     setTimeout(() => {
+      //       printWindow.current?.close();
+      //       // printWindow.current.onafterprint = () => printWindow.current?.close();
+      //     }, 300);
+      //   }
+      // }, 500);
     }
   }, [content]);
 

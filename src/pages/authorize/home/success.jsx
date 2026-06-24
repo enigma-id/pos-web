@@ -34,6 +34,8 @@ const SuccessModal = ({ data, backToMenu }) => {
   //     }
   //   }, [showResult]);
 
+  console.log("checkout data :", data)
+
   return (
     <>
       <Modal.Header
@@ -69,7 +71,8 @@ const SuccessModal = ({ data, backToMenu }) => {
                   <div className="text-xl font-semibold">{currencyFormat(data?.total_payment)}</div>
                   <div className="text-base-300 text-base font-thin capitalize">total paid</div>
                 </div>
-                {data?.payment_method?.id === 0 && (data?.total_payment - data?.total_charges > 0) && (
+
+                {data?.payment_method?.provider === 'cash' && (
                   <div className="border-base-200 flex flex-1 flex-col place-content-center place-items-center border-l">
                     <div className="text-xl font-semibold text-red-500">
                       {currencyFormat(data?.total_payment - data?.total_charges)}

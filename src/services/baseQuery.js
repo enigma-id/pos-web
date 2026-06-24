@@ -1,12 +1,9 @@
 import { fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
-import {
-  addToQueue,
-  checkAndSetIdempotency,
-  generateIdempotencyKey,
-  getPendingCount,
-} from './offline/queue';
+import { changeServiceCharge, resetCart } from './cart/slice';
+import { addToQueue, getPendingCount } from './offline/queue';
 import { setPendingCount, setQueueItems, setWarning } from './offline/slice';
+import { getSalesCacheValue } from '../utils/cache';
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: import.meta.env.VITE_API_URL || 'https://api.envio.co.id/dev/pos',
@@ -79,24 +76,8 @@ const buildTransactionPreview = ({ args, queued }) => {
 };
 
 const queueOfflineMutation = async (args, api) => {
-  console.log('args', args);
-
   const url = String(args?.url || '');
   const method = String(args?.method || 'GET').toUpperCase();
-  const idempotencyKey =
-    args?.idempotencyKey || args?.headers?.['X-Idempotency-Key'] || generateIdempotencyKey();
-
-  const check = await checkAndSetIdempotency(idempotencyKey);
-  if (check?.exists) {
-    return {
-      data: {
-        status: 'success',
-        offline_queued: true,
-        duplicate: true,
-        message: 'Request already queued.',
-      },
-    };
-  }
 
   const token = api?.getState?.()?.Auth?.token || null;
 
@@ -113,7 +94,6 @@ const queueOfflineMutation = async (args, api) => {
     params: args?.params,
     headers: {
       ...toObjectHeaders(args?.headers),
-      'X-Idempotency-Key': idempotencyKey,
     },
     token,
     type: 'mutation',
@@ -135,8 +115,6 @@ const queueOfflineMutation = async (args, api) => {
   const offlineState = api?.getState?.()?.Offline;
   const existingItems = Array.isArray(offlineState?.items) ? offlineState.items : [];
   api.dispatch(setQueueItems([...existingItems.filter(item => item?.id !== queued?.id), queued]));
-
-  console.log('queued', queued);
   if (pendingCount >= 100) {
     api.dispatch(setWarning('Many pending transactions. Contact support.'));
   } else {
@@ -157,6 +135,10 @@ const queueOfflineMutation = async (args, api) => {
       },
     };
   }
+
+  const cachedCharge = getSalesCacheValue('service_charge');
+  api.dispatch(resetCart());
+  api.dispatch(changeServiceCharge(cachedCharge));
 
   return {
     data: {

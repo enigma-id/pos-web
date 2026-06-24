@@ -15,13 +15,15 @@ const Layout = ({ children }) => {
   const dispatch = useDispatch();
   const Offline = useSelector(state => state?.Offline);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [showBanner, setShowBanner] = useState(true);
 
   const handleOpenBill = queueItem => {
     dispatch(loadOfflineBill(queueItem));
   };
 
   const banner =
-    !Offline?.isOnline && !Offline?.isSyncing
+    showBanner &&
+    (!Offline?.isOnline && !Offline?.isSyncing
       ? {
           variant: 'offline',
           message: 'Offline mode. Transactions will be queued.',
@@ -42,7 +44,7 @@ const Layout = ({ children }) => {
                 variant: 'warning',
                 message: Offline?.warning,
               }
-            : null;
+            : null);
 
   return (
     <div className="flex h-screen w-screen">
@@ -52,7 +54,7 @@ const Layout = ({ children }) => {
           message={banner.message}
           pendingCount={banner.pendingCount}
           onRetry={() => syncNow()}
-          onDismiss={null}
+          onDismiss={() => setShowBanner(false)}
         />
       )}
       {children}
@@ -115,7 +117,7 @@ const Navbar = () => {
           <small>Member</small>
         </div>
 
-        {User?.is_supervisor === 1 && (
+        {/* {User?.is_supervisor === true && (
           <div
             className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'shifts')}`}
             onClick={() => navigate('/shifts')}
@@ -123,7 +125,7 @@ const Navbar = () => {
             <ListIcon />
             <small>Shifts</small>
           </div>
-        )}
+        )} */}
 
         <div
           className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'history')}`}

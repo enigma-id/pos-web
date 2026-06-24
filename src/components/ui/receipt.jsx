@@ -3,32 +3,34 @@ import React from 'react';
 import { currencyFormat, dateFormat } from '../../utils/common';
 
 const Receipt = ({ data }) => {
-  console.log("receipt", data)
   const [discountMap, setDiscountMap] = React.useState([]);
 
 
-  const groupedCategories = items => {
+  const groupedCategories = (items, category_discounts) => {
+    if (!category_discounts || category_discounts.length === 0) {
+      setDiscountMap([]);
+      return;
+    }
+
     const group = {};
 
-    items.forEach(item => {
-      const category = item?.catalog?.category;
-      const discount = item?.discount_value * item?.quantity || 0;
+    category_discounts.forEach(discount => {
+      const categoryId = discount.category_id;
 
-      if (!category) return;
+      // The category name is outside the catalog, so it's item.category_name
+      const itemWithCategory = items.find(item => item?.catalog?.category_id === categoryId);
+      const categoryName = itemWithCategory?.category_name || 'Unknown Category';
 
-      const id = category.id;
-      const name = category.name;
-
-      if (!group[id]) {
-        group[id] = {
-          id,
-          name,
+      if (!group[categoryId]) {
+        group[categoryId] = {
+          id: categoryId,
+          name: categoryName,
           subtotal: 0,
         };
       }
-
-      group[id].subtotal += discount;
+      group[categoryId].subtotal += itemWithCategory?.discount_value;
     });
+
 
     const result = Object.values(group).filter(item => item.subtotal > 0);
     setDiscountMap(result);
@@ -36,7 +38,8 @@ const Receipt = ({ data }) => {
 
   React.useEffect(() => {
     if (!data) return;
-    groupedCategories(data?.items);
+    groupedCategories(data?.items, data?.category_discounts);
+
   }, [data]);
 
   if (!data) return;
@@ -57,9 +60,9 @@ const Receipt = ({ data }) => {
       <div style={{ paddingBottom: 5, marginBottom: 5 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p style={{ marginBlock: 2, fontSize: 11 }}>
-            {dateFormat(data?.ordered_at, 'DD-MM-YYYY')}
+            {dateFormat(data?.paid_at, 'DD-MM-YYYY')}
           </p>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>{dateFormat(data?.ordered_at, 'HH:mm')}</p>
+          <p style={{ marginBlock: 2, fontSize: 11 }}>{dateFormat(data?.paid_at, 'HH:mm')}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p style={{ marginBlock: 2, fontSize: 11 }}>Transaction</p>
@@ -67,17 +70,17 @@ const Receipt = ({ data }) => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p style={{ marginBlock: 2, fontSize: 11 }}>Sales Channel</p>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.channel?.name}</p>
+          <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.sales_channel?.name}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p style={{ marginBlock: 2, fontSize: 11 }}>Cashier</p>
           <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.session?.cashier?.name || data?.session?.name}</p>
         </div>
 
-        {data?.note && (
+        {data?.bill_name && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <p style={{ marginBlock: 2, fontSize: 11 }}>Bill Name</p>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.note}</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.bill_name}</p>
           </div>
         )}
 
@@ -88,12 +91,12 @@ const Receipt = ({ data }) => {
           </div>
         )}
 
-        {data?.ticket && (
+        {/* {data?.ticket && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <p style={{ marginBlock: 2, fontSize: 11 }}>Bill Name</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.ticket}</p>
           </div>
-        )}
+        )} */}
       </div>
 
       <div

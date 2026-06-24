@@ -22,7 +22,7 @@ import useModal from '../../../components/ui/modal/hook';
 import useCart from '../../../services/cart/hook';
 import useMembership from '../../../services/membership/hook';
 import { buildOfflineTransactionPayload, updateQueueItem, setWarning } from '../../../services/offline';
-import useOutlet from '../../../services/outlet/hooks';
+// import useOutlet from '../../../services/outlet/hooks';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
@@ -53,7 +53,7 @@ const CheckoutScreen = () => {
   } = useCart();
   const { show, showResult } = useOrder();
 
-  const { getServiceCharge } = useOutlet();
+  // const { getServiceCharge } = useOutlet();
 
   const { checkSaldo, checkResult } = useMembership();
   const { open: openPrint } = usePrintWindow({ title: 'Print Preview', autoClose: true });
@@ -143,35 +143,40 @@ const CheckoutScreen = () => {
       }
 
       if (item?.additionals_flat?.length > 0) {
-        base.additionals = item?.additionals_flat;
+       base.addons = item?.additionals_flat?.map((add) => ({
+          addon_group_id: add?.addon_id,
+          addon_item_id: add?.catalog_id,
+          ...(add?.quantity ? { quantity: add.quantity } : {}),
+        }));
       }
 
-      if (Array.isArray(item?.additionals) && item.additionals.length > 0) {
-        base.additionals_catalog_map = item.additionals
-          .flatMap((group, groupIndex) => {
-            const childs = Array.isArray(group?.childs) ? group.childs : [];
-            return childs
-              .filter(child =>
-                group?.type === 'quantity' ? (child?.quantity || 0) > 0 : !!child?.selected
-              )
-              .map((child, childIndex) => ({
-                index: `${groupIndex}-${childIndex}`,
-                addon_id: group?.id ?? null,
-                catalog_id: child?.catalog_id ?? child?.id ?? null,
-                addon: {
-                  id: group?.id ?? null,
-                  name: group?.name || '',
-                  type: group?.type || '',
-                },
-                catalog: {
-                  id: child?.catalog_id ?? child?.id ?? null,
-                  name: child?.name || '',
-                  unit_price: Number(child?.unit_price) || 0,
-                },
-              }));
-          })
-          .filter(entry => entry.catalog_id != null);
-      }
+
+      // if (Array.isArray(item?.additionals) && item.additionals.length > 0) {
+      //   base.additionals_catalog_map = item.additionals
+      //     .flatMap((group, groupIndex) => {
+      //       const childs = Array.isArray(group?.childs) ? group.childs : [];
+      //       return childs
+      //         .filter(child =>
+      //           group?.type === 'quantity' ? (child?.quantity || 0) > 0 : !!child?.selected
+      //         )
+      //         .map((child, childIndex) => ({
+      //           index: `${groupIndex}-${childIndex}`,
+      //           addon_id: group?.id ?? null,
+      //           catalog_id: child?.catalog_id ?? child?.id ?? null,
+      //           addon: {
+      //             id: group?.id ?? null,
+      //             name: group?.name || '',
+      //             type: group?.type || '',
+      //           },
+      //           catalog: {
+      //             id: child?.catalog_id ?? child?.id ?? null,
+      //             name: child?.name || '',
+      //             unit_price: Number(child?.unit_price) || 0,
+      //           },
+      //         }));
+      //     })
+      //     .filter(entry => entry.catalog_id != null);
+      // }
 
       if (item?.is_custom === 1) {
         base.description = item?.name;
@@ -251,6 +256,7 @@ const CheckoutScreen = () => {
   };
 
   const handleSaveBill = async ticket => {
+
     const allItems = [...(CartState?.items?.list || []), ...(CartState?.items?.bill || [])];
 
     const items = allItems?.map(item => {
@@ -264,7 +270,11 @@ const CheckoutScreen = () => {
       }
 
       if (item?.additionals_flat?.length > 0) {
-        base.additionals = item?.additionals_flat;
+        base.addons = item?.additionals_flat?.map((add) => ({
+          addon_group_id: add?.addon_id,
+          addon_item_id: add?.catalog_id,
+          ...(add?.quantity ? { quantity: add.quantity } : {}),
+        }));
       }
 
       if (item?.is_custom === 1) {
@@ -314,8 +324,7 @@ const CheckoutScreen = () => {
       payload.category_discounts = discount_categories;
     }
 
-    payload.id = CartState?.bill?.id;
-    payload.ticket = ticket;
+    payload.bill_name = ticket;
 
     checkoutSnapshotRef.current = {
       cartState: JSON.parse(JSON.stringify(CartState || {})),
@@ -390,7 +399,7 @@ const CheckoutScreen = () => {
               <div className="text-xl font-semibold">{currencyFormat(data?.total_payment)}</div>
               <div className="text-base-300 text-base font-thin capitalize">total paid</div>
             </div>
-            {selectedMethod?.id === 0 && data?.total_payment - data?.total_charges > 0 && (
+            {data?.payment_method?.provider === "cash" && data?.total_payment - data?.total_charges > 0 && (
               <div className="border-base-200 flex flex-1 flex-col place-content-center place-items-center border-l">
                 <div className="text-xl font-semibold">
                   {currencyFormat(data?.total_payment - data?.total_charges)}
@@ -518,7 +527,7 @@ const CheckoutScreen = () => {
     };
 
     getMethod();
-    getServiceCharge();
+    // getServiceCharge();
   }, []);
 
   React.useEffect(() => {
@@ -890,7 +899,7 @@ const CheckoutScreen = () => {
               onClick={() => setIsOpen(prev => !prev)}
             >
               <div className="flex place-items-center">
-                {selectedMethod?.id == 0 ? (
+                {selectedMethod?.provider === 'cash' ? (
                   <MoneyIcon className="h-8" />
                 ) : (
                   <CardIcon className="h-8" />
@@ -928,7 +937,7 @@ const CheckoutScreen = () => {
           <div className="flex-1">
             {selectedMethod?.provider === "cash" ? (
               <Keypad
-                payment={selectedMethod?.id}
+                payment={selectedMethod?.provider}
                 onChange={v => setPay(v)}
                 subtotal={CartState?.meta?.grand_total}
               />

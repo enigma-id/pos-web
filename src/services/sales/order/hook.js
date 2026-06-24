@@ -1,25 +1,14 @@
 import { useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 
-import { useCancelMutation, useCopyMutation, useLazyOrderQuery, useLazyShowQuery } from './action';
+import { useCancelMutation, useUpdateMutation, useLazyShowQuery } from './action';
 import { $failure } from '../../form/action';
 
 const useOrder = id => {
   const dispatch = useDispatch();
-  const [triggerOrder, orderResult] = useLazyOrderQuery();
   const [triggerShow, showResult] = useLazyShowQuery();
   const [cancelMutation, cancelResult] = useCancelMutation();
-  const [copyMutation, copyResult] = useCopyMutation();
-
-  const order = async (params = {}) => {
-    try {
-      await triggerOrder(params).unwrap();
-    } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error('error:', error);
-      }
-    }
-  };
+  const [updateMutation, updateResult] = useUpdateMutation();
 
   const show = async id => {
     try {
@@ -41,9 +30,9 @@ const useOrder = id => {
     }
   };
 
-  const copy = async ({ id, payload }) => {
+  const update = async ({ id, payload }) => {
     try {
-      const result = await copyMutation({ id, payload }).unwrap();
+      const result = await updateMutation({ id, payload }).unwrap();
       return result;
     } catch (error) {
       dispatch($failure(error));
@@ -59,14 +48,12 @@ const useOrder = id => {
   }, [id]);
 
   return {
-    order,
-    orderResult,
     show,
     showResult,
     cancel,
     cancelResult,
-    copy,
-    copyResult,
+    update,
+    updateResult,
   };
 };
 
