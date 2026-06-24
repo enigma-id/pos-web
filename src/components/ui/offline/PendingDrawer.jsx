@@ -3,23 +3,37 @@ import { useSelector } from 'react-redux';
 
 import { currencyFormat, dateFormat } from '../../../utils/common';
 
-const getApiCategory = url => {
+const getApiCategory = (url, item) => {
   if (!url) return 'unknown';
   const path = String(url).toLowerCase();
-  if (path.includes('/session/')) return 'shifts';
-  if (path.includes('direct-pay') || path.includes('close-bill')) return 'sales';
-  if (path.includes('open-bill') || (path.includes('/sales/order/') && !path.includes('cancel')))
-    return 'bills';
+  if (path.includes('/sales/session')) return 'shifts';
+  if (path.includes('/sales/order')) {
+    const status = item?.body?.status;
+    if (path.includes('/checkout') || status === 'completed') return 'order'; // Checkout
+    if (status === 'pending') return 'bills'; // Save bill
+    return 'order'; // Default order for /sales/order
+  }
   return 'other';
 };
 
-const getApiType = url => {
+const getApiType = (url, item) => {
   if (!url) return 'unknown';
-  const parts = String(url).split('/').filter(Boolean);
+  const path = String(url).toLowerCase();
+  const parts = path.split('/').filter(Boolean);
   const last = parts[parts.length - 1] || 'unknown';
-  if (last === 'direct-pay') return 'payment';
-  if (last === 'open-bill') return 'save bill';
-  if (last === 'close-bill') return 'close bill';
+
+  if (path.includes('/sales/session')) {
+    return last === 'close' ? 'close session' : 'start session';
+  }
+
+  if (path.includes('/sales/order')) {
+    const status = item?.body?.status;
+    if (status === 'pending') return 'save bill';
+    if (path.includes('/checkout') || status === 'completed') return 'checkout';
+    return 'order'; // Default for other /sales/order operations
+  }
+
+
   return last;
 };
 
@@ -47,14 +61,14 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
       }
       return acc;
     },
-    { all: items, sales: [], bills: [], shifts: [], other: [], failedCount: { all: 0 } }
+    { all: items, order: [], bills: [], shifts: [], other: [], failedCount: { all: 0 } }
   );
 
   const filteredItems = categorized[activeTab] || categorized.all;
 
   const tabs = [
     { id: 'all', label: 'All', icon: '📦' },
-    { id: 'sales', label: 'Sales', icon: '🛒' },
+    { id: 'order', label: 'Order', icon: '🛒' },
     { id: 'bills', label: 'Bills', icon: '📋' },
     { id: 'shifts', label: 'Shifts', icon: '💼' },
   ];
@@ -178,9 +192,12 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
             const createdAt = preview?.created_at || item?.createdAt;
             const status = statusConfig[item.status] || statusConfig.pending;
             const itemsList = preview?.items || [];
+            console.log("preview", preview)
+            console.log("itemsList", itemsList)
 
             // Specialized rendering for Session Start/End
             const isSession = apiType === 'start' || apiType === 'end';
+
             if (isSession) {
               const sessionLabel = apiType === 'start' ? 'Open Session' : 'Close Session';
               const sessionIcon = apiType === 'start' ? '🚪' : '🏁';
@@ -289,10 +306,10 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
                   <div className="collapse collapse-arrow rounded-none border-t border-base-200">
                     <input type="checkbox" className="min-h-0" />
                     <div className="collapse-title min-h-0 py-2 px-2.5 flex items-center justify-between group">
-                      <span className="text-[10px] font-bold text-base-content/70">
+                      <span className="text-[12px] font-bold text-base-content/70">
                         {itemCount} item{itemCount !== 1 ? 's' : ''}
                       </span>
-                      <span className="text-xs font-extrabold text-base-content mr-4">
+                      <span className="text-[12px] font-extrabold text-base-content mr-6">
                         {currencyFormat(displayTotal)}
                       </span>
                     </div>
@@ -302,46 +319,33 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
                           <div key={idx} className="flex flex-col gap-0.5">
                             <div className="flex justify-between items-start gap-2">
                               <div className="flex gap-1.5 items-start flex-1 min-w-0">
-                                <span className="bg-base-content/80 rounded px-1.5 py-0.5 text-[9px] text-white font-bold leading-none mt-0.5">
+                                <span className="bg-base-content/80 rounded px-1.5 py-0.5 text-[13px] text-white font-bold leading-none mt-0.5">
                                   {product.quantity}
                                 </span>
-                                <span className="text-[10px] font-bold uppercase truncate leading-tight">
-                                  {product.name || product.description || 'Unknown Item'}
+                                <span className="text-[13px] font-bold uppercase truncate leading-tight">
+                                  {product.catalog?.name || product.description || 'Unknown Item'}
                                 </span>
                               </div>
-                              <span className="text-[10px] text-base-content/60 font-medium whitespace-nowrap">
-                                {currencyFormat(Number(product.unit_price || 0) * Number(product.quantity || 0))}
+                              <span className="text-[13px] text-base-content/60 font-medium whitespace-nowrap">
+                                {currencyFormat(Number(product.unit_nett || 0) * Number(product.quantity || 0))}
                               </span>
                             </div>
 
                             {/* Additionals for queued items */}
-                            {(product.additionals || product.additionals_flat)?.length > 0 && (
+                            {product.additionals?.length > 0 && (
                               <div className="ml-5 border-l border-base-content/10 pl-2 flex flex-col gap-0.5">
-                                {(product.additionals || product.additionals_flat).map((add, aIdx) => {
-                                  // Handle both raw additionals and flattened additionals
-                                  const name = add.name || '';
-                                  const childs = add.childs || [];
-
-                                  if (childs.length > 0) {
-                                    return childs.map((c, cIdx) => (
-                                      <div key={`${aIdx}-${cIdx}`} className="flex justify-between text-[9px] text-base-content/40 italic">
-                                        <span>+ {c.name}</span>
-                                        {c.unit_price > 0 && (
-                                          <span>{currencyFormat(Number(c.unit_price) * Number(c.quantity || product.quantity))}</span>
+                                {product.additionals?.map((add, aIdx) => {
+                                 const suffix = add?.addon?.type === 'quantity' || add?.addon?.type === 'checkbox' ? `(${product?.quantity} x ${add?.quantity}) x ${currencyFormat(add?.unit_nett || 0)}` : '';
+                                return (
+                                    <div key={aIdx} className="flex justify-between text-[11px] text-base-content/40 italic">
+                                    <span>+ {add.catalog?.name} {suffix}</span>
+                                        {add.unit_nett > 0 && (
+                                      <span>
+                                        {currencyFormat(product?.quantity * add?.quantity * add?.unit_nett || 0)}
+                                       </span>
                                         )}
-                                      </div>
-                                    ));
-                                  }
-
-                                  return (
-                                    <div key={aIdx} className="flex justify-between text-[9px] text-base-content/40 italic">
-                                      <span>+ {add.name || 'Extra'}</span>
-                                      {add.unit_price > 0 && (
-                                        <span>{currencyFormat(Number(add.unit_price) * Number(add.quantity || 1))}</span>
-                                      )}
                                     </div>
-                                  );
-                                })}
+                                  )})}
                               </div>
                             )}
                           </div>
@@ -367,12 +371,11 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
 
                 {/* Action buttons */}
                 <div className="p-2.5 pt-0 flex gap-1">
-                  {/* Open Bill button - only for open-bill type and pending status */}
-                  {apiType === 'open-bill' && item.status === 'pending' && (
+                  {/* Open Bill button - only for save-bill type and pending status */}
+                  {apiType === 'save bill' && item.status === 'pending' && (
                     <button
                       className="btn btn-primary btn-xs flex-1 gap-1"
                       onClick={() => {
-                        console.log(item)
                         onOpenBill?.(item);
                         onClose();
                       }}

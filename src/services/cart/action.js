@@ -25,7 +25,7 @@ export const cartApi = createApi({
     closeBill: builder.mutation({
       query: ({ id, payload }) => ({
         url: `/sales/order/${id}/checkout`,
-        method: 'PUT',
+        method: 'POST',
         body: payload,
       }),
     }),

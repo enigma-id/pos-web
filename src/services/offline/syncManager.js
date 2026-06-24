@@ -133,10 +133,10 @@ const processItem = async item => {
 
 const sortPendingQueue = items => {
   return [...items].sort((a, b) => {
-    const isStartA = String(a.url).includes('/sales/session/start');
-    const isStartB = String(b.url).includes('/sales/session/start');
-    const isEndA = String(a.url).includes('/sales/session/end');
-    const isEndB = String(b.url).includes('/sales/session/end');
+    const isStartA = String(a.url).includes('/sales/session') && !String(a.url).includes('/sales/session/close');
+    const isStartB = String(b.url).includes('/sales/session') && !String(b.url).includes('/sales/session/close');
+    const isEndA = String(a.url).includes('/sales/session/close');
+    const isEndB = String(b.url).includes('/sales/session/close');
 
     if (isStartA && !isStartB) return -1;
     if (!isStartA && isStartB) return 1;
@@ -169,7 +169,7 @@ export const syncNow = async () => {
 
       const result = await processItem(current);
 
-      const isStartSession = String(current.url).includes('/sales/session/start');
+      const isStartSession = String(current.url).includes('/sales/session') && !String(current.url).includes('/sales/session/close');
       if (isStartSession && !result?.ok) {
         if (storeRef) {
           storeRef.dispatch(setOfflineError('Start session failed. Sync halted.'));

@@ -61,7 +61,7 @@ export const addToQueue = async request => {
   const now = getNow();
 
   // If it's an open-bill request, check if a bill with the same ticket already exists in the queue
-  const isSaveBill = String(request?.url).endsWith('open-bill');
+  const isSaveBill = String(request?.url).toLowerCase().includes('/sales/order') && request?.body?.status === 'pending';
   const ticketName = request?.body?.ticket;
 
   if (isSaveBill && ticketName) {

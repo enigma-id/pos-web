@@ -100,8 +100,8 @@ const queueOfflineMutation = async (args, api) => {
 
   const token = api?.getState?.()?.Auth?.token || null;
 
-  // Special handling for Session Start/End to provide immediate UI feedback
-  const isSessionStart = url.includes('/sales/session');
+  // Special handling for Session Start to provide immediate UI feedback
+  const isSessionStart = url.includes('/sales/session') && !url.includes('/sales/session/close');
   // const isSessionEnd = url.includes('/sales/session/close');
 
   const previewData = buildTransactionPreview({ args, queued: { id: null } });

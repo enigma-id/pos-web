@@ -31,12 +31,12 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
       setQuantity(itemQty);
       setInitialQuantity(itemQty);
 
-      const additions = (detail?.additionals || []).map(add => {
-        const cartAddon = existingItem?.additionals?.find(a => a.id === add.id);
+      const additions = (detail?.addons || []).map(add => {
+        const cartAddon = existingItem?.addons?.find(a => a.id === add.id);
 
         return {
           ...add,
-          childs: (add?.childs || []).map(child => {
+          childs: (add?.items || []).map(child => {
             const cartChild = cartAddon?.childs?.find(c => c.id === child.id);
             return {
               ...child,
@@ -48,18 +48,23 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
       });
 
       setAdditionals(additions);
+
+      console.log("bbbb", additions)
+
     } else {
       setQuantity(0);
       setInitialQuantity(0);
-      const clearedAdditionals = (detail?.additionals || []).map(add => ({
+      const clearedAdditionals = (detail?.addons || []).map(add => ({
         ...add,
-        childs: (add?.childs || []).map(child => ({
+        childs: (add?.items || []).map(child => ({
           ...child,
           quantity: 0,
           selected: false,
         })),
       }));
       setAdditionals(clearedAdditionals);
+
+      console.log("aaaa", clearedAdditionals)
     }
   }, [catalogDetail, catalog, mode, type]);
 
@@ -73,7 +78,6 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
       subtotal: calculateSubtotal(),
     };
 
-    console.log(formattedItem)
 
     if (mode === 'edit') {
       change(editKey, formattedItem, type);
@@ -152,13 +156,13 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
     <Modal.Body full>
       <div className="bg-base-100 flex min-h-1/3 min-w-fit flex-1 flex-col overflow-y-auto p-6 shadow-sm">
         <div className="border-base-200 mb-3 flex justify-between border-b border-dashed pb-3">
-          <h2 className="card-title !text-xl">{catalogData?.name}</h2>
+          <h2 className="card-title text-xl!">{catalogData?.name}</h2>
           <p className="text-primary text-end text-xl font-semibold">
             {currencyFormat(catalogData?.unit_price)}
           </p>
         </div>
 
-        {catalogDetail?.is_custom === 1 && (
+        {catalogDetail?.is_custom === true && (
           <>
             <div className="mb-3">
               <Input

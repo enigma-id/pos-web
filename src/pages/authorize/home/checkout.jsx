@@ -122,7 +122,7 @@ const CheckoutScreen = () => {
 
   const handlePay = async (card) => {
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-    const isCashPayment = selectedMethod?.id === 0;
+    const isCashPayment = selectedMethod?.provider === "cash";
     const cashTotalPayment = Number(pay) || 0;
 
     if (isOffline && isCashPayment && cashTotalPayment <= 0) {
@@ -198,7 +198,7 @@ const CheckoutScreen = () => {
       payment_method_id: selectedMethod?.id,
       payment_ref: paymentRef,
       total_payment:
-        selectedMethod?.id === 0 ? Number(pay) || 0 : CartState?.meta?.grand_total || 0,
+        selectedMethod?.provider === "cash" ? Number(pay) || 0 : CartState?.meta?.grand_total || 0,
       items,
     };
 
@@ -234,7 +234,7 @@ const CheckoutScreen = () => {
       cartState: JSON.parse(JSON.stringify(CartState || {})),
       selectedChannel: Channel?.selectedChannel ? { ...Channel.selectedChannel } : null,
       paymentMethod: selectedMethod ? { ...selectedMethod } : null,
-      paymentRef: selectedMethod?.id === 0 ? '' : paymentRef,
+      paymentRef: selectedMethod?.provider === "cash" ? '' : paymentRef,
       note,
       requestBody: payload,
     };
@@ -321,7 +321,7 @@ const CheckoutScreen = () => {
       cartState: JSON.parse(JSON.stringify(CartState || {})),
       selectedChannel: Channel?.selectedChannel ? { ...Channel.selectedChannel } : null,
       paymentMethod: selectedMethod ? { ...selectedMethod } : null,
-      paymentRef: selectedMethod?.id === 0 ? '' : paymentRef,
+      paymentRef: selectedMethod?.provider === "cash" ? '' : paymentRef,
       note,
       requestBody: payload,
       authSession: session?.user,
