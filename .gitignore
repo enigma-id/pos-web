@@ -8,6 +8,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+dev-dist
 dist
 dist-ssr
 *.local
@@ -23,6 +24,8 @@ dist-ssr
 *.sln
 *.sw?
 # Env files
-.env
+!.env
 !.env.production
 !.env.sandbox
+.vercel
+.env*
