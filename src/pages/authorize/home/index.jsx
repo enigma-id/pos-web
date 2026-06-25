@@ -191,7 +191,7 @@ const CatalogScreen = () => {
                         {currencyFormat(
                           cat?.unit_price,
                           undefined,
-                          cat?.is_custom === 1 ? '{custom price}' : 'Free'
+                          cat?.is_custom ? '{custom price}' : 'Free'
                         )}
                       </div>
                     </div>
@@ -209,7 +209,7 @@ const CatalogScreen = () => {
               <RefreshIcon />
             </div>
 
-            {User?.is_supervisor === true && (
+            {User?.role === "manager" && (
               <div className="btn btn-circle btn-xl btn-primary" onClick={openDrawer}>
                 <PlusIcon />
               </div>

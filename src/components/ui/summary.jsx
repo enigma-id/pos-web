@@ -5,6 +5,8 @@ import { currencyFormat, dateFormat } from '../../utils/common';
 const Summary = ({ data }) => {
   if (!data) return;
 
+  console.log(data)
+
   const formatFinishedAt = dateString => {
     const date = new Date(dateString);
     const year = date.getFullYear();
@@ -101,6 +103,7 @@ const Summary = ({ data }) => {
               {currencyFormat(data?.cash_started, false)}
             </p>
           </div>
+
           <div
             style={{
               display: 'flex',
@@ -123,7 +126,33 @@ const Summary = ({ data }) => {
             }}
           >
             <p style={{ marginBlock: 2, fontSize: 11 }}>Expected Cash</p>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(data?.cash_due, false)}</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(data?.summary?.cash?.expected_cash, false)}</p>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 5,
+            }}
+          >
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Topup Cash</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>
+              {currencyFormat(data?.summary?.cash?.topup_cash, false)}
+            </p>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 5,
+            }}
+          >
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Outstanding Bill</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>
+              {currencyFormat(data?.summary?.sales?.outstanding_bill, false)}
+            </p>
           </div>
           <div
             style={{
@@ -135,7 +164,7 @@ const Summary = ({ data }) => {
           >
             <p style={{ marginBlock: 2, fontSize: 11 }}>Outstanding Bill Payments</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
-              {currencyFormat(data?.bill_payment, false)}
+              {currencyFormat(data?.summary?.sales?.outstanding_bill_payment, false)}
             </p>
           </div>
           <div
@@ -148,7 +177,7 @@ const Summary = ({ data }) => {
           >
             <p style={{ marginBlock: 2, fontSize: 11 }}>Total Sales</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
-              {currencyFormat(data?.summary_order?.total_nett, false)}
+              {currencyFormat(data?.summary?.sales?.total_sales, false)}
             </p>
           </div>
           <div
@@ -161,7 +190,7 @@ const Summary = ({ data }) => {
           >
             <p style={{ marginBlock: 2, fontSize: 11 }}>Total Discount</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
-              {currencyFormat(data?.summary_order?.total_discount, false)}
+              {currencyFormat(data?.summary?.sales?.total_discount, false)}
             </p>
           </div>
           <div
@@ -175,7 +204,7 @@ const Summary = ({ data }) => {
             <p style={{ marginBlock: 2, fontSize: 11 }}>After Discount</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
               {currencyFormat(
-                data?.summary_order?.total_charges - data?.summary_order?.total_service_charge,
+                data?.summary?.sales?.total_after_discount,
                 false
               )}
             </p>
@@ -190,7 +219,7 @@ const Summary = ({ data }) => {
           >
             <p style={{ marginBlock: 2, fontSize: 11 }}>Total Service</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
-              {currencyFormat(data?.summary_order?.total_service_charge, false)}
+              {currencyFormat(data?.summary?.sales?.total_service, false)}
             </p>
           </div>
           <div
@@ -203,26 +232,13 @@ const Summary = ({ data }) => {
           >
             <p style={{ marginBlock: 2, fontSize: 11 }}>Grand Total</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
-              {currencyFormat(data?.summary_order?.total_charges, false)}
-            </p>
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 5,
-            }}
-          >
-            <p style={{ marginBlock: 2, fontSize: 11 }}>Outstanding Bill</p>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>
-              {currencyFormat(data?.summary_order?.total_openbill, false)}
+              {currencyFormat(data?.summary?.sales?.grand_total, false)}
             </p>
           </div>
         </div>
       </div>
 
-      {data?.topups && data?.topups !== null ? (
+      {data?.summary?.topups?.length > 0 ? (
         <div style={{ marginBottom: 10 }}>
           <div
             style={{
@@ -238,7 +254,7 @@ const Summary = ({ data }) => {
               ## TOPUP ##
             </p>
           </div>
-          {data?.topups?.map((t, idx) => (
+          {data?.summary?.topups?.map((t, idx) => (
             <div
               key={idx}
               style={{
@@ -248,14 +264,14 @@ const Summary = ({ data }) => {
                 marginBottom: 5,
               }}
             >
-              <p style={{ marginBlock: 2, fontSize: 11, textTransform: 'uppercase' }}>{t?.name}</p>
-              <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(t?.nominal, false)}</p>
+              <p style={{ marginBlock: 2, fontSize: 11, textTransform: 'uppercase' }}>{t?.type}</p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(t?.total_nominal, false)}</p>
             </div>
           ))}
         </div>
       ) : null}
 
-      {data?.cash_payments && data?.cash_payments !== null ? (
+      {data?.summary?.payment_methods?.length > 0 ? (
         <div style={{ marginBottom: 10 }}>
           <div
             style={{
@@ -271,7 +287,7 @@ const Summary = ({ data }) => {
               ## PAYMENTS ##
             </p>
           </div>
-          {data?.cash_payments?.map((cat, idx) => (
+          {data?.summary?.payment_methods?.map((cat, idx) => (
             <div
               key={idx}
               style={{
@@ -281,8 +297,8 @@ const Summary = ({ data }) => {
                 marginBottom: 5,
               }}
             >
-              <p style={{ marginBlock: 2, fontSize: 11 }}>{cat?.payment_name || 'Cash'}</p>
-              <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(cat?.subtotal, false)}</p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>{cat?.name}</p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(cat?.total_paid, false)}</p>
             </div>
           ))}
         </div>
@@ -323,7 +339,7 @@ const Summary = ({ data }) => {
         </div>
       ) : null} */}
 
-      {data?.category_solds && data?.category_solds !== null ? (
+      {data?.summary?.category_solds?.length > 0 ? (
         <div style={{ marginBottom: 10 }}>
           <div
             style={{
@@ -339,7 +355,7 @@ const Summary = ({ data }) => {
               ## CATEGORY SOLD ##
             </p>
           </div>
-          {data?.category_solds?.map((cat, idx) => (
+          {data?.summary?.category_solds?.map((cat, idx) => (
             <div
               key={idx}
               style={{
@@ -349,9 +365,9 @@ const Summary = ({ data }) => {
                 marginBottom: 5,
               }}
             >
-              <p style={{ marginBlock: 2, fontSize: 11 }}>{cat?.name}</p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>{cat?.category_name}</p>
               <p style={{ marginBlock: 2, fontSize: 11 }}>
-                ({cat?.quantity}) {currencyFormat(cat?.total_charges, false)}
+                ({cat?.total_qty}) {currencyFormat(cat?.total_charges, false)}
               </p>
             </div>
           ))}

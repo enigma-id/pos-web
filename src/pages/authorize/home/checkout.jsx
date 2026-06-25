@@ -71,9 +71,9 @@ const CheckoutScreen = () => {
   const checkoutSnapshotRef = React.useRef(null);
 
   const renderAdditionals = item => {
-    return (item?.additionals || [])
+    return (item?.addons || [])
       .map(add => {
-        const selectedChilds = (add?.childs || []).filter(child =>
+        const selectedChilds = (add?.items || []).filter(child =>
           add.type === 'quantity' ? (child?.quantity || 0) > 0 : !!child?.selected
         );
 
@@ -144,42 +144,42 @@ const CheckoutScreen = () => {
 
       if (item?.additionals_flat?.length > 0) {
        base.addons = item?.additionals_flat?.map((add) => ({
-          addon_group_id: add?.addon_id,
-          addon_item_id: add?.catalog_id,
+          addon_group_id: add?.addon_group_id,
+          addon_item_id: add?.addon_item_id,
           ...(add?.quantity ? { quantity: add.quantity } : {}),
         }));
       }
 
 
-      // if (Array.isArray(item?.additionals) && item.additionals.length > 0) {
-      //   base.additionals_catalog_map = item.additionals
-      //     .flatMap((group, groupIndex) => {
-      //       const childs = Array.isArray(group?.childs) ? group.childs : [];
-      //       return childs
-      //         .filter(child =>
-      //           group?.type === 'quantity' ? (child?.quantity || 0) > 0 : !!child?.selected
-      //         )
-      //         .map((child, childIndex) => ({
-      //           index: `${groupIndex}-${childIndex}`,
-      //           addon_id: group?.id ?? null,
-      //           catalog_id: child?.catalog_id ?? child?.id ?? null,
-      //           addon: {
-      //             id: group?.id ?? null,
-      //             name: group?.name || '',
-      //             type: group?.type || '',
-      //           },
-      //           catalog: {
-      //             id: child?.catalog_id ?? child?.id ?? null,
-      //             name: child?.name || '',
-      //             unit_price: Number(child?.unit_price) || 0,
-      //           },
-      //         }));
-      //     })
-      //     .filter(entry => entry.catalog_id != null);
-      // }
+      if (Array.isArray(item?.addons) && item.addons.length > 0) {
+        base.additionals_catalog_map = item.addons
+          .flatMap((group, groupIndex) => {
+            const childs = Array.isArray(group?.items) ? group.items : [];
+            return childs
+              .filter(child =>
+                group?.type === 'quantity' ? (child?.quantity || 0) > 0 : !!child?.selected
+              )
+              .map((child, childIndex) => ({
+                index: `${groupIndex}-${childIndex}`,
+                addon_group_id: group?.id ?? null,
+                addon_item_id: child?.catalog_id ?? child?.id ?? null,
+                addon: {
+                  id: group?.id ?? null,
+                  name: group?.name || '',
+                  type: group?.type || '',
+                },
+                catalog: {
+                  id: child?.catalog_id ?? child?.id ?? null,
+                  name: child?.name || '',
+                  unit_price: Number(child?.unit_price) || 0,
+                },
+              }));
+          })
+          .filter(entry => entry.catalog_id != null);
+      }
 
-      if (item?.is_custom === 1) {
-        base.description = item?.name;
+      if (item?.is_custom) {
+        base.catalog_name = item?.name;
         base.unit_price = item?.unit_price;
       }
 
@@ -271,14 +271,14 @@ const CheckoutScreen = () => {
 
       if (item?.additionals_flat?.length > 0) {
         base.addons = item?.additionals_flat?.map((add) => ({
-          addon_group_id: add?.addon_id,
-          addon_item_id: add?.catalog_id,
+          addon_group_id: add?.addon_group_id,
+          addon_item_id: add?.addon_item_id,
           ...(add?.quantity ? { quantity: add.quantity } : {}),
         }));
       }
 
-      if (item?.is_custom === 1) {
-        base.description = item?.name;
+      if (item?.is_custom) {
+        base.catalog_name = item?.name;
         base.unit_price = item?.unit_price;
       }
 
@@ -721,10 +721,10 @@ const CheckoutScreen = () => {
                   </div>
                 </div>
               </div>
-            ) : CartState?.bill?.ticket ? (
+            ) : CartState?.bill?.bill_name ? (
               <div className="border-base-200 border-b pb-4">
-                <div className="py-4 text-base font-semibold">Customer</div>
-                <div className="text-base">{CartState?.bill?.ticket || '-'}</div>
+                <div className="py-4 text-base font-semibold">Bill Name</div>
+                <div className="text-base">{CartState?.bill?.bill_name || '-'}</div>
               </div>
             ) : (
               <div className="pb-4">

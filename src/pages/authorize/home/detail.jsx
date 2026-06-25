@@ -31,13 +31,15 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
       setQuantity(itemQty);
       setInitialQuantity(itemQty);
 
+      console.log(detail)
+
       const additions = (detail?.addons || []).map(add => {
         const cartAddon = existingItem?.addons?.find(a => a.id === add.id);
 
         return {
           ...add,
-          childs: (add?.items || []).map(child => {
-            const cartChild = cartAddon?.childs?.find(c => c.id === child.id);
+          items: (add?.items || []).map(child => {
+            const cartChild = cartAddon?.items?.find(c => c.id === child.id);
             return {
               ...child,
               quantity: add.type === 'quantity' ? cartChild?.quantity || 0 : cartChild ? 1 : 0,
@@ -49,14 +51,13 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
 
       setAdditionals(additions);
 
-      console.log("bbbb", additions)
 
     } else {
       setQuantity(0);
       setInitialQuantity(0);
       const clearedAdditionals = (detail?.addons || []).map(add => ({
         ...add,
-        childs: (add?.items || []).map(child => ({
+        items: (add?.items || []).map(child => ({
           ...child,
           quantity: 0,
           selected: false,
@@ -64,19 +65,21 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
       }));
       setAdditionals(clearedAdditionals);
 
-      console.log("aaaa", clearedAdditionals)
     }
   }, [catalogDetail, catalog, mode, type]);
 
   const addToCart = () => {
     if (!catalogData) return;
 
+      console.log("catalogData", catalogData)
+
     const formattedItem = {
       ...catalogData,
       quantity,
-      additionals,
+      addons: additionals,
       subtotal: calculateSubtotal(),
     };
+      console.log("formattedItem", formattedItem)
 
 
     if (mode === 'edit') {
@@ -95,7 +98,7 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
           ? add
           : {
               ...add,
-              childs: add.childs.map(c => (c.id !== childId ? c : { ...c, quantity: qty })),
+              items: add.items.map(c => (c.id !== childId ? c : { ...c, quantity: qty })),
             }
       )
     );
@@ -105,12 +108,12 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
     setAdditionals(prev =>
       prev.map(add => {
         if (add.id !== addonId) return add;
-        const isAlreadySelected = add.childs.some(
+        const isAlreadySelected = add.items.some(
           child => child.id === selectedChildId && child.selected
         );
         return {
           ...add,
-          childs: add.childs.map(child => ({
+          items: add.items.map(child => ({
             ...child,
             selected: isAlreadySelected ? false : child.id === selectedChildId,
             quantity: isAlreadySelected ? 0 : child.id === selectedChildId ? 1 : 0,
@@ -127,7 +130,7 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
           ? add
           : {
               ...add,
-              childs: add.childs.map(c =>
+              items: add.items.map(c =>
                 c.id !== childId ? c : { ...c, selected: checked, quantity: checked ? 1 : 0 }
               ),
             }
@@ -139,7 +142,7 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
     let total = quantity * (catalogData?.unit_price || 0);
 
     additionals.forEach(add => {
-      add.childs.forEach(child => {
+      add.items.forEach(child => {
         if (add.type === 'quantity' && child.quantity > 0) {
           total += quantity * child.quantity * (child.unit_price || 0);
         }
@@ -186,7 +189,7 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
 
         {additionals.map(
           add =>
-            add.childs?.length > 0 && (
+            add.items?.length > 0 && (
               <div key={add.id} className="border-base-200 mb-4 border-b border-dashed pb-3">
                 <p className="mb-2 text-base font-semibold uppercase">
                   {add.name}{' '}
@@ -204,7 +207,8 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
                     </span>
                   ) : null}
                 </p>
-                {add.childs.map(child => (
+
+                {add.items.map(child => (
                   <div key={child.id} className="mb-2 flex items-center justify-between text-sm">
                     <span>{child.name}</span>
                     <div className="flex items-center">

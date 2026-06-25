@@ -10,15 +10,15 @@ function flattenAdditionals(additionals = []) {
   const result = [];
 
   additionals.forEach(add => {
-    const { id: addon_id, type, childs = [] } = add;
+    const { id: addon_group_id, type, items = [] } = add;
 
-    childs.forEach(child => {
+    items.forEach(child => {
       const isSelected = type === 'quantity' ? (child.quantity || 0) > 0 : !!child.selected;
 
       if (isSelected) {
-        const entry = { addon_id, catalog_id: child.catalog_id ?? child.id };
+        const entry = { addon_group_id, addon_item_id: child.addon_item_id ?? child.id };
 
-        if (child.catalog_id) {
+        if (child.addon_item_id) {
           entry.id = child.id;
         }
 
@@ -28,12 +28,11 @@ function flattenAdditionals(additionals = []) {
     });
   });
 
-  return _.sortBy(result, ['addon_id', 'catalog_id']);
+  return _.sortBy(result, ['addon_group_id', 'addon_item_id']);
 }
 
 function extractUniqueCategories(items) {
   const map = new Map();
-  console.log('items', items);
 
   items.forEach(item => {
     console.log('category discount', item);
@@ -69,7 +68,6 @@ function extractUniqueCategories(items) {
     }
   });
 
-  console.log('map discount', map.values());
   return Array.from(map.values());
 }
 
@@ -153,9 +151,9 @@ function recalculateTotals(state) {
 function convertApiOrderToCartItem(item) {
   const groupedAdditionals = {};
 
-  for (const add of item.additionals || []) {
+  for (const add of item.addons || []) {
     const addon = add.addon || {};
-    const addonId = addon.id || add.addon_id;
+    const addonId = addon.id || add.addon_group_id;
     if (!addonId) continue;
 
     if (!groupedAdditionals[addonId]) {
@@ -163,14 +161,14 @@ function convertApiOrderToCartItem(item) {
         id: addonId,
         name: addon.name || add.name || '',
         type: addon.type || add.addon_type || '',
-        childs: [],
+        items: [],
       };
     }
 
     const qty = add.quantity > 0 ? add.quantity / item.quantity : 0;
     const addCatalog = add.catalog || {};
 
-    groupedAdditionals[addonId].childs.push({
+    groupedAdditionals[addonId].items.push({
       id: add.id,
       catalog_id: addCatalog.id || add.catalog_id,
       name: addCatalog.name || add.name || '',
@@ -182,10 +180,10 @@ function convertApiOrderToCartItem(item) {
 
   const additionalsGrouped = Object.values(groupedAdditionals);
 
-  const additionalsFlat = (item.additionals || []).map(add => ({
+  const additionalsFlat = (item.addons || []).map(add => ({
     id: add.id,
-    addon_id: add.addon?.id || add.addon_id,
-    catalog_id: add.catalog?.id || add.catalog_id,
+    addon_group_id: add.addon?.id || add.addon_group_id,
+    addon_item_id: add.catalog?.id || add.addon_item_id,
     ...(add.quantity ? { quantity: add.quantity / item.quantity } : {}),
   }));
 
@@ -194,7 +192,8 @@ function convertApiOrderToCartItem(item) {
 
   return {
     id: item.id,
-    category: item.catalog.category,
+    category_id: item.catalog?.category_id,
+    category_name: item?.category_name,
     brand_id: item.catalog.brand_id,
     ref_id: item.catalog.ref_id,
     code: item.catalog.code,
@@ -210,7 +209,7 @@ function convertApiOrderToCartItem(item) {
     quantity: item.quantity,
     subtotal,
     catalog_id: item.catalog.id,
-    additionals: additionalsGrouped,
+    addons: additionalsGrouped,
     additionals_flat: additionalsFlat,
     discount_amount: item.discount_value || 0,
     discount_percentage: item.discount || 0,
@@ -222,11 +221,11 @@ function convertApiOrderToCartItem(item) {
 
 function calculateAdditionalsPerItem(additionals = []) {
   return additionals.reduce((total, add) => {
-    const { childs = [] } = add;
+    const { items = [] } = add;
 
     return (
       total +
-      childs.reduce((sum, child) => {
+      items.reduce((sum, child) => {
         return sum + (child.unit_price || 0) * (child.quantity || 0);
       }, 0)
     );
@@ -253,11 +252,11 @@ function recalculateGrandTotalWithServiceCharge(state) {
 // Convert offline queue item (open-bill) to cart item format
 function convertOfflineQueueItemToCartItem(item) {
   const additionalsGrouped = {};
-  const rawAdditionals = Array.isArray(item?.additionals) ? item.additionals : [];
+  const rawAdditionals = Array.isArray(item?.addons) ? item.addons : [];
 
   rawAdditionals.forEach(add => {
     const addon = add.addon || {};
-    const addonId = addon.id || add.addon_id;
+    const addonId = addon.id || add.addon_group_id;
     if (!addonId) return;
 
     if (!additionalsGrouped[addonId]) {
@@ -265,12 +264,12 @@ function convertOfflineQueueItemToCartItem(item) {
         id: addonId,
         name: addon.name || add.name || '',
         type: addon.type || add.addon_type || '',
-        childs: [],
+        items: [],
       };
     }
 
     const addCatalog = add.catalog || {};
-    additionalsGrouped[addonId].childs.push({
+    additionalsGrouped[addonId].items.push({
       id: add?.id,
       catalog_id: addCatalog.id || add?.catalog_id,
       name: addCatalog.name || add?.name || '',
@@ -281,8 +280,8 @@ function convertOfflineQueueItemToCartItem(item) {
   });
 
   const additionalsFlat = rawAdditionals.map(add => ({
-    addon_id: add.addon?.id || add?.addon_id,
-    catalog_id: add.catalog?.id || add?.catalog_id,
+    addon_group_id: add.addon?.id || add?.addon_group_id,
+    addon_item_id: add.catalog?.id || add?.addon_item_id,
     quantity: add?.quantity || 1,
   }));
 
@@ -297,14 +296,14 @@ function convertOfflineQueueItemToCartItem(item) {
     id: item?.id || Date.now(),
     catalog_id: item?.catalog_id,
     category: item?.category || { id: item?.category_id || 0 },
-    name: item?.description || item?.name || 'Item',
+    name: item?.catalog_name || item?.name || 'Item',
     unit_price: unitPrice,
     quantity: qty,
     subtotal,
     final_total: subtotal,
-    is_custom: item?.is_custom || 0,
-    is_vatable: item?.is_vatable || 0,
-    additionals: additionalsGroupedArray,
+    is_custom: item?.is_custom || false,
+    is_vatable: item?.is_vatable || false,
+    addons: additionalsGroupedArray,
     additionals_flat: additionalsFlat,
     discount_amount: 0,
     discount_percentage: 0,
@@ -348,14 +347,14 @@ const cartSlice = createSlice({
 
     addItem: (state, action) => {
       const catalog = action.payload;
-      const flat = flattenAdditionals(catalog.additionals);
+      const flat = flattenAdditionals(catalog.addons);
       let existingIndex;
 
       if (catalog.is_custom) {
         existingIndex = state.items.list.findIndex(
           item =>
             !item.from_bill &&
-            item.is_custom === 1 &&
+            item.is_custom === true &&
             item.name?.trim().toLowerCase() === catalog.name?.trim().toLowerCase() &&
             item.unit_price === catalog.unit_price
         );
@@ -376,7 +375,7 @@ const cartSlice = createSlice({
           ...catalog,
           from_bill: undefined,
           catalog_id: catalog.id,
-          additionals: catalog.additionals,
+          addons: catalog.addons,
           additionals_flat: flat,
           quantity: catalog.quantity,
           subtotal: catalog.subtotal,
@@ -402,8 +401,8 @@ const cartSlice = createSlice({
           name: catalog.name,
           quantity: catalog.quantity,
           unit_price: catalog.unit_price,
-          additionals: catalog.additionals,
-          additionals_flat: flattenAdditionals(catalog.additionals),
+          addons: catalog.addons,
+          additionals_flat: flattenAdditionals(catalog.addons),
           subtotal: catalog.subtotal,
         };
       }
@@ -474,14 +473,35 @@ const cartSlice = createSlice({
     },
 
     setBillItems: (state, action) => {
-      // console.log("payload",)
-      const items = action.payload;
+      const { items, category_discounts } = action.payload;
 
       state.items.bill = items.map(item => convertApiOrderToCartItem(item));
 
       const allItems = [...state.items.list, ...state.items.bill];
+      console.log('items', items);
 
-      state.discount.category = extractUniqueCategories(allItems);
+      if (
+        category_discounts &&
+        Array.isArray(category_discounts) &&
+        category_discounts.length > 0
+      ) {
+        state.discount.category = category_discounts.map(cd => {
+          const itemWithCat = allItems.find(i => i.category_id === cd.category_id);
+
+          console.log('itemWithCat', itemWithCat);
+          console.log('allItems', allItems);
+
+          return {
+            id: cd.category_id,
+            name: itemWithCat?.category_name || '',
+            discount_type: cd.is_discount_percentage ? 'percentage' : 'nominal',
+            discount_value: cd.is_discount_percentage ? cd.discount_percentage : cd.discount_value,
+          };
+        });
+      } else {
+        state.discount.category = extractUniqueCategories(allItems);
+      }
+
       recalculateTotals(state);
     },
 
@@ -494,8 +514,8 @@ const cartSlice = createSlice({
           name: catalog.name,
           quantity: catalog.quantity,
           unit_price: catalog.unit_price,
-          additionals: catalog.additionals,
-          additionals_flat: flattenAdditionals(catalog.additionals),
+          addons: catalog.addons,
+          additionals_flat: flattenAdditionals(catalog.addons),
           subtotal: catalog.subtotal,
         };
       }
@@ -531,8 +551,8 @@ const cartSlice = createSlice({
 
       // Set bill metadata from preview, falling back to body
       state.bill = {
-        id: null,
-        ticket: preview?.ticket || body?.ticket || '',
+        id: preview?.id,
+        bill_name: preview?.bill_name || body?.bill_name || '',
         total_bill: preview?.total_charges || preview?.total_bill || 0,
         membership:
           preview?.membership || (body?.membership_id ? { id: body.membership_id } : null),

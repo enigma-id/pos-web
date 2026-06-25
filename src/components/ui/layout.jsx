@@ -117,7 +117,7 @@ const Navbar = () => {
           <small>Member</small>
         </div>
 
-        {/* {User?.is_supervisor === true && (
+        {User?.role === "manager" && (
           <div
             className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'shifts')}`}
             onClick={() => navigate('/shifts')}
@@ -125,7 +125,7 @@ const Navbar = () => {
             <ListIcon />
             <small>Shifts</small>
           </div>
-        )} */}
+        )}
 
         <div
           className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'history')}`}

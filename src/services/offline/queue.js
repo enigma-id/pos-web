@@ -61,7 +61,9 @@ export const addToQueue = async request => {
   const now = getNow();
 
   // If it's an open-bill request, check if a bill with the same ticket already exists in the queue
-  const isSaveBill = String(request?.url).toLowerCase().includes('/sales/order') && request?.body?.status === 'pending';
+  const isSaveBill =
+    String(request?.url).toLowerCase().includes('/sales/order') &&
+    request?.body?.status === 'pending';
   const ticketName = request?.body?.ticket;
 
   if (isSaveBill && ticketName) {
@@ -81,7 +83,7 @@ export const addToQueue = async request => {
         const existingItemIndex = mergedItems.findIndex(
           ei =>
             ei.catalog_id === newItem.catalog_id &&
-            JSON.stringify(ei.additionals) === JSON.stringify(newItem.additionals)
+            JSON.stringify(ei.addons) === JSON.stringify(newItem.addons)
         );
 
         if (existingItemIndex >= 0) {
@@ -108,7 +110,10 @@ export const addToQueue = async request => {
         // If the new request has a high-fidelity preview, use it
         const newPreview = request?.transaction_preview;
 
-        const totalBill = mergedItems.reduce((sum, item) => sum + (Number(item.unit_price) * Number(item.quantity)), 0);
+        const totalBill = mergedItems.reduce(
+          (sum, item) => sum + Number(item.unit_price) * Number(item.quantity),
+          0
+        );
         const itemCount = mergedItems.reduce((sum, item) => sum + Number(item.quantity), 0);
 
         updatedBill.transaction_preview = {

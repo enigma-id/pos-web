@@ -5,6 +5,8 @@ import { currencyFormat, dateFormat } from '../../utils/common';
 const Receipt = ({ data }) => {
   const [discountMap, setDiscountMap] = React.useState([]);
 
+  console.log(data)
+
 
   const groupedCategories = (items, category_discounts) => {
     if (!category_discounts || category_discounts.length === 0) {
@@ -130,14 +132,14 @@ const Receipt = ({ data }) => {
               {currencyFormat(item?.quantity * item?.unit_nett, false)}
             </p>
           </div>
-          {item?.additionals?.map((addon, idx) => (
+          {item?.addons?.map((addon, idx) => (
             <div
               key={idx}
               style={{ display: 'flex', alignItems: '', justifyContent: 'space-between' }}
             >
               <p style={{ marginBlock: 2, fontSize: 9, textTransform: 'capitalize' }}>
                 + {addon?.catalog?.name}
-                {addon?.addon?.type !== 'options' &&
+                {addon?.addon?.type === 'quantity' &&
                   ` (${addon?.quantity} x ${currencyFormat(addon?.unit_nett, false)})`}
               </p>
               <p style={{ marginBlock: 2, fontSize: 9 }}>

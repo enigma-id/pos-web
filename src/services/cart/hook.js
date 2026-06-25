@@ -258,7 +258,7 @@ const useCart = catalog_id => {
     try {
       const res = await showOrder({ id: data?.id }).unwrap();
       if (res?.message === 'success') {
-        billItems(res?.data?.items);
+        billItems({ items: res?.data?.items, category_discounts: res?.data?.category_discounts });
 
         dispatch(selectedBill(res?.data));
 

@@ -43,15 +43,15 @@ const Cart = ({ onUpdate }) => {
     const result = [];
 
     additionals.forEach(add => {
-      const { id: addon_id, type, childs = [] } = add;
+      const { id: addon_group_id, type, items = [] } = add;
 
-      childs.forEach(child => {
+      items.forEach(child => {
         const isSelected = type === 'quantity' ? (child.quantity || 0) > 0 : !!child.selected;
 
         if (isSelected) {
-          const entry = { addon_id, catalog_id: child.catalog_id ?? child.id };
+          const entry = { addon_group_id, addon_item_id: child.addon_item_id ?? child.id };
 
-          if (child.catalog_id) {
+          if (child.addon_item_id) {
             entry.id = child.id;
           }
 
@@ -68,18 +68,15 @@ const Cart = ({ onUpdate }) => {
   };
 
   const onBillCreate = async ticket => {
-    const discount_categories = CartState?.bill?.category_discounts?.filter(
+    const discount_categories = CartState?.discount?.category?.filter(
       (cat) =>
         cat &&
-        (
-          (cat.is_discount_percentage && cat.discount_percentage > 0) ||
-          (!cat.is_discount_percentage && cat.discount_value > 0)
-        )
+        (cat.discount_value > 0)
       )?.map((cat) => ({
-        category_id: cat.category_id,
-        ...(cat.is_discount_percentage
-          ? { discount_percentage: cat.discount_percentage }
-          : { discount_value: cat.discount_value }),
+        category_id: cat.id,
+        ...(cat.discount_type === 'nominal'
+          ? { discount_value: cat.discount_value } :
+           { discount_percentage: cat.discount_value })
       }));
 
     const billItems = CartState?.items?.bill?.map(bi => {
@@ -89,15 +86,15 @@ const Cart = ({ onUpdate }) => {
         quantity: bi.quantity,
       };
 
-      if (bi?.is_custom === 1) {
-        base.description = bi.name;
+      if (bi?.is_custom) {
+        base.catalog_name = bi.name;
         base.unit_price = bi.unit_price;
       }
 
-      const flattened = flattenAdditionals(bi?.additionals);
+      const flattened = flattenAdditionals(bi?.addons);
 
       if (flattened?.length > 0) {
-        base.additionals = flattened;
+        base.addons = flattened;
       }
 
       return base;
@@ -109,15 +106,15 @@ const Cart = ({ onUpdate }) => {
         quantity: item.quantity,
       };
 
-      if (item?.is_custom === 1) {
-        base.description = item?.name;
+      if (item?.is_custom ) {
+        base.catalog_name = item?.name;
         base.unit_price = item?.unit_price;
       }
 
-      const flattened = flattenAdditionals(item?.additionals);
+      const flattened = flattenAdditionals(item?.addons);
 
       if (flattened?.length > 0) {
-        base.additionals = flattened;
+        base.addons = flattened;
       }
 
       return base;
@@ -168,20 +165,20 @@ const Cart = ({ onUpdate }) => {
       authSession: session,
     });
 
+    console.log("------------------", {id: CartState?.bill?.id, payload, __offlinePreview: saveBillOfflineDataRef.current})
+
     if (CartState?.bill?.id) {
       payload.bill_name = CartState?.bill?.bill_name;
-
       await update({id: CartState?.bill?.id, payload, __offlinePreview: saveBillOfflineDataRef.current})
-
     } else {
       await checkout({...payload, __offlinePreview: saveBillOfflineDataRef.current})
     }
   };
 
   const renderAdditionals = item => {
-    return (item?.additionals || [])
+    return (item?.addons || [])
       .map(add => {
-        const selectedChilds = (add?.childs || []).filter(child =>
+        const selectedChilds = (add?.items || []).filter(child =>
           add.type === 'quantity' ? (child?.quantity || 0) > 0 : !!child?.selected
         );
 
@@ -438,7 +435,7 @@ const Cart = ({ onUpdate }) => {
                     </span>
                   </div>
 
-                  {item?.additionals?.length > 0 && (
+                  {item?.addons?.length > 0 && (
                     <div className="border-base-200 ms-3.5 border-s py-2 ps-6">
                       {renderAdditionals(item).map((line, idx) => (
                         <div key={idx} className="mb-2">

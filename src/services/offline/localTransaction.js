@@ -6,41 +6,44 @@ const toNumber = value => {
 };
 
 const buildCatalogFromItem = item => ({
-  id: item?.catalog_id ?? item?.id ?? 0,
+  id: item?.catalog_id ?? item?.id ?? '',
   category: item?.category || {
-    id: item?.category_id ?? 0,
-    brand_id: item?.category?.brand_id ?? 0,
-    ref_id: item?.category_id ?? 0,
+    id: item?.category_id ?? '',
+    brand_id: item?.category?.brand_id ?? '',
+    ref_id: item?.category_id ?? '',
     name: item?.category?.name || 'Unknown',
   },
-  brand_id: item?.brand_id ?? 0,
-  ref_id: item?.ref_id ?? item?.catalog_id ?? item?.id ?? 0,
+  brand_id: item?.brand_id ?? '',
+  ref_id: item?.ref_id ?? item?.catalog_id ?? item?.id ?? '',
   code: item?.code || '',
   name: item?.name || item?.description || 'Item',
   base_price: toNumber(item?.base_price ?? item?.unit_price),
   image: item?.image || '',
-  is_custom: item?.is_custom ?? 0,
-  is_vatable: item?.is_vatable ?? 0,
-  is_active: item?.is_active ?? 1,
-  is_additional: item?.is_additional ?? 0,
-  is_deleted: item?.is_deleted ?? 0,
+  is_custom: item?.is_custom ?? false,
+  is_vatable: item?.is_vatable ?? false,
+  is_active: item?.is_active ?? true,
+  is_additional: item?.is_additional ?? false,
+  is_deleted: item?.is_deleted ?? false,
 });
 
 const buildAdditionalsFromItem = item => {
-  const rawAdditionals = Array.isArray(item?.additionals) ? item.additionals : [];
+  const rawAdditionals = Array.isArray(item?.addons) ? item.addons : [];
 
   const groupedFromCart = [];
   rawAdditionals.forEach(group => {
-    const childs = Array.isArray(group?.childs) ? group.childs : [];
+    const childs = Array.isArray(group?.items) ? group.items : [];
     childs.forEach(child => {
       const itemQty = toNumber(item?.quantity) || 1;
       const childQty = toNumber(child?.quantity);
       const selected = Boolean(child?.selected) || childQty > 0;
+
+      console.log('item', item);
+      console.log('child', child);
       if (!selected) return;
 
       groupedFromCart.push({
-        addon_id: group?.id ?? null,
-        catalog_id: child?.catalog_id ?? child?.id ?? null,
+        addon_group_id: group?.id ?? null,
+        addon_item_id: child?.catalog_id ?? child?.id ?? null,
         quantity: childQty * itemQty,
         unit_nett: toNumber(child?.unit_price),
         addon: {
@@ -61,9 +64,9 @@ const buildAdditionalsFromItem = item => {
 
   return sourceAdditionals.map((addon, idx) => {
     return {
-      id: addon?.id ?? `${item?.id ?? item?.catalog_id ?? 'item'}-addon-${idx}`,
-      addon_id: addon?.addon_id ?? addon?.addon?.id ?? null,
-      catalog_id: addon?.catalog_id ?? addon?.catalog?.id ?? null,
+      id: addon?.id ?? `${item?.id ?? item?.addon_item_id ?? 'item'}-addon-${idx}`,
+      addon_group_id: addon?.addon_group_id ?? addon?.addon?.id ?? null,
+      addon_item_id: addon?.addon_item_id ?? addon?.catalog?.id ?? null,
       quantity: toNumber(addon?.quantity),
       unit_nett: toNumber(addon?.unit_nett ?? addon?.price),
       note: addon?.note || '',
@@ -74,34 +77,34 @@ const buildAdditionalsFromItem = item => {
 };
 
 const normalizeRequestItem = requestItem => ({
-  catalog_id: requestItem?.catalog_id ?? requestItem?.id ?? 0,
+  catalog_id: requestItem?.catalog_id ?? requestItem?.id ?? '',
   id: requestItem?.id,
   quantity: requestItem?.quantity ?? 1,
   unit_price: requestItem?.unit_price ?? requestItem?.unit_nett ?? requestItem?.unit_bill ?? 0,
   description: requestItem?.description || '',
-  additionals_flat: Array.isArray(requestItem?.additionals) ? requestItem.additionals : [],
-  additionals: Array.isArray(requestItem?.additionals) ? requestItem.additionals : [],
+  additionals_flat: Array.isArray(requestItem?.addons) ? requestItem.addons : [],
+  addons: Array.isArray(requestItem?.addons) ? requestItem.addons : [],
   additionals_catalog_map: Array.isArray(requestItem?.additionals_catalog_map)
     ? requestItem.additionals_catalog_map
     : [],
-  is_custom: requestItem?.is_custom ?? 0,
+  is_custom: requestItem?.is_custom ?? false,
   name: requestItem?.name || requestItem?.description || 'Item',
 });
 
 const buildAdditionalsCatalogMapFromCartItem = cartItem => {
-  const groups = Array.isArray(cartItem?.additionals) ? cartItem.additionals : [];
+  const groups = Array.isArray(cartItem?.addons) ? cartItem.addons : [];
   const map = [];
 
   groups.forEach(group => {
-    const childs = Array.isArray(group?.childs) ? group.childs : [];
+    const childs = Array.isArray(group?.items) ? group.items : [];
     childs.forEach(child => {
       const qty = toNumber(child?.quantity);
       const selected = Boolean(child?.selected) || qty > 0;
       if (!selected) return;
 
       map.push({
-        addon_id: group?.id ?? null,
-        catalog_id: child?.catalog_id ?? child?.id ?? null,
+        addon_group_id: group?.id ?? null,
+        addon_item_id: child?.addon_item_id ?? child?.id ?? null,
         addon: group
           ? {
               id: group?.id ?? null,
@@ -196,7 +199,7 @@ const buildOrderItem = (item, index, orderId) => {
     discount_value: discountValue,
     unit_bill: unitBill,
     is_discount_percentage: false,
-    additionals: buildAdditionalsFromItem(item),
+    addons: buildAdditionalsFromItem(item),
   };
 };
 

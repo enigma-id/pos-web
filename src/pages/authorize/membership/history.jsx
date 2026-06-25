@@ -36,16 +36,16 @@ const HistorySection = ({ id }) => {
     setPage(1);
     setHasMore(true);
     processedIdsRef.current.clear();
-  }, [id]);
+  }, [id, showResult]);
 
   // Fetch history
   React.useEffect(() => {
     if (showResult.isSuccess) {
       const params = {
-      page,
-      limit: LIMIT
-    }
-      setLogs([])
+        page,
+        limit: LIMIT
+      }
+
       saldoLog({ id, params });
     }
   }, [showResult, id, page]);
@@ -100,6 +100,7 @@ const HistorySection = ({ id }) => {
   }, [hasMore]);
 
   const prevLogsLengthRef = React.useRef(0);
+
   React.useEffect(() => {
     logsLengthRef.current = logs.length;
 

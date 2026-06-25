@@ -34,8 +34,6 @@ const SuccessModal = ({ data, backToMenu }) => {
   //     }
   //   }, [showResult]);
 
-  console.log("checkout data :", data)
-
   return (
     <>
       <Modal.Header

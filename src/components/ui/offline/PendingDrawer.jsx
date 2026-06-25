@@ -3,7 +3,9 @@ import { useSelector } from 'react-redux';
 
 import { currencyFormat, dateFormat } from '../../../utils/common';
 
-const getApiCategory = (url, item) => {
+const getApiCategory = (item) => {
+  const url = item?.url;
+
   if (!url) return 'unknown';
   const path = String(url).toLowerCase();
   if (path.includes('/sales/session')) return 'shifts';
@@ -16,8 +18,11 @@ const getApiCategory = (url, item) => {
   return 'other';
 };
 
-const getApiType = (url, item) => {
+const getApiType = (item) => {
+  const url = item?.url;
+
   if (!url) return 'unknown';
+
   const path = String(url).toLowerCase();
   const parts = path.split('/').filter(Boolean);
   const last = parts[parts.length - 1] || 'unknown';
@@ -51,7 +56,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
 
   const categorized = items.reduce(
     (acc, item) => {
-      const cat = getApiCategory(item.url);
+      const cat = getApiCategory(item);
       if (!acc[cat]) acc.other.push(item);
       else acc[cat].push(item);
 
@@ -181,7 +186,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
 
           {filteredItems.map(item => {
             const preview = item?.transaction_preview || {};
-            const apiType = getApiType(item?.url);
+            const apiType = getApiType(item);
             const code = preview?.code || `OFF-${item?.id}`;
             const channelName = preview?.channel?.name || '-';
             const paymentName = preview?.payment_method?.name || '-';
@@ -330,9 +335,9 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
                             </div>
 
                             {/* Additionals for queued items */}
-                            {product.additionals?.length > 0 && (
+                            {product.addons?.length > 0 && (
                               <div className="ml-5 border-l border-base-content/10 pl-2 flex flex-col gap-0.5">
-                                {product.additionals?.map((add, aIdx) => {
+                                {product.addons?.map((add, aIdx) => {
                                  const suffix = add?.addon?.type === 'quantity' || add?.addon?.type === 'checkbox' ? `(${product?.quantity} x ${add?.quantity}) x ${currencyFormat(add?.unit_nett || 0)}` : '';
                                 return (
                                     <div key={aIdx} className="flex justify-between text-[11px] text-base-content/40 italic">
@@ -385,10 +390,10 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
                   {/* Remove button for pending items */}
                   {item.status === 'pending' && (
                     <button
-                      className="btn btn-ghost btn-xs text-base-content/50"
+                      className="btn btn-error btn-ghost btn-xs text-base-content/50"
                       onClick={() => onRemove?.(item.id)}
                     >
-                      🗑️
+                      &#10006; Remove
                     </button>
                   )}
 

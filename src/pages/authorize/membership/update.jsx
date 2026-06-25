@@ -72,6 +72,7 @@ const UpdateSession = ({ id, onClose, isOpen, reboot }) => {
 
   React.useEffect(() => {
     if (showResult?.isSuccess) {
+
       setName(showResult?.data?.data?.name);
       setPhone(showResult?.data?.data?.reff_code);
     }
@@ -89,7 +90,7 @@ const UpdateSession = ({ id, onClose, isOpen, reboot }) => {
 
   if (showResult?.isLoading) return <div>loading...</div>;
 
-  const data = updateResult?.isSuccess ? updateResult?.data?.data : showResult?.data?.data;
+  const data = showResult?.data?.data;
 
   return (
     <div className="flex h-full w-md min-w-lg flex-1 flex-col">
@@ -124,7 +125,7 @@ const UpdateSession = ({ id, onClose, isOpen, reboot }) => {
                 {data?.reff_code || '-'}
               </div>
             </div>
-            {User?.is_supervisor === true && (
+            {User?.role === "manager" && (
               <div className="mt-2">
                 <button
                   className={`btn btn-primary h-full flex-1 rounded ${!updateResult?.isLoading ? '' : 'btn-disabled'}`}
@@ -158,7 +159,7 @@ const UpdateSession = ({ id, onClose, isOpen, reboot }) => {
         >
           Save
         </button>
-        {Session?.user?.is_supervisor === true && (
+        {Session?.user?.role === true && (
           <div
             className={`btn btn-error h-full flex-1 rounded-none text-white ${data?.saldo > 0 ? 'btn-disabled' : ''}`}
             onClick={onDeleteOpen}

@@ -108,7 +108,7 @@ const Kitchen = ({ data }) => {
             </div>
             <p style={{ marginBlock: 2, fontSize: 12 }}>{item?.quantity}</p>
           </div>
-          {item?.additionals?.map((addon, idx) => (
+          {item?.addons?.map((addon, idx) => (
             <div key={idx}>
               <p style={{ marginBlock: 2, fontSize: 11, textTransform: 'capitalize' }}>
                 + {addon?.catalog?.name}{' '}

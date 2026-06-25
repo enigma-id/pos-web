@@ -209,7 +209,7 @@ const ShiftScreen = () => {
             </div>
 
             <div className="flex h-[calc(100vh-64px)] w-full place-content-center overflow-x-auto py-20">
-              <div className="h-fit w-2/4 rounded-xl bg-white p-6 shadow">
+              <div className="h-fit w-3/4 rounded-xl bg-white p-6 shadow">
                 <div className="border-base-200 border-b py-4">
                   <div className="mb-2 text-sm">
                     <span className="font-semibold">Cashier :</span> {detail?.cashier?.name || '-'}
@@ -220,7 +220,7 @@ const ShiftScreen = () => {
                     {dateFormat(detail?.finished_at, 'DD MMM YYYY HH:mm', '(ongoing)')}
                   </div>
                   <div className="mb-2 text-sm capitalize">
-                    <span className="font-semibold">Outlet :</span> {detail?.outlet?.alias || '-'}
+                    <span className="font-semibold">Outlet :</span> {detail?.outlet?.name || '-'}
                   </div>
                 </div>
 
@@ -244,14 +244,30 @@ const ShiftScreen = () => {
                     <div>
                       <span className="text-sm">Expected Cash</span>
                     </div>
-                    <span className="text-sm">{currencyFormat(detail?.cash_due)}</span>
+                    <span className="text-sm">{currencyFormat(detail?.summary?.cash?.expected_cash)}</span>
+                  </div>
+
+                  <div className="flex place-content-between place-items-center py-2">
+                    <div>
+                      <span className="text-sm">Topup Cash</span>
+                    </div>
+                    <span className="text-sm">{currencyFormat(detail?.summary?.cash?.topup_cash)}</span>
+                  </div>
+
+                  <div className="flex place-content-between place-items-center py-2">
+                    <div>
+                      <span className="text-sm">Outstanding Bills</span>
+                    </div>
+                    <span className="text-sm">
+                      {currencyFormat(detail?.summary?.sales?.outstanding_bill)}
+                    </span>
                   </div>
 
                   <div className="flex place-content-between place-items-center py-2">
                     <div>
                       <span className="text-sm">Outstanding Bill Payments</span>
                     </div>
-                    <span className="text-sm">{currencyFormat(detail?.bill_payment)}</span>
+                    <span className="text-sm">{currencyFormat(detail?.summary?.sales?.outstanding_bill_payment)}</span>
                   </div>
 
                   <div className="flex place-content-between place-items-center py-2">
@@ -259,7 +275,7 @@ const ShiftScreen = () => {
                       <span className="text-sm">Total Sales</span>
                     </div>
                     <span className="text-sm">
-                      {currencyFormat(detail?.summary_order?.total_nett)}
+                      {currencyFormat(detail?.summary?.sales?.total_sales)}
                     </span>
                   </div>
                   <div className="flex place-content-between place-items-center py-2">
@@ -267,7 +283,7 @@ const ShiftScreen = () => {
                       <span className="text-sm">Total Discount</span>
                     </div>
                     <span className="text-sm">
-                      {currencyFormat(detail?.summary_order?.total_discount)}
+                      {currencyFormat(detail?.summary?.sales?.total_discount)}
                     </span>
                   </div>
                   <div className="flex place-content-between place-items-center py-2">
@@ -276,8 +292,7 @@ const ShiftScreen = () => {
                     </div>
                     <span className="text-sm">
                       {currencyFormat(
-                        detail?.summary_order?.total_charges -
-                          detail?.summary_order?.total_service_charge
+                        detail?.summary?.sales?.total_after_discount
                       )}
                     </span>
                   </div>
@@ -286,7 +301,7 @@ const ShiftScreen = () => {
                       <span className="text-sm">Total Service</span>
                     </div>
                     <span className="text-sm">
-                      {currencyFormat(detail?.summary_order?.total_service_charge)}
+                      {currencyFormat(detail?.summary?.sales?.total_service)}
                     </span>
                   </div>
                   <div className="flex place-content-between place-items-center py-2">
@@ -294,35 +309,28 @@ const ShiftScreen = () => {
                       <span className="text-sm">Grand Total</span>
                     </div>
                     <span className="text-sm">
-                      {currencyFormat(detail?.summary_order?.total_charges)}
+                      {currencyFormat(detail?.summary?.sales?.grand_total)}
                     </span>
                   </div>
-                  <div className="flex place-content-between place-items-center py-2">
-                    <div>
-                      <span className="text-sm">Outstanding Bills</span>
-                    </div>
-                    <span className="text-sm">
-                      {currencyFormat(detail?.summary_order?.total_openbill)}
-                    </span>
-                  </div>
+
                 </div>
 
                 <div className="border-base-200 border-b pt-4 pb-2">
                   <div className="mb-2 text-sm font-semibold">Topup :</div>
-                  {detail?.topups?.map((item, i) => (
+                  {detail?.summary?.topups?.map((item, i) => (
                     <div key={i} className="flex place-content-between place-items-center py-2">
-                      <div className="text-sm capitalize">{item?.name}</div>
-                      <span className="text-sm">{currencyFormat(item?.nominal)}</span>
+                      <div className="text-sm capitalize">{item?.type}</div>
+                      <span className="text-sm">{currencyFormat(item?.total_nominal)}</span>
                     </div>
                   ))}
                 </div>
 
                 <div className="border-base-200 border-b pt-4 pb-2">
                   <div className="mb-2 text-sm font-semibold">Payments :</div>
-                  {detail?.cash_payments?.map((item, i) => (
+                  {detail?.summary?.payment_methods?.map((item, i) => (
                     <div key={i} className="flex place-content-between place-items-center py-2">
-                      <div className="text-sm">{item?.payment_name || 'Cash'}</div>
-                      <span className="text-sm">{currencyFormat(item?.subtotal)}</span>
+                      <div className="text-sm">{item?.name}</div>
+                      <span className="text-sm">{currencyFormat(item?.total_paid)}</span>
                     </div>
                   ))}
                 </div>
@@ -344,13 +352,13 @@ const ShiftScreen = () => {
 
                 <div className="border-base-200 border-b pt-4 pb-2">
                   <div className="mb-2 text-sm font-semibold">Category Sold :</div>
-                  {detail?.category_solds?.map((item, i) => (
+                  {detail?.summary?.category_solds?.map((item, i) => (
                     <div key={i} className="flex place-content-between place-items-center py-2">
                       <div>
                         <span className="bg-base-content rounded-lg px-3 py-1 text-sm text-white">
-                          {item?.quantity}
+                          {item?.total_qty}
                         </span>
-                        <span className="ps-2 text-sm">{item?.name || '-'}</span>
+                        <span className="ps-2 text-sm">{item?.category_name || '-'}</span>
                       </div>
                       <span className="text-sm">{currencyFormat(item?.total_charges)}</span>
                     </div>
@@ -376,7 +384,7 @@ const ShiftScreen = () => {
                   <div className="mb-2 text-sm font-semibold">Sales Order :</div>
 
                   <div className="grid grid-cols-2 gap-2">
-                    {detail?.sales_orders?.map((data, i) => (
+                    {detail?.orders?.map((data, i) => (
                       <div
                         key={i}
                         className="border-base-200 hover:border-primary hover:text-primary flex cursor-pointer place-content-between place-items-center gap-4 rounded border p-4"
@@ -388,7 +396,7 @@ const ShiftScreen = () => {
                           <div>
                             <div className="text-base">{currencyFormat(data?.total_charges)}</div>
                             <div className="text-base-300 text-xs">
-                              {dateFormat(data?.ordered_at)}
+                              {dateFormat(data?.created_at)}
                             </div>
                           </div>
                         </div>

@@ -87,7 +87,7 @@ const OrderDetails = ({ data }) => {
               )} */}
             </div>
             <div>
-              {item?.additionals?.map((addon, i) => (
+              {item?.addons?.map((addon, i) => (
                 <div key={i} className="flex place-content-between place-items-center text-base">
                   <div className="text-xs font-thin">
                     <span>

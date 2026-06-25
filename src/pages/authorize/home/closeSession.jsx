@@ -107,6 +107,7 @@ const CloseSection = () => {
     }
   }, [endResult]);
 
+
   const List = ({ title, value }) => {
     return (
       <div className="border-base-200 mb-3 flex items-center justify-between border-b py-1">
@@ -115,6 +116,8 @@ const CloseSection = () => {
       </div>
     );
   };
+
+  const data = summaryResult?.data?.data;
 
   return (
     <div className="border-base-200 bg-base-100 flex h-screen flex-col border-l">
@@ -135,59 +138,62 @@ const CloseSection = () => {
       </div>
 
       <div className="mt-4 flex-1 overflow-y-auto px-6 py-4">
-        <List title="Session Started" value={dateFormat(summaryResult?.data?.data?.started_at)} />
-        <List title="Cashier" value={summaryResult?.data?.data?.cashier?.name} />
+        <List title="Session Started" value={dateFormat(data?.started_at)} />
+        <List title="Cashier" value={data?.cashier?.name} />
         <List
           title="Starting Cash"
-          value={currencyFormat(summaryResult?.data?.data?.cash_started || 0)}
+          value={currencyFormat(data?.cash_started || 0)}
         />
         <List
           title="Outstanding Bill Payments"
-          value={currencyFormat(summaryResult?.data?.data?.bill_payment || 0)}
+          value={currencyFormat(data?.summary?.sales?.outstanding_bill_payment || 0)}
+        />
+        <List
+          title="Outstanding Bills"
+          value={currencyFormat(data?.summary?.sales?.outstanding_bill || 0)}
         />
         <List
           title="Total Sales"
-          value={currencyFormat(summaryResult?.data?.data?.summary_order?.total_nett || 0)}
+          value={currencyFormat(data?.summary?.sales?.total_sales || 0)}
         />
         <List
           title="Total Discount"
-          value={currencyFormat(summaryResult?.data?.data?.summary_order?.total_discount || 0)}
+          value={currencyFormat(data?.summary?.sales?.total_discount || 0)}
         />
         <List
           title="Total After Discount"
           value={currencyFormat(
-            summaryResult?.data?.data?.summary_order?.total_charges -
-              summaryResult?.data?.data?.summary_order?.total_service_charge || 0
+            data?.summary?.sales?.total_after_discount || 0
           )}
         />
         <List
           title="Total Service"
           value={currencyFormat(
-            summaryResult?.data?.data?.summary_order?.total_service_charge || 0
+            data?.summary?.sales?.total_service || 0
           )}
         />
         <List
           title="Grand Total"
-          value={currencyFormat(summaryResult?.data?.data?.summary_order?.total_charges || 0)}
+          value={currencyFormat(data?.summary?.sales?.grand_total || 0)}
         />
-        <List
-          title="Outstanding Bills"
-          value={currencyFormat(summaryResult?.data?.data?.summary_order?.total_openbill || 0)}
-        />{' '}
-        {summaryResult?.data?.data?.topups?.length > 0 && (
+
+        {data?.summary?.topups?.length > 0 && (
           <div className="bg-accent mb-3 rounded-md p-3">
-            {summaryResult?.data?.data?.topups?.map((t, i) => (
-              <List key={i} title={`Topup ${t?.name}`} value={currencyFormat(t?.nominal || 0)} />
+            {data?.summary?.topups?.map((t, i) => (
+              <List key={i} title={`Topup ${t?.type}`} value={currencyFormat(t?.total_nominal || 0)} />
             ))}
           </div>
         )}
-        {summaryResult?.data?.data?.cash_payments?.length > 0 && (
+
+        {data?.summary?.payment_methods
+?.length > 0 && (
           <div className="bg-accent mb-3 rounded-md p-3">
-            {summaryResult?.data?.data?.cash_payments?.map((pm, i) => (
+            {data?.summary?.payment_methods
+?.map((pm, i) => (
               <List
                 key={i}
-                title={pm?.payment_name === '' ? 'Cash' : pm?.payment_name}
-                value={currencyFormat(pm?.subtotal || 0)}
+                title={pm?.name}
+                value={currencyFormat(pm?.total_paid || 0)}
               />
             ))}
           </div>
@@ -200,7 +206,7 @@ const CloseSection = () => {
               const raw = e.target.value.replace(/[^0-9]/g, '');
               setCash(raw);
 
-              const different = Number(raw) - Number(summaryResult?.data?.data?.cash_due || 0);
+              const different = Number(raw) - Number(data?.summary?.cash?.expected_cash || 0);
 
               setDiff(isNaN(different) ? 0 : different);
             }}
