@@ -1,44 +1,41 @@
-import { openDB } from 'idb';
+import { openDB, deleteDB } from 'idb';
 import { v4 as uuidv4 } from 'uuid';
 
-const DB_NAME = 'pos-offline-queue';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const STORES = {
   pendingRequests: 'pendingRequests',
-  idempotencyKeys: 'idempotencyKeys',
   metadata: 'metadata',
 };
 
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
-let dbPromise = null;
+const dbInstances = new Map();
 
 const getNow = () => Date.now();
 
-const ensureDB = () => {
-  if (!dbPromise) {
-    dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        if (!db.objectStoreNames.contains(STORES.pendingRequests)) {
-          const store = db.createObjectStore(STORES.pendingRequests, { keyPath: 'id' });
-          store.createIndex('status', 'status', { unique: false });
-          store.createIndex('createdAt', 'createdAt', { unique: false });
-        }
+const getDBName = userId => `pos-offline-queue-${userId}`;
 
-        if (!db.objectStoreNames.contains(STORES.idempotencyKeys)) {
-          const idem = db.createObjectStore(STORES.idempotencyKeys, { keyPath: 'key' });
-          idem.createIndex('createdAt', 'createdAt', { unique: false });
-        }
+const ensureDB = userId => {
+  if (!userId) throw new Error('userId required for queue DB');
+  const key = String(userId);
+  if (!dbInstances.has(key)) {
+    dbInstances.set(
+      key,
+      openDB(getDBName(userId), DB_VERSION, {
+        upgrade(db) {
+          if (!db.objectStoreNames.contains(STORES.pendingRequests)) {
+            const store = db.createObjectStore(STORES.pendingRequests, { keyPath: 'id' });
+            store.createIndex('status', 'status', { unique: false });
+            store.createIndex('createdAt', 'createdAt', { unique: false });
+          }
 
-        if (!db.objectStoreNames.contains(STORES.metadata)) {
-          db.createObjectStore(STORES.metadata, { keyPath: 'key' });
-        }
-      },
-    });
+          if (!db.objectStoreNames.contains(STORES.metadata)) {
+            db.createObjectStore(STORES.metadata, { keyPath: 'key' });
+          }
+        },
+      })
+    );
   }
-
-  return dbPromise;
+  return dbInstances.get(key);
 };
 
 const sortFIFO = items => {
@@ -49,15 +46,32 @@ const sortFIFO = items => {
   });
 };
 
-export const generateIdempotencyKey = () => uuidv4();
+export const closeUserDB = async userId => {
+  const key = String(userId);
+  const db = dbInstances.get(key);
+  if (db) {
+    db.close();
+    dbInstances.delete(key);
+  }
+};
 
-export const initQueueDB = async () => {
-  await ensureDB();
+export const deleteUserDB = async userId => {
+  await closeUserDB(userId);
+  const name = getDBName(userId);
+  try {
+    await deleteDB(name);
+  } catch {
+    // DB may not exist, ignore
+  }
+};
+
+export const initQueueDB = async userId => {
+  await ensureDB(userId);
   return true;
 };
 
-export const addToQueue = async request => {
-  const db = await ensureDB();
+export const addToQueue = async (request, userId) => {
+  const db = await ensureDB(userId);
   const now = getNow();
 
   // If it's an open-bill request, check if a bill with the same ticket already exists in the queue
@@ -131,9 +145,24 @@ export const addToQueue = async request => {
     }
   }
 
+  // If it's a checkout request, remove any matching pending save-bill
+  const isCheckout =
+    String(request?.url).toLowerCase().includes('/sales/order') &&
+    request?.body?.status === 'completed' &&
+    ticketName;
+
+  if (isCheckout && ticketName) {
+    const allItems = await db.getAll(STORES.pendingRequests);
+    const pendingBills = allItems.filter(
+      item => String(item?.url).endsWith('open-bill') && item?.body?.ticket === ticketName
+    );
+    for (const bill of pendingBills) {
+      await db.delete(STORES.pendingRequests, bill.id);
+    }
+  }
+
   const item = {
     id: request?.id || uuidv4(),
-    idempotencyKey: request?.idempotencyKey || generateIdempotencyKey(),
     url: request?.url || '',
     method: request?.method || 'POST',
     body: request?.body ?? null,
@@ -153,25 +182,25 @@ export const addToQueue = async request => {
   return item;
 };
 
-export const getQueue = async () => {
-  const db = await ensureDB();
+export const getQueue = async userId => {
+  const db = await ensureDB(userId);
   const all = await db.getAll(STORES.pendingRequests);
   return sortFIFO(all);
 };
 
-export const getQueueByStatus = async status => {
-  const db = await ensureDB();
+export const getQueueByStatus = async (status, userId) => {
+  const db = await ensureDB(userId);
   const all = await db.getAllFromIndex(STORES.pendingRequests, 'status', status);
   return sortFIFO(all);
 };
 
-export const getQueueItem = async id => {
-  const db = await ensureDB();
+export const getQueueItem = async (id, userId) => {
+  const db = await ensureDB(userId);
   return db.get(STORES.pendingRequests, id);
 };
 
-export const updateQueueItem = async (id, updates = {}) => {
-  const db = await ensureDB();
+export const updateQueueItem = async (id, updates = {}, userId) => {
+  const db = await ensureDB(userId);
   const existing = await db.get(STORES.pendingRequests, id);
   if (!existing) return null;
 
@@ -185,58 +214,16 @@ export const updateQueueItem = async (id, updates = {}) => {
   return next;
 };
 
-export const removeFromQueue = async id => {
-  const db = await ensureDB();
+export const removeFromQueue = async (id, userId) => {
+  const db = await ensureDB(userId);
   await db.delete(STORES.pendingRequests, id);
   return true;
 };
 
-export const clearQueue = async () => {
-  const db = await ensureDB();
+export const clearQueue = async userId => {
+  const db = await ensureDB(userId);
   await db.clear(STORES.pendingRequests);
   return true;
-};
-
-export const hasIdempotentKey = async key => {
-  if (!key) return false;
-  const db = await ensureDB();
-  const found = await db.get(STORES.idempotencyKeys, key);
-  return !!found;
-};
-
-export const setIdempotentKey = async key => {
-  if (!key) return false;
-  const db = await ensureDB();
-  await db.put(STORES.idempotencyKeys, {
-    key,
-    createdAt: getNow(),
-  });
-  return true;
-};
-
-export const cleanupExpiredIdempotencyKeys = async () => {
-  const db = await ensureDB();
-  const all = await db.getAll(STORES.idempotencyKeys);
-  const threshold = getNow() - ONE_DAY_MS;
-
-  const expired = all.filter(item => (item?.createdAt || 0) < threshold);
-  await Promise.all(expired.map(item => db.delete(STORES.idempotencyKeys, item.key)));
-
-  return expired.length;
-};
-
-export const checkAndSetIdempotency = async key => {
-  if (!key) return { exists: false, set: false };
-
-  await cleanupExpiredIdempotencyKeys();
-
-  const exists = await hasIdempotentKey(key);
-  if (exists) {
-    return { exists: true, set: false };
-  }
-
-  await setIdempotentKey(key);
-  return { exists: false, set: true };
 };
 
 const METADATA_KEYS = {
@@ -244,13 +231,13 @@ const METADATA_KEYS = {
   syncAttempt: 'syncAttempt',
 };
 
-export const getPendingCount = async () => {
-  const pending = await getQueueByStatus('pending');
+export const getPendingCount = async userId => {
+  const pending = await getQueueByStatus('pending', userId);
   return pending.length;
 };
 
-export const setLastSyncTime = async timestamp => {
-  const db = await ensureDB();
+export const setLastSyncTime = async (timestamp, userId) => {
+  const db = await ensureDB(userId);
   await db.put(STORES.metadata, {
     key: METADATA_KEYS.lastSyncTime,
     value: timestamp,
@@ -259,14 +246,14 @@ export const setLastSyncTime = async timestamp => {
   return true;
 };
 
-export const getLastSyncTime = async () => {
-  const db = await ensureDB();
+export const getLastSyncTime = async userId => {
+  const db = await ensureDB(userId);
   const data = await db.get(STORES.metadata, METADATA_KEYS.lastSyncTime);
   return data?.value ?? null;
 };
 
-export const incrementSyncAttempt = async () => {
-  const db = await ensureDB();
+export const incrementSyncAttempt = async userId => {
+  const db = await ensureDB(userId);
   const item = await db.get(STORES.metadata, METADATA_KEYS.syncAttempt);
   const current = item?.value || 0;
   const next = current + 1;
@@ -280,15 +267,57 @@ export const incrementSyncAttempt = async () => {
   return next;
 };
 
-export const resetMetadata = async () => {
-  const db = await ensureDB();
+export const resetMetadata = async userId => {
+  const db = await ensureDB(userId);
   await db.clear(STORES.metadata);
   return true;
 };
 
-export const getAllMetadata = async () => {
-  const db = await ensureDB();
+export const getAllMetadata = async userId => {
+  const db = await ensureDB(userId);
   return db.getAll(STORES.metadata);
 };
 
-export const QUEUE_STORES = STORES;
+// --- Legacy migration helpers ---
+
+export const getLegacyQueue = async () => {
+  let db;
+  try {
+    db = await openDB('pos-offline-queue', 1);
+  } catch {
+    return [];
+  }
+  const all = await db.getAll('pendingRequests');
+  db.close();
+  return all;
+};
+
+export const migrateLegacyQueue = async userId => {
+  const legacy = await getLegacyQueue();
+  if (legacy.length === 0) return { migrated: 0 };
+
+  let written = 0;
+  const skipped = [];
+
+  for (const item of legacy) {
+    try {
+      await addToQueue(item, userId);
+      written++;
+    } catch {
+      skipped.push(item.id);
+    }
+  }
+
+  // Only delete legacy if all items were written successfully
+  if (skipped.length === 0) {
+    try {
+      const legacyDb = await openDB('pos-offline-queue', 1);
+      legacyDb.close();
+      await deleteDB('pos-offline-queue');
+    } catch {
+      // Legacy DB may not exist, ignore
+    }
+  }
+
+  return { migrated: written, skipped: skipped.length };
+};

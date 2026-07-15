@@ -8,21 +8,23 @@ import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useAuth from '../../../services/auth/hook';
 import useSession from '../../../services/sales/session/hook';
+import { syncNow, clearQueue, getPendingCount } from '../../../services/offline';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
 
 const CloseSection = () => {
   const { summary, summaryResult, end, endResult } = useSession();
   const pendingCount = useSelector(state => state?.Offline?.pendingCount || 0);
+  const userId = useSelector(state => state?.Auth?.session?.user?.id);
   const { onLogout } = useAuth();
 
   const { showCart } = useSidebar();
   const { openModal, closeModal } = useModal();
+  const [syncing, setSyncing] = React.useState(false);
 
   const { open } = usePrintWindow({
     title: 'Print Preview',
     autoClose: true,
-    onClose: () => onLogout(),
   });
 
   const [cash, setCash] = React.useState('');
@@ -32,46 +34,79 @@ const CloseSection = () => {
     open(<Summary data={v} />);
   };
 
+  const doEndSession = () => {
+    const payload = { cash_finished: Number(cash) };
+    end(payload);
+  };
+
+  const showFailoverModal = (count = pendingCount) => {
+    openModal(
+      <>
+        <Modal.Header onClose={closeModal}>
+          <div className="text-[16px] font-semibold tracking-wide">Pending Sync Warning</div>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="p-6">
+            <div className="mb-4 text-sm">
+              There are <b>{count}</b> transaction(s) that couldn't be synced.
+              Ending session now will remove these pending transactions.
+            </div>
+            <div className="flex place-content-end gap-3">
+              <button className="btn btn-outline" onClick={closeModal}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-outline"
+                onClick={() => {
+                  setSyncing(true);
+                  handleTrySync();
+                }}
+              >
+                Try Again
+              </button>
+              <button
+                className="btn btn-warning"
+                onClick={async () => {
+                  closeModal();
+                  await clearQueue(userId);
+                  doEndSession();
+                }}
+              >
+                Close Anyway
+              </button>
+            </div>
+          </div>
+        </Modal.Body>
+      </>
+    );
+  };
+
+  const handleTrySync = async () => {
+    try {
+      await syncNow();
+    } catch {
+      // sync failed silently
+    }
+    setSyncing(false);
+
+    // Re-check queue after sync attempt
+    const remaining = await getPendingCount(userId);
+    if (remaining > 0) {
+      showFailoverModal(remaining);
+    } else {
+      doEndSession();
+    }
+  };
+
   const onSubmit = async () => {
     if (pendingCount > 0) {
-      openModal(
-        <>
-          <Modal.Header onClose={closeModal}>
-            <div className="text-[16px] font-semibold tracking-wide">Pending Sync Warning</div>
-          </Modal.Header>
-          <Modal.Body>
-            <div className="p-6">
-              <div className="mb-4 text-sm">
-                There are <b>{pendingCount}</b> transaction(s) still pending sync.
-                Ending session now may leave sales unsynced.
-              </div>
-              <div className="flex place-content-end gap-3">
-                <button className="btn btn-outline" onClick={closeModal}>
-                  Cancel
-                </button>
-                <button
-                  className="btn btn-warning"
-                  onClick={() => {
-                    closeModal();
-                    const payload = { cash_finished: Number(cash) };
-                    end(payload);
-                  }}
-                >
-                  End Session Anyway
-                </button>
-              </div>
-            </div>
-          </Modal.Body>
-        </>
-      );
+      // Option 1: Try sync first
+      setSyncing(true);
+      await handleTrySync();
       return;
     }
 
-    const payload = {
-      cash_finished: Number(cash),
-    };
-
-    end(payload);
+    doEndSession();
   };
 
   const openLogout = () => {
@@ -222,11 +257,11 @@ const CloseSection = () => {
 
       <div className="border-base-200 min-h-15 border-t">
         <button
-          className={`btn btn-block btn-xl btn-primary rounded-none ${endResult?.isLoading ? 'btn-disabled' : ''}`}
+          className={`btn btn-block btn-xl btn-primary rounded-none ${endResult?.isLoading || syncing ? 'btn-disabled' : ''}`}
           onClick={onSubmit}
         >
-          End Session
-          {endResult?.isLoading && <span className="loading loading-spinner"></span>}
+          {syncing ? 'Syncing pending transactions...' : 'End Session'}
+          {(endResult?.isLoading || syncing) && <span className="loading loading-spinner"></span>}
         </button>
       </div>
     </div>

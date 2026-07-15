@@ -1,9 +1,11 @@
 // services/sales/session/hook.js
+import { useRef, useCallback } from 'react';
 import { useDispatch } from 'react-redux';
 
 import {
   useStartMutation,
   useEndMutation,
+  useUpdateDeviceMutation,
   useLazySummaryQuery,
   useLazySessionQuery,
   useLazyShowSessionQuery,
@@ -13,11 +15,51 @@ import { resetCart } from '../../cart/slice';
 import useCatalog from '../../catalog/hooks';
 import { $failure } from '../../form/action';
 
+const getDeviceInfo = async () => {
+  const info = {};
+
+  try {
+    const pos = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 300000,
+      });
+    });
+    info.latitude = pos.coords.latitude;
+    info.longitude = pos.coords.longitude;
+  } catch (e) {
+    // Geolocation unavailable or permission denied
+    console.log(e);
+  }
+
+  try {
+    const battery = await navigator.getBattery();
+    info.battery_level = `${Math.round(battery.level * 100)}`;
+  } catch (e) {
+    // Battery API unavailable
+    console.log(e);
+  }
+
+  return info;
+};
+
+// Module-level ref so external modules can stop tracking (e.g. on logout)
+export const trackingRef = { current: null };
+
+export const stopDeviceTrackingGlobal = () => {
+  if (trackingRef.current) {
+    clearInterval(trackingRef.current);
+    trackingRef.current = null;
+  }
+};
+
 const useSession = () => {
   const dispatch = useDispatch();
 
   const [startMutation, startResult] = useStartMutation();
   const [endMutation, endResult] = useEndMutation();
+  const [updateDeviceMutation, updateDeviceResult] = useUpdateDeviceMutation();
 
   const [triggerSummary, summaryResult] = useLazySummaryQuery();
   const [triggerSession, sessionResult] = useLazySessionQuery();
@@ -25,15 +67,27 @@ const useSession = () => {
 
   const { refreshCatalog } = useCatalog();
 
+  const sendDeviceData = useCallback(async () => {
+    const deviceInfo = await getDeviceInfo();
+    if (deviceInfo.latitude != null || deviceInfo.battery_level != null) {
+      try {
+        await updateDeviceMutation(deviceInfo).unwrap();
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.error('Device update error:', err);
+        }
+      }
+    }
+  }, [updateDeviceMutation]);
+
   const start = async data => {
     try {
-      const res = await startMutation(data).unwrap();
+      const deviceInfo = await getDeviceInfo();
+      const res = await startMutation({ ...data, ...deviceInfo }).unwrap();
       if (res?.message === 'success') {
         refreshCatalog();
         dispatch(resetCart());
-        // dispatch(clearSelectedChannel());
 
-        // If it was an offline session start, we manually set the session as active
         if (res?.data?.is_offline_session) {
           dispatch(checkSession());
         } else {
@@ -45,7 +99,25 @@ const useSession = () => {
     }
   };
 
+  const startDeviceTracking = useCallback(
+    (intervalMs = 300000) => {
+      stopDeviceTracking();
+      trackingRef.current = setInterval(() => {
+        sendDeviceData();
+      }, intervalMs);
+    },
+    [sendDeviceData]
+  );
+
+  const stopDeviceTracking = useCallback(() => {
+    if (trackingRef.current) {
+      clearInterval(trackingRef.current);
+      trackingRef.current = null;
+    }
+  }, []);
+
   const end = async data => {
+    stopDeviceTracking();
     try {
       const res = await endMutation(data).unwrap();
 
@@ -104,6 +176,10 @@ const useSession = () => {
     sessionResult,
     show,
     showResult,
+    sendDeviceData,
+    startDeviceTracking,
+    stopDeviceTracking,
+    updateDeviceResult,
   };
 };
 

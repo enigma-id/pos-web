@@ -165,8 +165,6 @@ const Cart = ({ onUpdate }) => {
       authSession: session,
     });
 
-    console.log("------------------", {id: CartState?.bill?.id, payload, __offlinePreview: saveBillOfflineDataRef.current})
-
     if (CartState?.bill?.id) {
       payload.bill_name = CartState?.bill?.bill_name;
       await update({id: CartState?.bill?.id, payload, __offlinePreview: saveBillOfflineDataRef.current})
@@ -295,7 +293,7 @@ const Cart = ({ onUpdate }) => {
           },
           status: 'pending',
         },
-      });
+      }, session?.user?.id);
     }
 
     openModal(<SuccessModal data={printData} />, 'w-md');

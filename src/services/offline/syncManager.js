@@ -27,6 +27,12 @@ let storeRef = null;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+const getCurrentUserId = () => {
+  if (!storeRef) return null;
+  const state = storeRef.getState();
+  return state?.Auth?.session?.user?.id ?? null;
+};
+
 const getStatusCode = error => {
   if (!error) return null;
   if (typeof error?.status === 'number') return error.status;
@@ -44,7 +50,16 @@ const shouldRetry = error => {
 const broadcastQueueState = async () => {
   if (!storeRef) return;
 
-  const all = await getQueue();
+  const userId = getCurrentUserId();
+  if (!userId) {
+    storeRef.dispatch(setQueueItems([]));
+    storeRef.dispatch(setPendingCount(0));
+    storeRef.dispatch(setFailedCount(0));
+    storeRef.dispatch(setWarning(null));
+    return;
+  }
+
+  const all = await getQueue(userId);
   const pending = all.filter(item => item.status === 'pending');
   const failed = all.filter(item => item.status === 'failed');
 
@@ -81,52 +96,51 @@ const executeQueuedRequest = async item => {
   return baseQuery(args, fakeApi, {});
 };
 
-const markFailed = async (item, message) => {
+const markFailed = async (item, message, userId) => {
   await updateQueueItem(item.id, {
     status: 'failed',
     lastError: message || 'Sync failed',
-  });
+  }, userId);
 };
 
-// 1. Add a Set to track items currently being synced
+// Tracks items currently being synced to prevent duplicate processing
 const syncingItems = new Set();
 
-// ... existing code ...
-
-const processItem = async item => {
-  // 2. Check if this specific item is already being processed
+const processItem = async (item, userId) => {
+  // Prevent duplicate processing of the same item
   if (syncingItems.has(item.id)) {
     console.log(`Sync already in progress for item: ${item.id}`);
     return { ok: false };
   }
 
-  // 3. Add to lock
+  // Add to lock
   syncingItems.add(item.id);
 
   try {
-    await updateQueueItem(item.id, { status: 'syncing' });
+    // Reset retry budget per sync session
+    await updateQueueItem(item.id, { retryCount: 0 }, userId);
+    item.retryCount = 0;
+
+    await updateQueueItem(item.id, { status: 'syncing' }, userId);
 
     for (let attempt = item.retryCount || 0; attempt < MAX_RETRY; attempt += 1) {
       const result = await executeQueuedRequest(item);
 
       if (!result?.error) {
-        await updateQueueItem(item.id, { status: 'completed', retryCount: attempt });
+        await updateQueueItem(item.id, { status: 'completed', retryCount: attempt }, userId);
         await sleep(REMOVE_DELAY);
-        await removeFromQueue(item.id);
+        await removeFromQueue(item.id, userId);
         return { ok: true };
       }
 
       const status = getStatusCode(result.error);
       if (status === 401) {
-        await markFailed(item, 'Authentication expired. Please login again.');
-        if (storeRef) {
-          storeRef.dispatch(setOfflineError('Session expired during sync. Please login again.'));
-        }
-        return { ok: false, stop: true };
+        await markFailed(item, 'Session expired. Please login again.', userId);
+        return { ok: false };
       }
 
       if (!shouldRetry(result.error)) {
-        await markFailed(item, result?.error?.data?.message || 'Client error, not retried');
+        await markFailed(item, result?.error?.data?.message || 'Client error, not retried', userId);
         return { ok: false };
       }
 
@@ -135,16 +149,16 @@ const processItem = async item => {
         retryCount: nextRetryCount,
         status: 'pending',
         lastError: result?.error?.data?.message || 'Retrying due to server/network issue',
-      });
+      }, userId);
 
       const delay = BASE_DELAY * 2 ** attempt;
       await sleep(delay);
     }
 
-    await markFailed(item, 'Max retries reached');
+    await markFailed(item, 'Max retries reached', userId);
     return { ok: false };
   } finally {
-    // 4. Always remove from lock in finally block
+    // Always remove from lock in finally block
     syncingItems.delete(item.id);
   }
 };
@@ -175,19 +189,22 @@ export const syncNow = async () => {
   if (isSyncingInternal) return;
   if (typeof navigator !== 'undefined' && !navigator.onLine) return;
 
+  const userId = getCurrentUserId();
+  if (!userId) return;
+
   isSyncingInternal = true;
   storeRef.dispatch(setSyncing(true));
   storeRef.dispatch(setOfflineError(null));
 
   try {
-    let pending = await getQueueByStatus('pending');
+    let pending = await getQueueByStatus('pending', userId);
 
     while (pending.length > 0) {
       // Prioritize: Start Session > Transactions > End Session
       const sorted = sortPendingQueue(pending);
       const current = sorted[0];
 
-      const result = await processItem(current);
+      const result = await processItem(current, userId);
 
       const isStartSession =
         String(current.url).includes('/sales/session') &&
@@ -203,11 +220,11 @@ export const syncNow = async () => {
         break;
       }
 
-      pending = await getQueueByStatus('pending');
+      pending = await getQueueByStatus('pending', userId);
     }
 
     const now = new Date().toISOString();
-    await setLastSyncTimeMeta(now);
+    await setLastSyncTimeMeta(now, userId);
     storeRef.dispatch(setLastSyncTime(now));
   } catch (error) {
     if (storeRef) {
@@ -223,29 +240,54 @@ export const syncNow = async () => {
 };
 
 export const retryFailedItem = async id => {
-  const all = await getQueue();
+  const userId = getCurrentUserId();
+  if (!userId) return false;
+
+  const all = await getQueue(userId);
   const item = all.find(x => x.id === id);
   if (!item) return false;
 
-  await updateQueueItem(id, { status: 'pending', retryCount: 0, lastError: null });
+  await updateQueueItem(id, { status: 'pending', retryCount: 0, lastError: null }, userId);
   await broadcastQueueState();
   await syncNow();
   return true;
 };
 
 export const removeFailedItem = async id => {
-  await removeFromQueue(id);
+  const userId = getCurrentUserId();
+  if (!userId) return false;
+
+  await removeFromQueue(id, userId);
   await broadcastQueueState();
   return true;
 };
 
+let prevUserId = null;
+
 export const initSyncManager = async store => {
   storeRef = store;
 
+  // Try broadcast immediately (user may already be rehydrated)
   await broadcastQueueState();
+
+  // Subscribe to auth changes — rehydrate queue state when user logs in/out
+  store.subscribe(() => {
+    const state = store.getState();
+    const userId = state?.Auth?.session?.user?.id ?? null;
+    if (userId !== prevUserId) {
+      prevUserId = userId;
+      broadcastQueueState();
+      if (userId) {
+        syncNow();
+      }
+    }
+  });
 
   if (typeof window !== 'undefined') {
     const onOnline = () => {
+      const userId = getCurrentUserId();
+      if (!userId) return;
+
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
       }
@@ -255,12 +297,6 @@ export const initSyncManager = async store => {
     };
 
     window.addEventListener('online', onOnline);
-
-    if (typeof navigator === 'undefined' || navigator.onLine) {
-      setTimeout(() => {
-        syncNow();
-      }, RECONNECT_DELAY);
-    }
   }
 };
 

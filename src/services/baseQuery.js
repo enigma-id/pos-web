@@ -79,7 +79,19 @@ const queueOfflineMutation = async (args, api) => {
   const url = String(args?.url || '');
   const method = String(args?.method || 'GET').toUpperCase();
 
-  const token = api?.getState?.()?.Auth?.token || null;
+  const state = api?.getState?.();
+  const token = state?.Auth?.token || null;
+  const userId = state?.Auth?.session?.user?.id;
+
+  // If no userId (not logged in), skip queue
+  if (!userId) {
+    return {
+      data: {
+        status: 'error',
+        message: 'Cannot queue offline mutation: no user logged in.',
+      },
+    };
+  }
 
   // Special handling for Session Start to provide immediate UI feedback
   const isSessionStart = url.includes('/sales/session') && !url.includes('/sales/session/close');
@@ -99,7 +111,7 @@ const queueOfflineMutation = async (args, api) => {
     type: 'mutation',
     status: 'pending',
     transaction_preview: previewData,
-  });
+  }, userId);
 
   const queued = {
     ...queuedRaw,
@@ -109,7 +121,7 @@ const queueOfflineMutation = async (args, api) => {
     },
   };
 
-  const pendingCount = await getPendingCount();
+  const pendingCount = await getPendingCount(userId);
   api.dispatch(setPendingCount(pendingCount));
 
   const offlineState = api?.getState?.()?.Offline;

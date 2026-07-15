@@ -44,12 +44,21 @@ export const salesSessionApi = createApi({
         method: 'GET',
       }),
     }),
+    updateDevice: builder.mutation({
+      query: payload => ({
+        url: '/sales/session/device',
+        method: 'PUT',
+        body: payload,
+        __skipOfflineQueue: true,
+      }),
+    }),
   }),
 });
 
 export const {
   useStartMutation,
   useEndMutation,
+  useUpdateDeviceMutation,
   useLazySummaryQuery,
   useLazySessionQuery,
   useLazyShowSessionQuery,
