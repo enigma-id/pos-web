@@ -178,9 +178,14 @@ const CatalogScreen = () => {
                   >
                     <div className="catalog-img">
                       <img
-                        src={cat?.image}
+                        src={cat?.image || '/placeholder.svg'}
                         alt={cat?.name}
                         className="bg-secondary h-full w-full rounded-xl object-cover"
+                        onError={e => {
+                          if (e.target.src !== '/placeholder.svg') {
+                            e.target.src = '/placeholder.svg';
+                          }
+                        }}
                       />
                     </div>
                     <div className="py-2">
