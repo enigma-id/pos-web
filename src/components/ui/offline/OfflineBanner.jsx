@@ -5,6 +5,7 @@ const variantMap = {
   syncing: 'alert-info',
   warning: 'alert-warning',
   error: 'alert-error',
+  success: 'alert-success',
 };
 
 const OfflineBanner = ({

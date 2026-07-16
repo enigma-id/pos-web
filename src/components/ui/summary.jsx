@@ -5,8 +5,6 @@ import { currencyFormat, dateFormat } from '../../utils/common';
 const Summary = ({ data }) => {
   if (!data) return;
 
-  console.log(data)
-
   const formatFinishedAt = dateString => {
     const date = new Date(dateString);
     const year = date.getFullYear();

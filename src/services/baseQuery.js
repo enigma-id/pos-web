@@ -57,8 +57,6 @@ const buildTransactionPreview = ({ args, queued }) => {
   const totalPayment = Number(body?.total_payment);
   const safeTotalPayment = totalPayment;
 
-  console.log('body', body);
-
   return {
     code: body?.code || `OFF-${queued?.id ?? Date.now()}`,
     channel: {
@@ -99,19 +97,22 @@ const queueOfflineMutation = async (args, api) => {
 
   const previewData = buildTransactionPreview({ args, queued: { id: null } });
 
-  const queuedRaw = await addToQueue({
-    url: args?.url,
-    method,
-    body: args?.body,
-    params: args?.params,
-    headers: {
-      ...toObjectHeaders(args?.headers),
+  const queuedRaw = await addToQueue(
+    {
+      url: args?.url,
+      method,
+      body: args?.body,
+      params: args?.params,
+      headers: {
+        ...toObjectHeaders(args?.headers),
+      },
+      token,
+      type: 'mutation',
+      status: 'pending',
+      transaction_preview: previewData,
     },
-    token,
-    type: 'mutation',
-    status: 'pending',
-    transaction_preview: previewData,
-  }, userId);
+    userId
+  );
 
   const queued = {
     ...queuedRaw,

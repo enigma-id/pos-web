@@ -112,11 +112,9 @@ const useCatalog = () => {
 
     const categoryData = await getOrFetchCatalog(categoryKey, async () => {
       const res = await triggerCategories().unwrap();
-      console.log('category data', res);
       const data = res?.data || [];
       return [{ id: 0, name: 'All Category' }, ...data];
     });
-    console.log('categoryData', categoryData);
 
     setAllCatalog(catalogData);
     setCategories(categoryData);

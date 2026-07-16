@@ -13,12 +13,10 @@ export const salesOrderApi = createApi({
       }),
     }),
     update: builder.mutation({
-      query: ({ id, ...payload }) => ({
+      query: ({ id, payload }) => ({
         url: `/sales/order/${id}`,
         method: 'PUT',
-        body: {
-          ...payload,
-        },
+        body: payload,
       }),
     }),
     cancel: builder.mutation({

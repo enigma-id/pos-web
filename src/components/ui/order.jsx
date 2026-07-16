@@ -46,9 +46,9 @@ const OrderDetails = ({ data }) => {
       </div>
 
       <div className="border-base-200 border-b py-4">
-        {(data?.ticket || data?.note) && (
+        {(data?.bill_name || data?.ticket || data?.note) && (
           <div className="mb-2 text-sm">
-            <span className="font-semibold">Bills name :</span> {data?.ticket || data?.note}
+            <span className="font-semibold">Bills name :</span> {data?.bill_name || data?.ticket || data?.note}
           </div>
         )}
         <div className="mb-2 text-sm">
@@ -91,10 +91,10 @@ const OrderDetails = ({ data }) => {
                 <div key={i} className="flex place-content-between place-items-center text-base">
                   <div className="text-xs font-thin">
                     <span>
-                      + {addon?.catalog?.name}{' '}
+                      + {addon?.catalog_name}{' '}
                       {addon?.addon?.type === 'options'
                         ? ''
-                        : `(${addon?.quantity > 0 && addon?.quantity} x ${currencyFormat(addon?.unit_nett)})`}
+                        : `${addon?.quantity > 0 ? `(${addon?.quantity} x ${currencyFormat(addon?.unit_nett)})` : ""}`}
                     </span>
                   </div>
                   <div className="text-xs font-thin">

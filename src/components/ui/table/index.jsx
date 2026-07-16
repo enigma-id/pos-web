@@ -36,7 +36,12 @@ const useTable = (name, config) => {
 
       const isSuccess = res?.message === 'success';
       const data = isSuccess && Array.isArray(res?.data) ? res?.data : [];
-      const total = isSuccess && typeof res?.total === 'number' ? res?.total : data?.length;
+      const total =
+        isSuccess && typeof res?.meta?.total === 'number'
+          ? res?.meta?.total
+          : isSuccess && typeof res?.total === 'number'
+            ? res?.total
+            : data?.length;
       const isEmpty = data?.length === 0;
 
       dispatch(

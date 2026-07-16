@@ -57,7 +57,7 @@ const SuccessModal = ({ data, backToMenu }) => {
         </div>
 
         <div className="py-4 text-center">
-          {data?.offline_queued ? (
+          {data?.offline_queued && data?.status !== 'pending' ? (
             <>
               <p className="text-base font-semibold">Payment saved locally.</p>
               <p className="text-base-300 text-sm">
@@ -79,6 +79,13 @@ const SuccessModal = ({ data, backToMenu }) => {
                   </div>
                 )}
               </div>
+            </>
+          ) : data?.offline_queued ? (
+            <>
+              <p className="text-base font-semibold">Bill saved locally.</p>
+              <p className="text-base-300 text-sm">
+                It will sync automatically when your connection is restored.
+              </p>
             </>
           ) : (
             <p className="text-base font-semibold">Bill saved successfully.</p>

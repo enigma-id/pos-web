@@ -37,8 +37,6 @@ const buildAdditionalsFromItem = item => {
       const childQty = toNumber(child?.quantity);
       const selected = Boolean(child?.selected) || childQty > 0;
 
-      console.log('item', item);
-      console.log('child', child);
       if (!selected) return;
 
       groupedFromCart.push({
@@ -278,7 +276,6 @@ export const buildOfflineTransactionPayload = ({
   // id: '9930ee69-1aa2-4498-b856-5c168f3ef8d0';
   // is_discount_percentage: false;
   // order_id: 'c6a5cf80-5b4d-41b8-8b95-9c2d66742226';
-  console.log('cartState', cartState);
 
   return {
     id: orderId,
@@ -295,7 +292,7 @@ export const buildOfflineTransactionPayload = ({
       cartState?.meta?.bill_name ||
       cartState?.bill?.bill_name ||
       '',
-    status: 'completed',
+    status: queueMeta?.requestBody?.status || 'completed',
     subtotal_tax: subtotalTax,
     subtotal_taxed: subtotalTaxed,
     subtotal_gross: subtotalGross,

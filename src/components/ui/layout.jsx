@@ -1,50 +1,94 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { BurgerIcon, HistoryIcon, ListIcon, MenuIcon, ReceiptIcon, UserIcon } from './icon';
+import { BurgerIcon, DeviceIcon, HistoryIcon, ListIcon, MenuIcon, ReceiptIcon, UserIcon, TruckIcon } from './icon';
 import { OfflineBanner, PendingDrawer, SyncIndicator } from './offline';
 import useSidebar from './sidebar/hook';
 import { loadOfflineBill } from '../../services/cart/slice';
 import { removeFailedItem, retryFailedItem, syncNow } from '../../services/offline';
+import { setNetworkState } from '../../services/offline/slice';
+import useNetworkStatus from '../../services/offline/useNetworkStatus';
 import useSession from '../../services/sales/session/hook';
 import { isActive } from '../../utils/common';
 
 const Layout = ({ children }) => {
   const dispatch = useDispatch();
   const Offline = useSelector(state => state?.Offline);
+  const { isOnline, wasOffline } = useNetworkStatus();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [showBanner, setShowBanner] = useState(true);
+  const [backOnline, setBackOnline] = useState(false);
+  const prevOnlineRef = useRef(isOnline);
+
+  // Wire network status to Redux
+  useEffect(() => {
+    dispatch(setNetworkState({ isOnline, wasOffline }));
+  }, [isOnline, wasOffline]);
+
+  // Re-show banner on offline transition; brief "back online" on reconnect
+  useEffect(() => {
+    const prev = prevOnlineRef.current;
+    prevOnlineRef.current = isOnline;
+
+    if (prev && !isOnline) {
+      // Went offline — re-show banner
+      setShowBanner(true);
+      setBackOnline(false);
+    }
+
+    if (wasOffline && isOnline) {
+      // Just came back — brief "back online" banner, auto-dismiss 5s
+      setBackOnline(true);
+      setShowBanner(true);
+      const t = setTimeout(() => {
+        setBackOnline(false);
+        setShowBanner(false);
+      }, 5000);
+      return () => clearTimeout(t);
+    }
+  }, [isOnline, wasOffline]);
 
   const handleOpenBill = queueItem => {
     dispatch(loadOfflineBill(queueItem));
   };
 
-  const banner =
-    showBanner &&
-    (!Offline?.isOnline && !Offline?.isSyncing
-      ? {
-          variant: 'offline',
-          message: 'Offline mode. Transactions will be queued.',
-        }
-      : Offline?.isSyncing
-        ? {
-            variant: 'syncing',
-            message: 'Syncing queued transactions...',
-            pendingCount: Offline?.pendingCount || 0,
-          }
-        : Offline?.error
-          ? {
-              variant: 'error',
-              message: Offline?.error,
-            }
-          : Offline?.warning
-            ? {
-                variant: 'warning',
-                message: Offline?.warning,
-              }
-            : null);
+  const banner = (() => {
+    if (!showBanner) return null;
+
+    if (backOnline) {
+      return {
+        variant: 'success',
+        message: 'Back online. Connection restored.',
+      };
+    }
+
+    if (!Offline?.isOnline && !Offline?.isSyncing) {
+      return {
+        variant: 'offline',
+        message: 'Offline mode. Transactions will be queued.',
+      };
+    }
+
+    if (Offline?.isSyncing) {
+      return {
+        variant: 'syncing',
+        message: 'Syncing queued transactions...',
+        pendingCount: Offline?.pendingCount || 0,
+      };
+    }
+
+    if (Offline?.error) {
+      return { variant: 'error', message: Offline?.error };
+    }
+
+    if (Offline?.warning) {
+      return { variant: 'warning', message: Offline?.warning };
+    }
+
+    return null;
+  })();
 
   return (
     <div className="flex h-screen w-screen">
@@ -54,7 +98,10 @@ const Layout = ({ children }) => {
           message={banner.message}
           pendingCount={banner.pendingCount}
           onRetry={() => syncNow()}
-          onDismiss={() => setShowBanner(false)}
+          onDismiss={() => {
+            setShowBanner(false);
+            setBackOnline(false);
+          }}
         />
       )}
       {children}
@@ -75,7 +122,7 @@ const Navbar = () => {
   const User = useSelector(state => state?.Auth?.session?.user);
   const SalesSession = useSelector(state => state?.SalesSession);
 
-  const { summary } = useSession();
+  const { summary, sendDeviceData, updateDeviceResult, startDeviceTracking, stopDeviceTracking } = useSession();
   const { showSummary } = useSidebar();
 
   const location = useLocation();
@@ -92,6 +139,15 @@ const Navbar = () => {
   useEffect(() => {
     summary();
   }, []);
+
+  // Start/stop device tracking based on active session
+  useEffect(() => {
+    if (SalesSession?.hasSession) {
+      startDeviceTracking();
+    } else {
+      stopDeviceTracking();
+    }
+  }, [SalesSession?.hasSession, startDeviceTracking, stopDeviceTracking]);
 
   return (
     <div
@@ -142,6 +198,14 @@ const Navbar = () => {
           <ReceiptIcon />
           <small>Saved Bills</small>
         </div>
+
+        <div
+          className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'delivery')}`}
+          onClick={() => navigate('/delivery')}
+        >
+          <TruckIcon />
+          <small>Delivery</small>
+        </div>
       </div>
 
       <div className="mb-5">
@@ -152,6 +216,18 @@ const Navbar = () => {
             onClick={() => setDrawerOpen(true)}
           />
         </div>
+        {SalesSession?.hasSession && (
+          <div
+            className={`nav-items mb-3 place-items-center`}
+            onClick={() => !updateDeviceResult?.isLoading && sendDeviceData()}
+          >
+            {updateDeviceResult?.isLoading ? (
+              <span className="loading loading-spinner loading-sm"></span>
+            ) : (
+              <DeviceIcon />
+            )}
+          </div>
+        )}
         <div
           className={`nav-items mb-3`}
           onClick={

@@ -97,7 +97,7 @@ const BillScreen = () => {
                     <div className={`text-base ${selectedIndex === index ? 'text-primary' : ''}`}>
                       {currencyFormat(item?.total_charges)}
                     </div>
-                    <div className="text-base-300 text-xs">{item?.ticket || '-'}</div>
+                    <div className="text-base-300 text-xs">{item?.bill_name || item?.ticket || '-'}</div>
                   </div>
                 </div>
                 <div className="flex flex-col place-content-between">

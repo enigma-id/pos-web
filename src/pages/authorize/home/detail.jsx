@@ -31,8 +31,6 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
       setQuantity(itemQty);
       setInitialQuantity(itemQty);
 
-      console.log(detail)
-
       const additions = (detail?.addons || []).map(add => {
         const cartAddon = existingItem?.addons?.find(a => a.id === add.id);
 
@@ -71,16 +69,12 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
   const addToCart = () => {
     if (!catalogData) return;
 
-      console.log("catalogData", catalogData)
-
     const formattedItem = {
       ...catalogData,
       quantity,
       addons: additionals,
       subtotal: calculateSubtotal(),
     };
-      console.log("formattedItem", formattedItem)
-
 
     if (mode === 'edit') {
       change(editKey, formattedItem, type);

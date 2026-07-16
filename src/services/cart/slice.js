@@ -35,7 +35,6 @@ function extractUniqueCategories(items) {
   const map = new Map();
 
   items.forEach(item => {
-    console.log('category discount', item);
     const cat = { id: item.category_id, name: item.category_name };
 
     const discountType =
@@ -154,7 +153,28 @@ function convertApiOrderToCartItem(item) {
   for (const add of item.addons || []) {
     const addon = add.addon || {};
     const addonId = addon.id || add.addon_group_id;
-    if (!addonId) continue;
+
+    // Flat order response (no group metadata) → group under shared sentinel
+    if (!addonId) {
+      if (!groupedAdditionals._flat_addons_) {
+        groupedAdditionals._flat_addons_ = {
+          id: '_flat_addons_',
+          name: 'Add-ons',
+          type: 'options',
+          items: [],
+        };
+      }
+      const qty = add.quantity > 0 ? add.quantity / item.quantity : 1;
+      groupedAdditionals._flat_addons_.items.push({
+        id: add.id || add.catalog_id,
+        catalog_id: add.catalog_id,
+        name: add.catalog_name || '',
+        unit_price: add.unit_nett || add.unit_price || 0,
+        quantity: qty,
+        selected: true,
+      });
+      continue;
+    }
 
     if (!groupedAdditionals[addonId]) {
       groupedAdditionals[addonId] = {
@@ -171,10 +191,10 @@ function convertApiOrderToCartItem(item) {
     groupedAdditionals[addonId].items.push({
       id: add.id,
       catalog_id: addCatalog.id || add.catalog_id,
-      name: addCatalog.name || add.name || '',
-      unit_price: addCatalog.unit_price || add.unit_nett || 0,
+      name: addCatalog.name || add.name || add.catalog_name || '',
+      unit_price: addCatalog.unit_price || add.unit_nett || add.unit_price || 0,
       quantity: qty,
-      selected: add.quantity > 0 || (addon.type || add.addon_type) !== 'quantity',
+      selected: true,
     });
   }
 
@@ -182,9 +202,9 @@ function convertApiOrderToCartItem(item) {
 
   const additionalsFlat = (item.addons || []).map(add => ({
     id: add.id,
-    addon_group_id: add.addon?.id || add.addon_group_id,
-    addon_item_id: add.catalog?.id || add.addon_item_id,
-    ...(add.quantity ? { quantity: add.quantity / item.quantity } : {}),
+    addon_group_id: add.addon?.id || add.addon_group_id || add.id,
+    addon_item_id: add.catalog?.id || add.catalog_id || add.addon_item_id,
+    quantity: add.quantity > 0 ? add.quantity / item.quantity : 1,
   }));
 
   const additionalPerItem = calculateAdditionalsPerItem(additionalsGrouped);
@@ -469,6 +489,10 @@ const cartSlice = createSlice({
 
       state.bill = bill;
       state.meta.customer = bill?.membership ?? null;
+      state.meta.service_charge_value = bill?.service_charge_value ?? 0;
+      if (bill?.service_charge_percentage > 0) {
+        state.meta.service_charge_percentage = bill?.service_charge_percentage;
+      }
       recalculateTotals(state);
     },
 
@@ -478,7 +502,6 @@ const cartSlice = createSlice({
       state.items.bill = items.map(item => convertApiOrderToCartItem(item));
 
       const allItems = [...state.items.list, ...state.items.bill];
-      console.log('items', items);
 
       if (
         category_discounts &&
@@ -487,9 +510,6 @@ const cartSlice = createSlice({
       ) {
         state.discount.category = category_discounts.map(cd => {
           const itemWithCat = allItems.find(i => i.category_id === cd.category_id);
-
-          console.log('itemWithCat', itemWithCat);
-          console.log('allItems', allItems);
 
           return {
             id: cd.category_id,

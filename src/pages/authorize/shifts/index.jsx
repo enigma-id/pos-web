@@ -114,8 +114,9 @@ const ShiftScreen = () => {
   }, [showOrderResult]);
 
   const data = sessionResult?.data?.data || [];
-  const total = sessionResult?.data?.total || 0;
-  const totalPages = Math.ceil(total / itemsPerPage);
+  const meta = sessionResult?.data?.meta || {};
+  const total = meta?.total || 0;
+  const totalPages = meta?.total_pages || 0;
 
   return (
     <Drawer.Wrapper>
@@ -166,7 +167,7 @@ const ShiftScreen = () => {
                     </div>
                   </div>
                   <div
-                    className={`${item?.status === 'active' ? 'bg-base-300' : 'bg-success'} h-fit w-fit rounded-full px-4 py-1 text-[11px] text-white`}
+                    className={`h-fit w-fit rounded-full px-4 py-1 text-[11px] text-white ${item?.status === 'opened' ? 'bg-success' : 'bg-base-300'}`}
                   >
                     {item?.status}
                   </div>
@@ -185,7 +186,7 @@ const ShiftScreen = () => {
             </button>
             <button
               onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages || data.total === 0}
+              disabled={currentPage === totalPages || total === 0}
               className="disabled:btn-disabled btn"
             >
               Next

@@ -10,12 +10,12 @@ import {
 } from '../../utils/cache';
 import { changeServiceCharge, resetCart } from '../cart/slice';
 import { $failure } from '../form/action';
-import { clearSelectedChannel } from '../sales/channel/slice';
-import { invalidateSession } from '../sales/session/slice';
-import { stopDeviceTrackingGlobal } from '../sales/session/hook';
-import { $reset } from '../table/action';
 import { getPendingCount, deleteUserDB, migrateLegacyQueue } from '../offline/queue';
 import { syncNow } from '../offline/syncManager';
+import { clearSelectedChannel } from '../sales/channel/slice';
+import { stopDeviceTrackingGlobal } from '../sales/session/hook';
+import { invalidateSession } from '../sales/session/slice';
+import { $reset } from '../table/action';
 
 const useAuth = () => {
   const dispatch = useDispatch();
@@ -28,6 +28,7 @@ const useAuth = () => {
     try {
       const res = await loginMutation(data).unwrap();
       dispatch(login(res?.data));
+
       getUser();
 
       // Recover queue for this user (fire-and-forget)
@@ -44,11 +45,13 @@ const useAuth = () => {
   const getUser = async () => {
     try {
       const res = await triggerGetUser().unwrap();
-      dispatch(session(res?.data));
 
-      const charge = res?.data?.sales_session?.outlet?.service_charges;
-      setSalesCacheValue('service_charge', charge);
-      dispatch(changeServiceCharge(charge));
+      if (res?.message === 'success') {
+        dispatch(session(res?.data));
+        const charge = res?.data?.sales_session?.outlet?.service_charges;
+        setSalesCacheValue('service_charge', charge);
+        dispatch(changeServiceCharge(charge));
+      }
     } catch (error) {
       const cachedCharge = getSalesCacheValue('service_charge');
       if (cachedCharge !== null && cachedCharge !== undefined) {

@@ -5,9 +5,6 @@ import { currencyFormat, dateFormat } from '../../utils/common';
 const Receipt = ({ data }) => {
   const [discountMap, setDiscountMap] = React.useState([]);
 
-  console.log(data)
-
-
   const groupedCategories = (items, category_discounts) => {
     if (!category_discounts || category_discounts.length === 0) {
       setDiscountMap([]);
@@ -122,7 +119,7 @@ const Receipt = ({ data }) => {
           <div style={{ display: 'flex', alignItems: '', justifyContent: 'space-between' }}>
             <div>
               <p style={{ marginBlock: 2, fontSize: 11, textTransform: 'capitalize' }}>
-                {item?.catalog?.name || item?.description}
+                {item?.catalog?.name || item?.catalog_name || item?.description}
               </p>
               <p style={{ marginBlock: 2, fontSize: 9 }}>
                 {item?.quantity} x {currencyFormat(item?.unit_nett, false)}
@@ -138,9 +135,9 @@ const Receipt = ({ data }) => {
               style={{ display: 'flex', alignItems: '', justifyContent: 'space-between' }}
             >
               <p style={{ marginBlock: 2, fontSize: 9, textTransform: 'capitalize' }}>
-                + {addon?.catalog?.name}
-                {addon?.addon?.type === 'quantity' &&
-                  ` (${addon?.quantity} x ${currencyFormat(addon?.unit_nett, false)})`}
+                + {addon?.catalog_name}{' '}
+                {addon?.addon?.type === 'options' ? ''
+                  : `${addon?.quantity > 0 ? `(${addon?.quantity} x ${currencyFormat(addon?.unit_nett)})` : ""}`}
               </p>
               <p style={{ marginBlock: 2, fontSize: 9 }}>
                 {currencyFormat(

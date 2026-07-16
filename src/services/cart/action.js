@@ -29,13 +29,6 @@ export const cartApi = createApi({
         body: payload,
       }),
     }),
-    update: builder.mutation({
-      query: ({ id, payload }) => ({
-        url: `/sales/order/${id}`,
-        method: 'PUT',
-        body: payload,
-      }),
-    }),
     getMethod: builder.query({
       query: params => ({
         url: '/payment-method',
@@ -50,6 +43,5 @@ export const {
   useCheckoutMutation,
   useLazyGetBillQuery,
   useCloseBillMutation,
-  useUpdateMutation,
   useLazyGetMethodQuery,
 } = cartApi;

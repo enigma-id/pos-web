@@ -7,6 +7,7 @@ import DetailScreen from './detail';
 import BillModal from './saveBill';
 import SuccessModal from './success';
 import { Input, Kitchen, Modal, NFCField, Receipt } from '../../../components/ui';
+import { changeServiceCharge } from '../../../services/cart/slice';
 import {
   BackIcon,
   CardIcon,

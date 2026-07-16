@@ -5,9 +5,9 @@ import {
   useCheckoutMutation,
   useLazyGetBillQuery,
   useCloseBillMutation,
-  useUpdateMutation,
   useLazyGetMethodQuery,
 } from './action';
+import { useUpdateMutation } from '../sales/order/action';
 import {
   customer,
   removeItem,
