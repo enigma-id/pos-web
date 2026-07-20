@@ -10,6 +10,7 @@ const initialState = {
   error: null,
   lastSyncTime: null,
   items: [],
+  apiReachable: true,
 };
 
 const offlineSlice = createSlice({
@@ -50,6 +51,9 @@ const offlineSlice = createSlice({
     setQueueItems: (state, action) => {
       state.items = Array.isArray(action.payload) ? action.payload : [];
     },
+    setApiReachable: (state, action) => {
+      state.apiReachable = !!action.payload;
+    },
     resetOfflineState: () => initialState,
   },
 });
@@ -65,6 +69,7 @@ export const {
   clearOfflineError,
   setLastSyncTime,
   setQueueItems,
+  setApiReachable,
   resetOfflineState,
 } = offlineSlice.actions;
 

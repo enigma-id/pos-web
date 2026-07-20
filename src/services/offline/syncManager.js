@@ -7,6 +7,7 @@ import {
   updateQueueItem,
 } from './queue';
 import {
+  setApiReachable,
   setFailedCount,
   setLastSyncTime,
   setOfflineError,
@@ -16,13 +17,15 @@ import {
   setWarning,
 } from './slice';
 
-const MAX_RETRY = 3;
+const MAX_RETRY = 5;
 const BASE_DELAY = 1000;
 const RECONNECT_DELAY = 3000;
 const REMOVE_DELAY = 5000;
+const HEARTBEAT_INTERVAL = 30000;
 
 let isSyncingInternal = false;
 let reconnectTimer = null;
+let heartbeatTimer = null;
 let storeRef = null;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -117,10 +120,6 @@ const processItem = async (item, userId) => {
   syncingItems.add(item.id);
 
   try {
-    // Reset retry budget per sync session
-    await updateQueueItem(item.id, { retryCount: 0 }, userId);
-    item.retryCount = 0;
-
     await updateQueueItem(item.id, { status: 'syncing' }, userId);
 
     for (let attempt = item.retryCount || 0; attempt < MAX_RETRY; attempt += 1) {
@@ -155,7 +154,9 @@ const processItem = async (item, userId) => {
       await sleep(delay);
     }
 
-    await markFailed(item, 'Max retries reached', userId);
+    // All retries exhausted — mark failed, require manual retry
+    const lastError = 'Max retries reached. Tap to retry manually.';
+    await updateQueueItem(item.id, { status: 'failed', lastError, retryCount: MAX_RETRY }, userId);
     return { ok: false };
   } finally {
     // Always remove from lock in finally block
@@ -269,6 +270,7 @@ export const initSyncManager = async store => {
 
   // Try broadcast immediately (user may already be rehydrated)
   await broadcastQueueState();
+  startHeartbeat();
 
   // Subscribe to auth changes — rehydrate queue state when user logs in/out
   store.subscribe(() => {
@@ -279,6 +281,9 @@ export const initSyncManager = async store => {
       broadcastQueueState();
       if (userId) {
         syncNow();
+        startHeartbeat();
+      } else {
+        stopHeartbeat();
       }
     }
   });
@@ -300,4 +305,25 @@ export const initSyncManager = async store => {
   }
 };
 
-export const getSyncingState = () => isSyncingInternal;
+const getSyncingState = () => isSyncingInternal;
+
+// Heartbeat: retry pending queue when API is marked dead but browser is online
+const startHeartbeat = () => {
+  stopHeartbeat();
+  heartbeatTimer = setInterval(() => {
+    if (!storeRef) return;
+    const state = storeRef.getState();
+    if (state?.Offline?.apiReachable === false && state?.Offline?.pendingCount > 0) {
+      syncNow();
+    }
+  }, HEARTBEAT_INTERVAL);
+};
+
+const stopHeartbeat = () => {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+};
+
+export { getSyncingState, startHeartbeat, stopHeartbeat };

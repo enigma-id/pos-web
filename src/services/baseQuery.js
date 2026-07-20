@@ -2,7 +2,7 @@ import { fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
 import { changeServiceCharge, resetCart } from './cart/slice';
 import { addToQueue, getPendingCount } from './offline/queue';
-import { setPendingCount, setQueueItems, setWarning } from './offline/slice';
+import { setApiReachable, setPendingCount, setQueueItems, setWarning } from './offline/slice';
 import { getSalesCacheValue } from '../utils/cache';
 
 const rawBaseQuery = fetchBaseQuery({
@@ -171,11 +171,36 @@ export const baseQuery = async (args, api, extraOptions) => {
   const method = typeof args === 'object' ? args.method : 'GET';
   const offlineMutation = typeof args === 'object' && isMutationMethod(method);
 
+  // 1) Browser offline — queue
   if (!isSkipOffline && offlineMutation && typeof navigator !== 'undefined' && !navigator.onLine) {
     return queueOfflineMutation(args, api);
   }
 
+  // 2) API is known-dead (previous 5xx / network timeout) — queue same as offline
+  const state = api?.getState?.();
+  if (!isSkipOffline && offlineMutation && state?.Offline?.apiReachable === false) {
+    return queueOfflineMutation(args, api);
+  }
+
   const result = await rawBaseQuery(args, api, extraOptions);
+
+  // Detect dead API (network error / timeout / 5xx) — treat like offline
+  if (result?.error) {
+    const status = result.error.status;
+    const isNetworkError = status == null || status === 'TIMEOUT' || status === 'FETCH_ERROR' || status === 'PARSING_ERROR';
+    const isServerError = typeof status === 'number' && status >= 500;
+
+    if (isNetworkError || isServerError) {
+      api.dispatch(setApiReachable(false));
+
+      if (offlineMutation && !isSkipOffline) {
+        return queueOfflineMutation(args, api);
+      }
+    }
+  } else if (state?.Offline?.apiReachable === false) {
+    // Any successful request means API is reachable again — restore
+    api.dispatch(setApiReachable(true));
+  }
 
   if (import.meta.env.DEV) {
     const url = typeof args === 'string' ? args : args.url;

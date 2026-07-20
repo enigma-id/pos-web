@@ -188,3 +188,12 @@ export const getCatalogDetailCacheByCategory = (id, channelId, categoryId) => {
 export const clearCatalogCache = () => {
   localStorage.removeItem(CATALOG_CACHE_KEY);
 };
+
+// Look up a catalog item from the cached pricing list (not detail cache)
+// Used as fallback when server is unreachable and no detail cache exists
+export const getCatalogItemFromPricingCache = (id, channelId) => {
+  const key = `catalog_pricing_${channelId}`;
+  const list = getCatalogCacheValue(key);
+  if (!Array.isArray(list)) return null;
+  return list.find(item => String(item.id) === String(id) || String(item.catalog_id) === String(id)) || null;
+};

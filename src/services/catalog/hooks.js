@@ -16,6 +16,7 @@ import {
   setCatalogDetailCache,
   getCatalogDetailCacheByCategory,
   setCatalogDetailCacheByCategory,
+  getCatalogItemFromPricingCache,
 } from '../../utils/cache';
 import { $failure } from '../form/action';
 
@@ -170,16 +171,19 @@ const useCatalog = () => {
     applyFilter(null, searchTerm);
   }, [applyFilter, searchTerm]);
 
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+
   const getDetail = useCallback(
     async ({ id, channel_id = selectedChannel.id, category_id }) => {
       const resolvedCategoryId = category_id ?? selectedCategory?.id ?? 0;
       const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+      const apiDead = apiReachable === false;
 
       const cachedByCategory = getCatalogDetailCacheByCategory(id, channel_id, resolvedCategoryId);
       const cachedLegacy = getCatalogDetailCache(id, channel_id);
 
-      if (isOffline) {
-        return cachedByCategory || cachedLegacy || null;
+      if (isOffline || apiDead) {
+        return cachedByCategory || cachedLegacy || getCatalogItemFromPricingCache(id, channel_id) || null;
       }
 
       try {

@@ -21,6 +21,7 @@ const Layout = ({ children }) => {
   const [showBanner, setShowBanner] = useState(true);
   const [backOnline, setBackOnline] = useState(false);
   const prevOnlineRef = useRef(isOnline);
+  const prevApiReachableRef = useRef(Offline?.apiReachable);
 
   // Wire network status to Redux
   useEffect(() => {
@@ -50,6 +51,29 @@ const Layout = ({ children }) => {
     }
   }, [isOnline, wasOffline]);
 
+  // Track apiReachable changes → show/hide "server dead" / "back online" banner
+  useEffect(() => {
+    const prev = prevApiReachableRef.current;
+    prevApiReachableRef.current = Offline?.apiReachable;
+
+    if (prev !== false && Offline?.apiReachable === false) {
+      // API just died
+      setBackOnline(false);
+      setShowBanner(true);
+    }
+
+    if (prev === false && Offline?.apiReachable !== false && isOnline) {
+      // API just recovered — brief "back online" banner
+      setBackOnline(true);
+      setShowBanner(true);
+      const t = setTimeout(() => {
+        setBackOnline(false);
+        setShowBanner(false);
+      }, 5000);
+      return () => clearTimeout(t);
+    }
+  }, [Offline?.apiReachable, isOnline]);
+
   const handleOpenBill = queueItem => {
     dispatch(loadOfflineBill(queueItem));
   };
@@ -68,6 +92,13 @@ const Layout = ({ children }) => {
       return {
         variant: 'offline',
         message: 'Offline mode. Transactions will be queued.',
+      };
+    }
+
+    if (Offline?.apiReachable === false && Offline?.isOnline && !Offline?.isSyncing) {
+      return {
+        variant: 'offline',
+        message: 'Server unreachable. Transactions will be queued.',
       };
     }
 

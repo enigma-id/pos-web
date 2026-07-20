@@ -4,8 +4,10 @@ import { useSelector } from 'react-redux';
 
 import CardMockup from '../../../assets/card-mockup.jpg';
 import { PaypassIcon } from '../../../components/ui/icon';
+import TopupReceipt from '../../../components/ui/topup-receipt';
 import useMembership from '../../../services/membership/hook';
 import { currencyFormat } from '../../../utils/common';
+import { usePrintWindow } from '../../../utils/print';
 
 const CardContent = ({ data, onClose }) => {
   const SalesSession = useSelector(state => state?.SalesSession?.hasSession);
@@ -14,6 +16,7 @@ const CardContent = ({ data, onClose }) => {
 
   const [value, setValue] = React.useState('');
   const [method, setMethod] = React.useState('');
+  const { open: openPrint } = usePrintWindow({ title: 'Topup Receipt', autoClose: true });
 
   const handleTopup = () => {
     const payload = {
@@ -24,9 +27,19 @@ const CardContent = ({ data, onClose }) => {
     topup({id: data?.id, payload });
   };
 
-  // Jika sukses, tutup modal
+  // Jika sukses: print receipt, then close modal
   React.useEffect(() => {
     if (topupResult?.isSuccess) {
+      const resData = topupResult?.data?.data || {};
+      openPrint(
+        <TopupReceipt
+          member={data}
+          nominal={Number(value) || 0}
+          paymentMethod={method}
+          newSaldo={resData?.saldo}
+          createdAt={resData?.created_at || new Date().toISOString()}
+        />
+      );
       onClose?.();
     }
   }, [topupResult]);

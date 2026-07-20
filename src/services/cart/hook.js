@@ -28,6 +28,7 @@ import {
   getCatalogDetailCache,
   getCatalogDetailCacheByCategory,
   getCatalogCacheValue,
+  getCatalogItemFromPricingCache,
   setSalesCacheValue,
 } from '../../utils/cache';
 import { useLazyGetCatalogDetailQuery } from '../catalog/action';
@@ -51,6 +52,7 @@ const useCart = catalog_id => {
 
   // All cart items
   const cartItems = useSelector(state => state?.Cart?.items?.list || []);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
 
   const charge = useSelector(state => state?.Auth?.session?.sales_session?.outlet?.service_charges);
 
@@ -288,18 +290,20 @@ const useCart = catalog_id => {
     if (!catalog_id || !selectedChannel?.id) return;
 
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    const apiDead = apiReachable === false;
     const selectedCategory = getCatalogCacheValue('selected_category');
     const resolvedCategoryId = selectedCategory?.id ?? 0;
 
-    if (isOffline) {
+    if (isOffline || apiDead) {
       const byCategory = getCatalogDetailCacheByCategory(
         catalog_id,
         selectedChannel.id,
         resolvedCategoryId
       );
       const legacy = getCatalogDetailCache(catalog_id, selectedChannel.id);
+      const pricing = getCatalogItemFromPricingCache(catalog_id, selectedChannel.id);
 
-      setOfflineCatalogDetail(byCategory || legacy || null);
+      setOfflineCatalogDetail(byCategory || legacy || pricing || null);
       return;
     }
 
@@ -308,7 +312,7 @@ const useCart = catalog_id => {
       id: catalog_id,
       channel_id: selectedChannel?.id,
     });
-  }, [catalog_id, selectedChannel, triggerCatalogDetail]);
+  }, [catalog_id, selectedChannel, apiReachable, triggerCatalogDetail]);
 
   return {
     catalogDetail: offlineCatalogDetail || catalogDetailResult?.data?.data,

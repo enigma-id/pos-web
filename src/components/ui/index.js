@@ -13,4 +13,5 @@ export { default as Remove } from './remove';
 export { default as Receipt } from './receipt';
 export { default as Summary } from './summary';
 export { default as Kitchen } from './kitchen';
+export { default as TopupReceipt } from './topup-receipt';
 export { default as CopyOrder } from './copy_order';
