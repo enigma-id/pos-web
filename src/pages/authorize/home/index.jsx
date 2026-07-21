@@ -177,16 +177,17 @@ const CatalogScreen = () => {
                     onClick={mode === 'open_session' ? false : () => onShow(cat, null)}
                   >
                     <div className="catalog-img">
-                      <img
-                        src={cat?.image || '/placeholder.svg'}
-                        alt={cat?.name}
-                        className="bg-secondary h-full w-full rounded-xl object-cover"
-                        onError={e => {
-                          if (e.target.src !== '/placeholder.svg') {
-                            e.target.src = '/placeholder.svg';
-                          }
-                        }}
-                      />
+                      {cat?.image ? (
+                        <img
+                          src={cat?.image}
+                          alt={cat?.name}
+                          className="bg-secondary h-full w-full rounded-xl object-cover"
+                        />
+                      ) : (
+                        <div className="bg-base-200 flex h-full w-full items-center place-content-center rounded-xl text-base-content/40 text-sm font-medium">
+                          No Image
+                        </div>
+                      )}
                     </div>
                     <div className="py-2">
                       <div className="overflow-hidden text-center font-semibold text-ellipsis">

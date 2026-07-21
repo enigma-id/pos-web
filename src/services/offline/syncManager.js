@@ -78,10 +78,16 @@ const broadcastQueueState = async () => {
 };
 
 const executeQueuedRequest = async item => {
+  const isOrder = String(item?.url || '').toLowerCase().includes('/sales/order');
+
+  const body = isOrder && item?.body && typeof item.body === 'object'
+    ? { ...item.body, is_offline_mode: true }
+    : item.body;
+
   const args = {
     url: item.url,
     method: item.method,
-    body: item.body,
+    body,
     params: item.params,
     headers: {
       ...(item.headers || {}),

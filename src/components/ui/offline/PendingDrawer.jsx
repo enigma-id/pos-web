@@ -11,10 +11,11 @@ const getApiCategory = (item) => {
   if (path.includes('/sales/session')) return 'shifts';
   if (path.includes('/sales/order')) {
     const status = item?.body?.status;
-    if (path.includes('/checkout') || status === 'completed') return 'order'; // Checkout
-    if (status === 'pending') return 'bills'; // Save bill
-    return 'order'; // Default order for /sales/order
+    if (path.includes('/checkout') || status === 'completed') return 'order';
+    if (status === 'pending') return 'bills';
+    return 'order';
   }
+  if (path.includes('/balance') && path.includes('/topup')) return 'topup';
   return 'other';
 };
 
@@ -35,9 +36,10 @@ const getApiType = (item) => {
     const status = item?.body?.status;
     if (status === 'pending') return 'save bill';
     if (path.includes('/checkout') || status === 'completed') return 'checkout';
-    return 'order'; // Default for other /sales/order operations
+    return 'order';
   }
 
+  if (path.includes('/balance') && path.includes('/topup')) return 'topup';
 
   return last;
 };
@@ -50,31 +52,30 @@ const statusConfig = {
 
 const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
   const items = useSelector(state => state?.Offline?.items || []);
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState('order');
 
   if (!open) return null;
 
   const categorized = items.reduce(
     (acc, item) => {
       const cat = getApiCategory(item);
-      if (!acc[cat]) acc.other.push(item);
-      else acc[cat].push(item);
+      acc[cat]?.push(item);
 
       if (item.status === 'failed') {
         acc.failedCount[cat] = (acc.failedCount[cat] || 0) + 1;
-        acc.failedCount.all += 1;
       }
       return acc;
     },
-    { all: items, order: [], bills: [], shifts: [], other: [], failedCount: { all: 0 } }
+    { order: [], bills: [], shifts: [], topup: [], other: [], failedCount: {} }
   );
 
-  const filteredItems = categorized[activeTab] || categorized.all;
+  // Merge 'other' into none — we don't show it as a tab
+  const filteredItems = categorized[activeTab] || [];
 
   const tabs = [
-    { id: 'all', label: 'All', icon: '📦' },
     { id: 'order', label: 'Order', icon: '🛒' },
     { id: 'bills', label: 'Bills', icon: '📋' },
+    { id: 'topup', label: 'Topup', icon: '💰' },
     { id: 'shifts', label: 'Shifts', icon: '💼' },
   ];
 
@@ -143,10 +144,10 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
             <h3 className="text-sm font-black text-base-content uppercase tracking-widest">
               Queue Manager
             </h3>
-            {categorized.failedCount.all > 0 && (
+            {Object.values(categorized.failedCount).reduce((a, b) => a + b, 0) > 0 && (
               <span className="badge badge-error badge-sm gap-1.5 font-bold px-2 py-2.5">
                 <span className="animate-bounce">✕</span>
-                {categorized.failedCount.all} Issues
+                {Object.values(categorized.failedCount).reduce((a, b) => a + b, 0)} Issues
               </span>
             )}
           </div>
@@ -178,9 +179,9 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
           {filteredItems.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-base-content/30 italic">
               <span className="text-4xl mb-3 opacity-20">
-                {activeTab === 'sales' ? '🛒' : activeTab === 'bills' ? '📋' : '💼'}
+                {activeTab === 'topup' ? '💰' : activeTab === 'order' ? '🛒' : activeTab === 'bills' ? '📋' : '💼'}
               </span>
-              <span className="text-xs font-medium">No {activeTab} in queue</span>
+              <span className="text-xs font-medium">No {activeTab} items in queue</span>
             </div>
           )}
 
@@ -200,6 +201,8 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
 
             // Specialized rendering for Session Start/End
             const isSession = apiType === 'start' || apiType === 'end';
+            // Specialized rendering for Topup
+            const isTopup = apiType === 'topup';
 
             if (isSession) {
               const sessionLabel = apiType === 'start' ? 'Open Session' : 'Close Session';
@@ -250,6 +253,76 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
                     )}
 
                     {/* Action buttons */}
+                    <div className="mt-2 flex gap-1">
+                      {item.status === 'pending' && (
+                        <button
+                          className="btn btn-ghost btn-xs text-base-content/50"
+                          onClick={() => onRemove?.(item.id)}
+                        >
+                          🗑️ Remove
+                        </button>
+                      )}
+                      {item.status === 'failed' && (
+                        <button
+                          className="btn btn-error btn-xs flex-1 gap-1"
+                          onClick={() => onRetry?.(item.id)}
+                        >
+                          ↻ Retry Sync
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            if (isTopup) {
+              const nominal = Number(preview?.nominal) || 0;
+              const memberName = preview?.member_name || '-';
+              const memberCode = preview?.member_code || '';
+
+              return (
+                <div
+                  key={item.id}
+                  className="rounded-lg border border-base-200 bg-base-100 transition-colors hover:border-base-300 overflow-hidden"
+                >
+                  <div className="h-1 w-full bg-info" />
+                  <div className="p-2.5">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="badge badge-xs badge-info uppercase font-bold tracking-wider">
+                        💰 Topup
+                      </span>
+                      <span className="text-xs font-bold text-base-content truncate flex-1">{code}</span>
+                      <span className={`badge badge-xs ${status.badge} gap-0.5`}>
+                        <span className="text-[9px]">{status.icon}</span>
+                        {item.status}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1 text-[10px] text-base-content/50 flex-wrap mb-2">
+                      <span className="truncate">{memberName}</span>
+                      {memberCode && <><span>·</span><span className="truncate">{memberCode}</span></>}
+                      <span>·</span>
+                      <span className="whitespace-nowrap">{dateFormat(createdAt)}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center bg-base-200/30 rounded p-2">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] uppercase text-base-content/40 font-bold">Payment</span>
+                        <span className="text-[13px] font-bold">{paymentName}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[9px] uppercase text-base-content/40 font-bold block">Amount</span>
+                        <span className="text-sm font-black text-success">{currencyFormat(nominal)}</span>
+                      </div>
+                    </div>
+
+                    {item.lastError && (
+                      <div className="mt-2 text-[10px] text-error bg-error/10 rounded px-2 py-1 leading-tight">
+                        {item.lastError}
+                      </div>
+                    )}
+
                     <div className="mt-2 flex gap-1">
                       {item.status === 'pending' && (
                         <button

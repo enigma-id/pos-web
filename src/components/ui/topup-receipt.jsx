@@ -1,8 +1,8 @@
 import { currencyFormat, dateFormat } from '../../utils/common';
 
-const TopupReceipt = ({ member, nominal, paymentMethod, newSaldo, createdAt }) => {
+const TopupReceipt = ({ member, nominal, paymentMethod, createdAt }) => {
   const oldSaldo = (member?.saldo || 0);
-  const finalSaldo = newSaldo ?? (oldSaldo + nominal);
+  const finalSaldo = oldSaldo + nominal
 
   return (
     <div className="sheet page-break" style={{ padding: '10px' }}>

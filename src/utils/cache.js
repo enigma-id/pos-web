@@ -191,6 +191,46 @@ export const clearCatalogCache = () => {
 
 // Look up a catalog item from the cached pricing list (not detail cache)
 // Used as fallback when server is unreachable and no detail cache exists
+//
+// Grouped cache: cache_members
+//
+
+const MEMBER_CACHE_KEY = 'cache_members';
+
+const getMemberCacheRaw = () => {
+  try {
+    const raw = localStorage.getItem(MEMBER_CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+const setMemberCacheRaw = data => {
+  const existing = getMemberCacheRaw();
+  const updated = { ...existing, ...data };
+  localStorage.setItem(MEMBER_CACHE_KEY, JSON.stringify(updated));
+};
+
+export const getMemberCache = cardId => {
+  const cache = getMemberCacheRaw();
+  return cache?.[cardId] ?? null;
+};
+
+export const setMemberCache = (cardId, memberData) => {
+  setMemberCacheRaw({ [cardId]: memberData });
+};
+
+export const updateMemberCacheSaldo = (cardId, newSaldo) => {
+  const existing = getMemberCache(cardId);
+  if (!existing) return;
+  setMemberCacheRaw({ [cardId]: { ...existing, saldo: newSaldo } });
+};
+
+export const clearMemberCache = () => {
+  localStorage.removeItem(MEMBER_CACHE_KEY);
+};
+
 export const getCatalogItemFromPricingCache = (id, channelId) => {
   const key = `catalog_pricing_${channelId}`;
   const list = getCatalogCacheValue(key);

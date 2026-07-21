@@ -26,6 +26,7 @@ import { buildOfflineTransactionPayload, updateQueueItem, setWarning } from '../
 // import useOutlet from '../../../services/outlet/hooks';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
+import { getMemberCache } from '../../../utils/cache';
 import { usePrintWindow } from '../../../utils/print';
 
 
@@ -57,6 +58,7 @@ const CheckoutScreen = () => {
   // const { getServiceCharge } = useOutlet();
 
   const { checkSaldo, checkResult } = useMembership();
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
   const { open: openPrint } = usePrintWindow({ title: 'Print Preview', autoClose: true });
   const { openModal, closeModal } = useModal();
 
@@ -360,6 +362,15 @@ const CheckoutScreen = () => {
   // }, [showResult?.isSuccess, showResult?.data?.data, openModal]);
 
   const handleRead = uid => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+
+    if (isOffline || apiReachable === false) {
+      // No connection → skip checkSaldo, ambil dari cache kalo ada
+      const cached = getMemberCache(uid);
+      handlePay(cached || { card_id: uid });
+      return;
+    }
+
     const params = {
       is_checkout: true,
       nominal: CartState?.meta?.grand_total,

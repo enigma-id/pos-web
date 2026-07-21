@@ -52,6 +52,12 @@ export const memberApi = createApi({
         url: `/balance/${id}/topup`,
         method: 'POST',
         body: payload,
+        __offlinePreview: {
+          type: 'topup',
+          code: `TOPUP-${Date.now()}`,
+          total_payment: payload?.nominal || 0,
+          item_count: 1,
+        },
       }),
     }),
     getSaldoLog: builder.query({

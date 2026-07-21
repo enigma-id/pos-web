@@ -3,7 +3,7 @@ import { useSelector } from 'react-redux';
 
 import Modal from './modal';
 
-const NFCField = ({ onRead, isOpen, onClose, result }) => {
+const NFCField = ({ onRead, isOpen, onClose, result, message }) => {
   const FormState = useSelector(state => state?.Form);
   const ref = useRef();
   const [status, setStatus] = useState('idle');
@@ -97,6 +97,11 @@ const NFCField = ({ onRead, isOpen, onClose, result }) => {
           <p className="text-sm text-gray-600">{getSubtitle()}</p>
           <small className="text-error">{FormState?.errors?.card_id}</small>
           <small className="text-error">{FormState?.errors?.saldo}</small>
+          {message && (
+            <p className="mt-4 rounded bg-warning/10 px-4 py-3 text-sm font-medium text-warning">
+              {message}
+            </p>
+          )}
           <input
             id="nfc"
             ref={ref}

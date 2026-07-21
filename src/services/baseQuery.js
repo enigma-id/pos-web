@@ -53,6 +53,21 @@ const buildTransactionPreview = ({ args, queued }) => {
   }
 
   const body = args?.body || {};
+
+  // Detect topup payload (has nominal + payment_type, no items)
+  if (body?.nominal != null && body?.payment_type && !Array.isArray(body?.items)) {
+    return {
+      type: 'topup',
+      code: `TOPUP-${Date.now()}`,
+      total_payment: Number(body.nominal) || 0,
+      item_count: 1,
+      nominal: Number(body.nominal) || 0,
+      payment_method: { name: body.payment_type },
+      member_id: args?.id || body?.member_id || null,
+      created_at: queued?.createdAt || new Date().toISOString(),
+    };
+  }
+
   const rawItems = Array.isArray(body?.items) ? body.items : [];
   const totalPayment = Number(body?.total_payment);
   const safeTotalPayment = totalPayment;
@@ -97,11 +112,18 @@ const queueOfflineMutation = async (args, api) => {
 
   const previewData = buildTransactionPreview({ args, queued: { id: null } });
 
+  const isOrder = url.includes('/sales/order');
+
+  const bodyWithOffline =
+    isOrder && args?.body && typeof args.body === 'object'
+      ? { ...args.body, is_offline_mode: true }
+      : args?.body;
+
   const queuedRaw = await addToQueue(
     {
       url: args?.url,
       method,
-      body: args?.body,
+      body: bodyWithOffline,
       params: args?.params,
       headers: {
         ...toObjectHeaders(args?.headers),

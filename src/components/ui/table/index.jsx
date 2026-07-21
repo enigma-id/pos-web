@@ -22,6 +22,11 @@ import {
   setSorting,
   setFilter,
 } from '../../../services/table/slice';
+import { getCache, setCache } from '../../../utils/cache';
+
+const TABLE_CACHE_PREFIX = 'cache_table_';
+
+const getTableCacheKey = name => `${TABLE_CACHE_PREFIX}${name}`;
 
 const useTable = (name, config) => {
   const dispatch = useDispatch();
@@ -56,22 +61,44 @@ const useTable = (name, config) => {
           },
         })
       );
+
+      // Cache table data for offline fallback
+      if (isSuccess) {
+        setCache(getTableCacheKey(name), { data, total, meta: res?.meta });
+      }
     } catch (error) {
       if (import.meta.env.DEV) {
         console.error('fetchData error:', error);
       }
 
-      dispatch(
-        setTable({
-          name,
-          table: {
-            ...state,
-            data: [],
-            total: 0,
-            isEmpty: true,
-          },
-        })
-      );
+      // Try cache fallback on error
+      const cached = getCache(getTableCacheKey(name));
+      if (cached) {
+        dispatch(
+          setTable({
+            name,
+            table: {
+              ...state,
+              ...cached,
+              data: cached.data || [],
+              total: cached.total || 0,
+              isEmpty: false,
+            },
+          })
+        );
+      } else {
+        dispatch(
+          setTable({
+            name,
+            table: {
+              ...state,
+              data: [],
+              total: 0,
+              isEmpty: true,
+            },
+          })
+        );
+      }
     }
   };
 

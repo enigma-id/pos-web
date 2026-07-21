@@ -10,7 +10,10 @@ import { CardSearchIcon, PlusIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useTable from '../../../components/ui/table';
 import useMembership from '../../../services/membership/hook';
+import { getCache, getMemberCache, setMemberCache } from '../../../utils/cache';
 import useDrawer from '../../../utils/drawer';
+
+const TABLE_CACHE_KEY = 'cache_table_membership';
 
 const MembershipScreen = () => {
   const {  open: openDrawer, isOpen: drawerOpen } = useDrawer();
@@ -20,6 +23,9 @@ const MembershipScreen = () => {
 
   const [type, setType] = React.useState('');
   const [data, setData] = React.useState(null);
+  const [cardIdBuffer, setCardIdBuffer] = React.useState('');
+  const [offlineMessage, setOfflineMessage] = React.useState('');
+  const scanConsumed = React.useRef(false);
 
   const tableConfig = React.useMemo(() => {
     return createTableConfig({
@@ -34,21 +40,44 @@ const MembershipScreen = () => {
   const Table = useTable('membership', tableConfig);
 
   const handleRead = uid => {
-    const params = {
-      card_id: uid,
-    };
+    scanConsumed.current = false;
+    setCardIdBuffer(uid);
 
+    // Offline + cache hit → skip fetch entirely
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      const cached = getMemberCache(uid);
+      if (cached) {
+        setOfflineMessage('');
+        onScanSuccess(cached);
+        return;
+      }
+      // No cache → show message, re-open modal so message prop applies
+      const msg = 'Member data not available offline. Please scan while online first to cache.';
+      setOfflineMessage(msg);
+      openModal(
+        <NFCField onRead={handleRead} isOpen={true} onClose={closeModal} result={checkResult} message={msg} />,
+        'w-md'
+      );
+      return;
+    }
+
+    const params = { card_id: uid };
     checkSaldo(params);
   };
 
   const onScan = () => {
     openModal(
-      <NFCField onRead={handleRead} isOpen={true} onClose={closeModal} result={checkResult} />,
+      <NFCField onRead={handleRead} isOpen={true} onClose={closeModal} result={checkResult} message={offlineMessage} />,
       'w-md'
     );
   };
 
   const onScanSuccess = data => {
+    // Cache member data for offline use
+    if (data?.card_id) {
+      setMemberCache(data.card_id, data);
+    }
+
     openModal(
       <>
         <Modal.Header
@@ -63,6 +92,7 @@ const MembershipScreen = () => {
           <CardContent
             data={data}
             onClose={() => {
+              setOfflineMessage('')
               closeModal();
               setData(null);
               Table.boot();
@@ -74,11 +104,36 @@ const MembershipScreen = () => {
     );
   };
 
+  // Online success → cache + proceed
   React.useEffect(() => {
-    if (checkResult?.isSuccess) {
+    if (checkResult?.isSuccess && !scanConsumed.current) {
+      scanConsumed.current = true;
       onScanSuccess(checkResult?.data?.data);
     }
   }, [checkResult]);
+
+  // Offline/error fallback → try cache (individual first, then table list)
+  React.useEffect(() => {
+    if (checkResult?.isError && cardIdBuffer && !scanConsumed.current) {
+      scanConsumed.current = true;
+
+      // 1. Try individual cache
+      let cached = getMemberCache(cardIdBuffer);
+
+      // 2. Fallback: lookup from cached table list by card_id
+      if (!cached) {
+        const tableCache = getCache(TABLE_CACHE_KEY);
+        const list = Array.isArray(tableCache?.data) ? tableCache.data : [];
+        cached = list.find(m => String(m?.card_id) === String(cardIdBuffer));
+      }
+
+      if (cached) {
+        // closeModal();
+        // setOfflineMessage('');
+        onScanSuccess(cached);
+      }
+    }
+  }, [checkResult, cardIdBuffer]);
 
   React.useEffect(() => {
     if (!drawerOpen) {

@@ -6,6 +6,7 @@ import CardMockup from '../../../assets/card-mockup.jpg';
 import { PaypassIcon } from '../../../components/ui/icon';
 import TopupReceipt from '../../../components/ui/topup-receipt';
 import useMembership from '../../../services/membership/hook';
+import { updateMemberCacheSaldo } from '../../../utils/cache';
 import { currencyFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
 
@@ -17,26 +18,48 @@ const CardContent = ({ data, onClose }) => {
   const [value, setValue] = React.useState('');
   const [method, setMethod] = React.useState('');
   const { open: openPrint } = usePrintWindow({ title: 'Topup Receipt', autoClose: true });
+  const topupSubmitted = React.useRef(false);
 
   const handleTopup = () => {
+    const nominal = Number(value) || 0;
     const payload = {
-      nominal: Number(value) || 0,
+      nominal,
       payment_type: method,
+      __offlinePreview: {
+        type: 'topup',
+        nominal,
+        payment_method: method,
+        member_id: data?.id,
+        member_name: data?.name,
+        member_code: data?.reff_code,
+        member_card_id: data?.card_id,
+        old_saldo: data?.saldo || 0,
+        new_saldo: (data?.saldo || 0) + nominal,
+      },
     };
 
-    topup({id: data?.id, payload });
+    topupSubmitted.current = true;
+    topup({ id: data?.id, payload });
   };
 
-  // Jika sukses: print receipt, then close modal
+  // Jika sukses: update cache lokal, print receipt, then close modal
   React.useEffect(() => {
-    if (topupResult?.isSuccess) {
+    if (topupResult?.isSuccess && topupSubmitted.current) {
+      topupSubmitted.current = false;
+      const nominal = Number(value) || 0;
       const resData = topupResult?.data?.data || {};
+
+      // Update cache with optimistic saldo for offline fallback
+      const newSaldo = (data?.saldo || 0) + nominal;
+      if (data?.card_id) {
+        updateMemberCacheSaldo(data.card_id, newSaldo);
+      }
+
       openPrint(
         <TopupReceipt
           member={data}
-          nominal={Number(value) || 0}
+          nominal={nominal}
           paymentMethod={method}
-          newSaldo={resData?.saldo}
           createdAt={resData?.created_at || new Date().toISOString()}
         />
       );
