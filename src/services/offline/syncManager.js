@@ -277,7 +277,6 @@ export const removeFailedItem = async id => {
   });
   if (filtered.length !== existing.length) {
     setCache(HISTORY_CACHE_KEY, filtered);
-    console.log('[syncManager] removed from history cache — was:', existing.length, 'now:', filtered.length);
   }
 
   await broadcastQueueState();

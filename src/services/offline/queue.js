@@ -223,6 +223,23 @@ export const updateQueueItem = async (id, updates = {}, userId) => {
 export const removeFromQueue = async (id, userId) => {
   const db = await ensureDB(userId);
   await db.delete(STORES.pendingRequests, id);
+
+  // Also remove matching entry from history cache (offline checkout entries)
+  try {
+    const { getCache, setCache } = await import('../../utils/cache');
+    const HISTORY_CACHE_KEY = 'cache_order_history';
+    const existing = getCache(HISTORY_CACHE_KEY) || [];
+    const filtered = existing.filter(e => {
+      const entryQueueId = e?.offline_meta?.queue_id || e?.id;
+      return String(entryQueueId) !== String(id);
+    });
+    if (filtered.length !== existing.length) {
+      setCache(HISTORY_CACHE_KEY, filtered);
+    }
+  } catch {
+    // fail silently
+  }
+
   return true;
 };
 

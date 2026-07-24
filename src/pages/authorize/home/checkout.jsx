@@ -482,8 +482,6 @@ const CheckoutScreen = () => {
     const closeBillData = closeBillResult?.data?.data || {};
     const isQueued = Boolean(checkoutData?.offline_queued || closeBillData?.offline_queued);
 
-    console.log('[checkout] result effect — isSuccess:', checkoutResult?.isSuccess, 'closeBill:', closeBillResult?.isSuccess, 'isQueued:', isQueued);
-
     if (checkoutResult?.isSuccess || closeBillResult?.isSuccess) {
       if (isQueued) {
         dispatch(
@@ -555,7 +553,6 @@ const CheckoutScreen = () => {
           },
         };
         setCache(HISTORY_CACHE_KEY, [historyEntry, ...existing]);
-        console.log('[checkout] history cache updated — total entries:', existing.length + 1);
 
         openModal(<SuccessModal data={offlineData} backToMenu />, 'w-md');
         return;

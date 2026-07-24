@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useSelector } from 'react-redux';
 
 import { currencyFormat, dateFormat } from '../../../utils/common';
@@ -69,19 +69,6 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
 
   // Merge 'other' into none — we don't show it as a tab
   const filteredItems = categorized[activeTab] || [];
-
-  useEffect(() => {
-    if (!open || !filteredItems.length) return;
-    console.log(`[PendingDrawer] Tab ${activeTab} — ${filteredItems.length} items:`, filteredItems.map(i => ({
-      id: i.id,
-      code: i?.transaction_preview?.code || `OFF-${i.id}`,
-      status: i.status,
-      type: getApiCategory(i),
-      itemCount: i?.transaction_preview?.items?.length || 0,
-      total: i?.transaction_preview?.total_charges || i?.transaction_preview?.total_bill || 0,
-      bill_name: i?.transaction_preview?.bill_name || '',
-    })));
-  }, [open, activeTab, filteredItems.length]);
 
   if (!open) return null;
 
