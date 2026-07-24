@@ -3,39 +3,12 @@ import React from 'react';
 import { currencyFormat, dateFormat } from '../../utils/common';
 
 const OrderDetails = ({ data }) => {
-  const [discountMap, setDiscountMap] = React.useState([]);
-
-  const groupedCategories = items => {
-    const group = {};
-
-    items.forEach(item => {
-      const category = item?.catalog?.category;
-      const discount = item?.discount_value * item?.quantity || 0;
-
-      if (!category) return;
-
-      const id = category.id;
-      const name = category.name;
-
-      if (!group[id]) {
-        group[id] = {
-          id,
-          name,
-          subtotal: 0,
-        };
-      }
-
-      group[id].subtotal += discount;
-    });
-
-    const result = Object.values(group).filter(item => item.subtotal > 0);
-    setDiscountMap(result);
-  };
-
-  React.useEffect(() => {
-    if (!data) return;
-    groupedCategories(data?.items);
-  }, [data]);
+  // Map category_id → category_name dari items
+  const catNames = {};
+  data?.items?.forEach(item => {
+    const id = item?.catalog?.category?.id || item?.catalog?.category_id;
+    if (id && item?.category_name) catNames[id] = item?.category_name;
+  });
 
   return (
     <div className="h-fit w-full rounded-xl bg-white p-6 shadow">
@@ -59,9 +32,11 @@ const OrderDetails = ({ data }) => {
           {dateFormat(data?.session?.started_at, 'DD MMM YYYY')} -{' '}
           {dateFormat(data?.session?.finished_at, 'DD MMM YYYY', '(ongoing)')}
         </div>
-        <div className="mb-2 text-sm capitalize">
-          <span className="font-semibold">Customer :</span> {data?.membership?.name || '-'}
-        </div>
+        {data?.membership?.name && (
+          <div className="mb-2 text-sm capitalize">
+            <span className="font-semibold">Customer :</span> {data?.membership?.name}
+          </div>
+        )}
       </div>
 
       <div className="border-base-200 border-b pt-4 pb-2">
@@ -121,29 +96,12 @@ const OrderDetails = ({ data }) => {
           </div>
         )}
 
-        {data?.items.reduce((sum, item) => {
-          const qty = item.quantity ?? 1; // default 1 kalau tidak ada quantity
-          const discount = item.discount_value ?? 0;
-          return sum + discount * qty;
-        }, 0) > 0 && (
+        {data?.category_discounts?.length > 0 && (
           <>
-            {/* <div className="flex place-content-between place-items-center text-base">
-              <div>Discount Category </div>
-              <div>
-                -
-                {currencyFormat(
-                  data?.items.reduce((sum, item) => {
-                    const qty = item.quantity ?? 1; // default 1 kalau tidak ada quantity
-                    const discount = item.discount_value ?? 0;
-                    return sum + discount * qty;
-                  }, 0)
-                )}
-              </div>
-            </div> */}
-            {discountMap?.map((d, i) => (
+            {data?.category_discounts?.map((d, i) => (
               <div key={i} className="flex place-content-between place-items-center text-base">
-                <div>Discount Category {d?.name} </div>
-                <div>-{currencyFormat(d?.subtotal)}</div>
+                <div>Discount Category {catNames[d?.category_id] || ''}</div>
+                <div>-{currencyFormat(d?.total_discount || d?.discount_value)}</div>
               </div>
             ))}
           </>

@@ -1,6 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
-import { useSelector } from 'react-redux';
 
 import {
   EmptySection,
@@ -12,20 +11,16 @@ import {
 import { MoneysIcon, PrintIcon, SearchIcon, TrashIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useOrder from '../../../services/sales/order/hook';
-import useSession from '../../../services/sales/session/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
 
 const HistoryScreen = () => {
-  const Session = useSelector(state => state?.Auth?.session);
-
   const [detail, setDetail] = React.useState(null);
   // const [search, setSearch] = React.useState('');
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [data, setData] = React.useState([]);
 
-  const { show, showResult } = useSession();
-  const { show: showOrder, showResult: showOrderResult } = useOrder();
+  const { history, historyResult, show: showOrder, showResult: showOrderResult } = useOrder();
 
   const { openModal, closeModal } = useModal();
 
@@ -43,7 +38,7 @@ const HistoryScreen = () => {
       <Refund
         id={id}
         onClose={() => {
-          show(Session?.sales_session?.id)
+          history();
           closeModal();
         }}
       />,
@@ -52,24 +47,21 @@ const HistoryScreen = () => {
   };
 
   React.useEffect(() => {
-    if (Session?.sales_session) {
-      show(Session?.sales_session?.id)
-    }
-  }, [Session]);
-
+    history();
+  }, []);
 
   React.useEffect(() => {
-    if (showResult?.isSuccess) {
+    if (historyResult?.isSuccess) {
       setSelectedIndex(0);
-      setData(showResult?.data?.data?.orders);
+      setData(historyResult?.data?.data);
     }
-  }, [showResult]);
+  }, [historyResult]);
 
   React.useEffect(() => {
-    if (showResult?.isSuccess && data?.length > 0) {
+    if (historyResult?.isSuccess && data?.length > 0) {
       showOrder(data[selectedIndex]?.id);
     }
-  }, [showResult, data, selectedIndex]);
+  }, [historyResult, data, selectedIndex]);
 
   React.useEffect(() => {
     if (showOrderResult?.isSuccess) {
@@ -117,7 +109,7 @@ const HistoryScreen = () => {
                       {currencyFormat(item?.total_charges)}
                     </div>
                     <div className="text-base-300 text-xs">{
-                      item?.ticket ? item?.ticket :
+                      item?.bill_name ? item?.bill_name :
                       item?.membership ? item?.membership?.name :
                       item?.note ? item?.note :
                       '-'

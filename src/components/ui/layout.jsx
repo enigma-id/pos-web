@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { BurgerIcon, DeviceIcon, HistoryIcon, ListIcon, MenuIcon, ReceiptIcon, UserIcon, TruckIcon } from './icon';
+import { BurgerIcon, HistoryIcon, ListIcon, MenuIcon, ReceiptIcon, UserIcon } from './icon';
 import { OfflineBanner, PendingDrawer, SyncIndicator } from './offline';
 import useSidebar from './sidebar/hook';
 import { loadOfflineBill } from '../../services/cart/slice';
@@ -153,7 +153,7 @@ const Navbar = () => {
   const User = useSelector(state => state?.Auth?.session?.user);
   const SalesSession = useSelector(state => state?.SalesSession);
 
-  const { summary, sendDeviceData, updateDeviceResult, startDeviceTracking, stopDeviceTracking } = useSession();
+  const { summary, startDeviceTracking, stopDeviceTracking } = useSession();
   const { showSummary } = useSidebar();
 
   const location = useLocation();
@@ -230,13 +230,6 @@ const Navbar = () => {
           <small>Saved Bills</small>
         </div>
 
-        <div
-          className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'delivery')}`}
-          onClick={() => navigate('/delivery')}
-        >
-          <TruckIcon />
-          <small>Delivery</small>
-        </div>
       </div>
 
       <div className="mb-5">
@@ -247,18 +240,6 @@ const Navbar = () => {
             onClick={() => setDrawerOpen(true)}
           />
         </div>
-        {SalesSession?.hasSession && (
-          <div
-            className={`nav-items mb-3 place-items-center`}
-            onClick={() => !updateDeviceResult?.isLoading && sendDeviceData()}
-          >
-            {updateDeviceResult?.isLoading ? (
-              <span className="loading loading-spinner loading-sm"></span>
-            ) : (
-              <DeviceIcon />
-            )}
-          </div>
-        )}
         <div
           className={`nav-items mb-3`}
           onClick={

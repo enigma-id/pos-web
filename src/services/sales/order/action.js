@@ -28,7 +28,14 @@ export const salesOrderApi = createApi({
         },
       }),
     }),
+    history: builder.query({
+      query: (params = {}) => ({
+        url: '/sales/order/history',
+        method: 'GET',
+        params,
+      }),
+    }),
   }),
 });
 
-export const { useLazyShowQuery, useCancelMutation, useUpdateMutation } = salesOrderApi;
+export const { useLazyShowQuery, useCancelMutation, useUpdateMutation, useLazyHistoryQuery } = salesOrderApi;

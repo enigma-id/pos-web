@@ -68,7 +68,7 @@ const CheckoutScreen = () => {
   const [pay, setPay] = React.useState(0);
   const [discountInputs, setDiscountInputs] = React.useState({});
   // const [billID, setBillID] = React.useState(null);
-  const [note, setNote] = React.useState('');
+  const [billName, setBillName] = React.useState('');
 
   const [selectedMethod, setSelectedMethod] = React.useState(null);
   const checkoutSnapshotRef = React.useRef(null);
@@ -214,8 +214,8 @@ const CheckoutScreen = () => {
       payload.ticket = CartState.bill.ticket;
     }
 
-    if (note) {
-      payload.note = note;
+    if (billName) {
+      payload.bill_name = billName;
     }
 
     if (CartState?.meta?.customer) {
@@ -247,7 +247,7 @@ const CheckoutScreen = () => {
       selectedChannel: Channel?.selectedChannel ? { ...Channel.selectedChannel } : null,
       paymentMethod: selectedMethod ? { ...selectedMethod } : null,
       paymentRef: selectedMethod?.provider === "cash" ? '' : paymentRef,
-      note,
+      billName,
       requestBody: payload,
     };
 
@@ -309,8 +309,8 @@ const CheckoutScreen = () => {
       status: 'pending'
     };
 
-    if (note) {
-      payload.note = note;
+    if (billName) {
+      payload.bill_name = billName;
     }
 
     if (CartState?.meta?.customer) {
@@ -338,7 +338,7 @@ const CheckoutScreen = () => {
       selectedChannel: Channel?.selectedChannel ? { ...Channel.selectedChannel } : null,
       paymentMethod: selectedMethod ? { ...selectedMethod } : null,
       paymentRef: selectedMethod?.provider === "cash" ? '' : paymentRef,
-      note,
+      billName,
       requestBody: payload,
       authSession: session,
     };
@@ -482,7 +482,7 @@ const CheckoutScreen = () => {
           selectedChannel: Channel?.selectedChannel,
           paymentMethod: snapshot?.paymentMethod || selectedMethod,
           paymentRef: snapshot?.paymentRef ?? paymentRef,
-          note: snapshot?.note ?? note,
+          billName: snapshot?.billName ?? billName,
           authSession: session,
           queueMeta: {
             ...queueMeta,
@@ -744,13 +744,13 @@ const CheckoutScreen = () => {
               </div>
             ) : (
               <div className="pb-4">
-                <div className="py-4 text-base font-semibold">Customer</div>
+                <div className="py-4 text-base font-semibold">Bill Name</div>
                 <Input
-                  value={note}
+                  value={billName}
                   onChange={e => {
-                    setNote(e.target.value);
+                    setBillName(e.target.value);
                   }}
-                  placeholder="Write a note here..."
+                  placeholder="Enter bill name..."
                 />
               </div>
             )}

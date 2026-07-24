@@ -1,18 +1,29 @@
 import { useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 
-import { useCancelMutation, useUpdateMutation, useLazyShowQuery } from './action';
+import { useCancelMutation, useUpdateMutation, useLazyShowQuery, useLazyHistoryQuery } from './action';
 import { $failure } from '../../form/action';
 
 const useOrder = id => {
   const dispatch = useDispatch();
   const [triggerShow, showResult] = useLazyShowQuery();
+  const [triggerHistory, historyResult] = useLazyHistoryQuery();
   const [cancelMutation, cancelResult] = useCancelMutation();
   const [updateMutation, updateResult] = useUpdateMutation();
 
   const show = async id => {
     try {
       await triggerShow({ id }).unwrap();
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('error:', error);
+      }
+    }
+  };
+
+  const history = async (params = {}) => {
+    try {
+      await triggerHistory(params).unwrap();
     } catch (error) {
       if (import.meta.env.DEV) {
         console.error('error:', error);
@@ -50,6 +61,8 @@ const useOrder = id => {
   return {
     show,
     showResult,
+    history,
+    historyResult,
     cancel,
     cancelResult,
     update,
