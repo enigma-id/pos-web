@@ -128,8 +128,6 @@ const CheckoutScreen = () => {
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     const isCashPayment = selectedMethod?.provider === "cash";
     const cashTotalPayment = Number(pay) || 0;
-    console.log('[checkout] handlePay — offline:', isOffline, 'method:', selectedMethod?.provider, 'cashPay:', cashTotalPayment);
-
     if (isOffline && isCashPayment && cashTotalPayment <= 0) {
       dispatch(setWarning('Please fill total payment first.'));
       return;
@@ -268,10 +266,8 @@ const CheckoutScreen = () => {
     });
 
     if (isBill) {
-      console.log('[checkout] calling closeBill');
       await closeBill(CartState?.bill?.id, { ...payload, __offlinePreview: offlinePreview });
     } else {
-      console.log('[checkout] calling checkout');
       await checkout({ ...payload, __offlinePreview: offlinePreview });
     }
   };

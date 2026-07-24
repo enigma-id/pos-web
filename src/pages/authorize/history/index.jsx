@@ -55,15 +55,12 @@ const HistoryScreen = () => {
     history();
   }, []);
 
-  // Re-read cache when offline items count changes (e.g. after queue remove)
-  const offlineItems = useSelector(state => state?.Offline?.items?.length);
+  // Re-read cache when offline queue count changes (e.g. remove from queue)
+  const offlineCount = useSelector(state => state?.Offline?.items?.length);
   React.useEffect(() => {
-    if (isOnline && apiReachable !== false) return; // only refresh when offline
-    const cached = getCache('cache_order_history') || [];
-    if (cached.length > 0) {
-      setData(cached);
-    }
-  }, [offlineItems]);
+    if (isOnline && apiReachable !== false) return;
+    history();
+  }, [offlineCount]);
 
   // Sync historyData from hook into local state
   React.useEffect(() => {
