@@ -109,27 +109,21 @@ const useCart = catalog_id => {
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     const apiDead = apiReachable === false;
 
-    console.log('[getPaymentMethod]', { isOffline, apiDead, channelId, fallbackCount: fallback?.length });
-
     // When offline — use cache, excluding realtime-only providers
     if (isOffline || apiDead) {
       if ((fallback || []).length > 0) {
         const filtered = fallback.filter(m => m?.provider !== 'qris' && m?.provider !== 'midtrans');
-        console.log('[getPaymentMethod] using cached methods (filtered)', { original: fallback.length, filtered: filtered.length });
         return filtered.length > 0 ? filtered : fallback;
       }
-      console.log('[getPaymentMethod] no cache available');
       return [];
     }
 
     try {
       const req = await triggerPaymentMethod().unwrap();
       const data = req?.data || [];
-      console.log('[getPaymentMethod] server data', { count: data.length });
       setPaymentMethodsCache(channelId, data);
       return data;
     } catch (error) {
-      console.log('[getPaymentMethod] fetch error, fallback:', { hasCache: (fallback || []).length > 0 });
       if ((fallback || []).length > 0) {
         const filtered = fallback.filter(m => m?.provider !== 'qris' && m?.provider !== 'midtrans');
         return filtered.length > 0 ? filtered : fallback;
