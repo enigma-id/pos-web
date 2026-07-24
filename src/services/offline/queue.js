@@ -74,16 +74,19 @@ export const addToQueue = async (request, userId) => {
   const db = await ensureDB(userId);
   const now = getNow();
 
-  // If it's an open-bill request, check if a bill with the same ticket already exists in the queue
+  // If it's an open-bill request, check if a bill with the same ticket/bill_name already exists in the queue
   const isSaveBill =
     String(request?.url).toLowerCase().includes('/sales/order') &&
     request?.body?.status === 'pending';
-  const ticketName = request?.body?.ticket;
+  const ticketName = request?.body?.ticket || request?.body?.bill_name;
 
   if (isSaveBill && ticketName) {
     const allItems = await db.getAll(STORES.pendingRequests);
     const existingBill = allItems.find(
-      item => String(item?.url).endsWith('open-bill') && item?.body?.ticket === ticketName
+      item =>
+        String(item?.url).toLowerCase().includes('/sales/order') &&
+        item?.body?.status === 'pending' &&
+        (item?.body?.ticket === ticketName || item?.body?.bill_name === ticketName)
     );
 
     if (existingBill) {
@@ -154,7 +157,10 @@ export const addToQueue = async (request, userId) => {
   if (isCheckout && ticketName) {
     const allItems = await db.getAll(STORES.pendingRequests);
     const pendingBills = allItems.filter(
-      item => String(item?.url).endsWith('open-bill') && item?.body?.ticket === ticketName
+      item =>
+        String(item?.url).toLowerCase().includes('/sales/order') &&
+        item?.body?.status === 'pending' &&
+        (item?.body?.ticket === ticketName || item?.body?.bill_name === ticketName)
     );
     for (const bill of pendingBills) {
       await db.delete(STORES.pendingRequests, bill.id);

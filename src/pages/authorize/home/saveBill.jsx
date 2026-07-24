@@ -12,7 +12,7 @@ const BillModal = ({ mode, count, onBillCreate }) => {
   const FormState = useSelector(state => state?.Form);
   const { closeModal } = useModal();
   const [ticket, setTicket] = React.useState('');
-  const { bill, billResult, onBillSelected } = useCart();
+  const { bill, billResult, billData, onBillSelected } = useCart();
 
 
   React.useEffect(() => {
@@ -20,7 +20,7 @@ const BillModal = ({ mode, count, onBillCreate }) => {
     bill();
   }, [mode]);
 
-  const billData = billResult?.data?.data || [];
+  const billList = billData || billResult?.data?.data || [];
 
   return (
     <>
@@ -46,7 +46,7 @@ const BillModal = ({ mode, count, onBillCreate }) => {
               />
             </div> */}
             <div className="min-h-0 flex-1 overflow-y-auto">
-              {billData?.map((bill, idx) => (
+              {billList?.map((bill, idx) => (
                 <div
                   key={idx}
                   className="border-base-200 flex cursor-pointer place-content-between place-items-center border-b p-4"
@@ -56,8 +56,13 @@ const BillModal = ({ mode, count, onBillCreate }) => {
                   }}
                 >
                   <div>
-                    <div className="font-semibold">{bill?.bill_name || "-"} </div>
-                    <div className="text-xs">{dateFormat(bill?.created_at)}</div>
+                    <div className="font-semibold">
+                      {bill?.bill_name || "-"}
+                      {bill?.from_queue && (
+                        <span className="badge badge-warning badge-xs ms-1">pending sync</span>
+                      )}
+                    </div>
+                    <div className="text-xs">{dateFormat(bill?.ordered_at || bill?.created_at)}</div>
                   </div>
                   <div className="font-semibold">{currencyFormat(bill?.total_charges)}</div>
                 </div>

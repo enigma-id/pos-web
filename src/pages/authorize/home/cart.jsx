@@ -27,7 +27,7 @@ const Cart = ({ onUpdate }) => {
   const { showCustomer } = useSidebar();
   const { openModal, closeModal } = useModal();
 
-  const { reset, remove, bill, billResult, cartItems, onBillSelected, checkout, checkoutResult, update, updateResult } =
+  const { reset, remove, bill, billResult, billData, cartItems, onBillSelected, checkout, checkoutResult, update, updateResult } =
     useCart();
 
   // const { getServiceCharge } = useOutlet();
@@ -352,7 +352,7 @@ const Cart = ({ onUpdate }) => {
     // getServiceCharge();
   }, []);
 
-  const data = billResult?.data?.data;
+  const data = billData || billResult?.data?.data;
 
   const mode = getMode();
 

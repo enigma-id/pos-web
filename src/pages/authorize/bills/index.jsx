@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
 import { FaCopy } from 'react-icons/fa';
+import { useSelector } from 'react-redux';
 
 import {
   EmptySection,
@@ -20,9 +21,11 @@ import { usePrintWindow } from '../../../utils/print';
 const BillScreen = () => {
   const [detail, setDetail] = React.useState(null);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
 
   const { show, showResult } = useOrder();
-  const { bill, billResult  } = useCart();
+  const { bill, billResult, billData } = useCart();
   const { openModal, closeModal } = useModal();
 
   const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
@@ -54,25 +57,38 @@ const BillScreen = () => {
 
   // Reset to first item on new data
   React.useEffect(() => {
-    if (billResult?.isSuccess) {
+    if (billData || billResult?.isSuccess) {
       setSelectedIndex(0);
       setDetail(null);
     }
-  }, [billResult]);
+  }, [billData]);
 
+  // Fetch or resolve detail when selected index changes
   React.useEffect(() => {
-    if (billResult?.isSuccess) {
-      show(billResult?.data?.data?.[selectedIndex]?.id);
+    const list = billData || billResult?.data?.data || [];
+    const selected = list[selectedIndex];
+    if (!selected) return;
+
+    // Offline → render from list data (already has items from /openbill)
+    if (selected?.from_queue || !isOnline || apiReachable === false) {
+      setDetail(selected);
+      return;
     }
-  }, [billResult, selectedIndex]);
+
+    // Online → fetch full detail from server
+    if (selected?.id) {
+      show(selected.id);
+    }
+  }, [billData, selectedIndex]);
 
   React.useEffect(() => {
     if (showResult?.isSuccess) {
-      setDetail(showResult?.data?.data);
+      const detailData = showResult?.data?.data;
+      setDetail(detailData);
     }
   }, [showResult]);
 
-  const data = billResult?.data?.data || [];
+  const data = billData || billResult?.data?.data || [];
 
   return (
     <div className="flex h-screen">
@@ -101,7 +117,12 @@ const BillScreen = () => {
                   </div>
                 </div>
                 <div className="flex flex-col place-content-between">
-                  <div className="text-base-300 text-end text-sm">{item?.code}</div>
+                  <div className="text-base-300 text-end text-sm">
+                    {item?.from_queue && (
+                      <span className="badge badge-warning badge-xs me-1">pending sync</span>
+                    )}
+                    {item?.code}
+                  </div>
 
                   <div className="text-base-300 text-end text-xs">
                     {dateFormat(item?.ordered_at)}
