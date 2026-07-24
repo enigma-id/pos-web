@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
+import { useSelector } from 'react-redux';
 
 import {
   EmptySection,
@@ -19,8 +20,10 @@ const HistoryScreen = () => {
   // const [search, setSearch] = React.useState('');
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [data, setData] = React.useState([]);
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
 
-  const { history, historyResult, show: showOrder, showResult: showOrderResult } = useOrder();
+  const { history, historyResult, historyData, show: showOrder, showResult: showOrderResult } = useOrder();
 
   const { openModal, closeModal } = useModal();
 
@@ -50,18 +53,32 @@ const HistoryScreen = () => {
     history();
   }, []);
 
+  // Sync historyData from hook into local state
   React.useEffect(() => {
-    if (historyResult?.isSuccess) {
+    if (historyData || historyResult?.isSuccess) {
       setSelectedIndex(0);
-      setData(historyResult?.data?.data);
+      setDetail(null);
+      setData(historyData || historyResult?.data?.data || []);
     }
-  }, [historyResult]);
+  }, [historyData, historyResult]);
 
+  // Fetch or resolve detail
   React.useEffect(() => {
-    if (historyResult?.isSuccess && data?.length > 0) {
-      showOrder(data[selectedIndex]?.id);
+    const list = data;
+    const selected = list[selectedIndex];
+    if (!selected) return;
+
+    // Offline / queue item → render from list data
+    if (!isOnline || apiReachable === false) {
+      setDetail(selected);
+      return;
     }
-  }, [historyResult, data, selectedIndex]);
+
+    // Online → fetch full detail from server
+    if (selected?.id) {
+      showOrder(selected.id);
+    }
+  }, [data, selectedIndex]);
 
   React.useEffect(() => {
     if (showOrderResult?.isSuccess) {
