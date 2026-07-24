@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 
 import { currencyFormat, dateFormat } from '../../../utils/common';
@@ -54,9 +54,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
   const items = useSelector(state => state?.Offline?.items || []);
   const [activeTab, setActiveTab] = useState('order');
 
-  if (!open) return null;
-
-  const categorized = items.reduce(
+  const categorized = React.useMemo(() => items.reduce(
     (acc, item) => {
       const cat = getApiCategory(item);
       acc[cat]?.push(item);
@@ -67,10 +65,25 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
       return acc;
     },
     { order: [], bills: [], shifts: [], topup: [], other: [], failedCount: {} }
-  );
+  ), [items]);
 
   // Merge 'other' into none — we don't show it as a tab
   const filteredItems = categorized[activeTab] || [];
+
+  useEffect(() => {
+    if (!open || !filteredItems.length) return;
+    console.log(`[PendingDrawer] Tab ${activeTab} — ${filteredItems.length} items:`, filteredItems.map(i => ({
+      id: i.id,
+      code: i?.transaction_preview?.code || `OFF-${i.id}`,
+      status: i.status,
+      type: getApiCategory(i),
+      itemCount: i?.transaction_preview?.items?.length || 0,
+      total: i?.transaction_preview?.total_charges || i?.transaction_preview?.total_bill || 0,
+      bill_name: i?.transaction_preview?.bill_name || '',
+    })));
+  }, [open, activeTab, filteredItems.length]);
+
+  if (!open) return null;
 
   const tabs = [
     { id: 'order', label: 'Order', icon: '🛒' },
@@ -367,7 +380,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
 
                   {/* Row 2: Metadata - single compact line */}
                   <div className="flex items-center gap-1 text-[10px] text-base-content/50 flex-wrap">
-                    <span className="truncate max-w-20">{cashierName}</span>
+                    <span className="truncate max-w-24">{preview?.bill_name || cashierName}</span>
                     <span>·</span>
                     <span className="truncate">{channelName}</span>
                     <span>·</span>

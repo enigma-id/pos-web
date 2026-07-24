@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
 import { useSelector } from 'react-redux';
+import { getCache } from '../../../utils/cache';
 
 import {
   EmptySection,
@@ -53,6 +54,16 @@ const HistoryScreen = () => {
   React.useEffect(() => {
     history();
   }, []);
+
+  // Re-read cache when offline items count changes (e.g. after queue remove)
+  const offlineItems = useSelector(state => state?.Offline?.items?.length);
+  React.useEffect(() => {
+    if (isOnline && apiReachable !== false) return; // only refresh when offline
+    const cached = getCache('cache_order_history') || [];
+    if (cached.length > 0) {
+      setData(cached);
+    }
+  }, [offlineItems]);
 
   // Sync historyData from hook into local state
   React.useEffect(() => {

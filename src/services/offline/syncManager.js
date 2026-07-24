@@ -265,6 +265,21 @@ export const removeFailedItem = async id => {
   if (!userId) return false;
 
   await removeFromQueue(id, userId);
+
+  // Also remove from history cache if this was a checkout entry
+  const { getCache, setCache } = await import('../../utils/cache');
+  const HISTORY_CACHE_KEY = 'cache_order_history';
+  const existing = getCache(HISTORY_CACHE_KEY) || [];
+  const filtered = existing.filter(e => {
+    // Match by queue id (stored as offline_meta.queue_id or id)
+    const entryQueueId = e?.offline_meta?.queue_id || e?.id;
+    return String(entryQueueId) !== String(id);
+  });
+  if (filtered.length !== existing.length) {
+    setCache(HISTORY_CACHE_KEY, filtered);
+    console.log('[syncManager] removed from history cache — was:', existing.length, 'now:', filtered.length);
+  }
+
   await broadcastQueueState();
   return true;
 };

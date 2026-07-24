@@ -34,10 +34,21 @@ const useOrder = id => {
       try {
         const res = await triggerHistory(params).unwrap();
         const serverData = res?.data || [];
-        if (serverData.length > 0) {
+        console.log('[history] online fetch — count:', serverData.length);
+
+        // Merge server data with existing cache (preserve offline-only entries)
+        const existing = getCache(HISTORY_CACHE_KEY) || [];
+        const offlineEntries = existing.filter(e => e?.offline_queued);
+        const merged = [...serverData, ...offlineEntries];
+
+        if (merged.length > 0) {
+          setCache(HISTORY_CACHE_KEY, merged);
+          console.log('[history] cache saved — merged:', merged.length, 'offline:', offlineEntries.length);
+        } else {
           setCache(HISTORY_CACHE_KEY, serverData);
         }
-        setMergedHistoryData(serverData);
+
+        setMergedHistoryData(merged);
         return;
       } catch (error) {
         if (import.meta.env.DEV) {
@@ -47,7 +58,9 @@ const useOrder = id => {
     }
 
     // Offline or dead API — read cache
+    console.log('[history] offline/dead — reading cache');
     const cached = getCache(HISTORY_CACHE_KEY) || [];
+    console.log('[history] cached data count:', cached.length);
     setMergedHistoryData(cached);
   };
 

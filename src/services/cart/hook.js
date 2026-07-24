@@ -81,9 +81,12 @@ const useCart = catalog_id => {
     isCheckoutRunning.current = true;
 
     try {
+      console.log('[cart.checkout] sending payload', { ...data, items: `[${data?.items?.length} items]` });
       const res = await checkoutMutation(data).unwrap();
+      console.log('[cart.checkout] response:', res);
       if (res?.message === 'success') reset();
     } catch (error) {
+      console.error('[cart.checkout] error:', error);
       dispatch($failure(error));
     } finally {
       isCheckoutRunning.current = false;

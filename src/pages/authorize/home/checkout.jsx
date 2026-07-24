@@ -22,7 +22,8 @@ import Keypad from '../../../components/ui/keypad';
 import useModal from '../../../components/ui/modal/hook';
 import useCart from '../../../services/cart/hook';
 import useMembership from '../../../services/membership/hook';
-import { buildOfflineTransactionPayload, updateQueueItem, setWarning } from '../../../services/offline';
+import { buildOfflineTransactionPayload, updateQueueItem, setWarning, setQueueItems, getQueue } from '../../../services/offline';
+import { getCache, setCache } from '../../../utils/cache';
 // import useOutlet from '../../../services/outlet/hooks';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
@@ -127,6 +128,7 @@ const CheckoutScreen = () => {
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     const isCashPayment = selectedMethod?.provider === "cash";
     const cashTotalPayment = Number(pay) || 0;
+    console.log('[checkout] handlePay — offline:', isOffline, 'method:', selectedMethod?.provider, 'cashPay:', cashTotalPayment);
 
     if (isOffline && isCashPayment && cashTotalPayment <= 0) {
       dispatch(setWarning('Please fill total payment first.'));
@@ -249,12 +251,28 @@ const CheckoutScreen = () => {
       paymentRef: selectedMethod?.provider === "cash" ? '' : paymentRef,
       billName,
       requestBody: payload,
+      authSession: session,
     };
 
+    // Build formatted preview for Queue Manager (same shape as PendingDrawer expects)
+    const offlinePreview = buildOfflineTransactionPayload({
+      cartState: CartState,
+      selectedChannel: Channel?.selectedChannel,
+      paymentMethod: selectedMethod,
+      paymentRef: selectedMethod?.provider === "cash" ? '' : paymentRef,
+      billName: billName,
+      authSession: session,
+      queueMeta: {
+        requestBody: payload,
+      },
+    });
+
     if (isBill) {
-      await closeBill(CartState?.bill?.id, payload);
+      console.log('[checkout] calling closeBill');
+      await closeBill(CartState?.bill?.id, { ...payload, __offlinePreview: offlinePreview });
     } else {
-      await checkout(payload);
+      console.log('[checkout] calling checkout');
+      await checkout({ ...payload, __offlinePreview: offlinePreview });
     }
   };
 
@@ -468,6 +486,8 @@ const CheckoutScreen = () => {
     const closeBillData = closeBillResult?.data?.data || {};
     const isQueued = Boolean(checkoutData?.offline_queued || closeBillData?.offline_queued);
 
+    console.log('[checkout] result effect — isSuccess:', checkoutResult?.isSuccess, 'closeBill:', closeBillResult?.isSuccess, 'isQueued:', isQueued);
+
     if (checkoutResult?.isSuccess || closeBillResult?.isSuccess) {
       if (isQueued) {
         dispatch(
@@ -492,7 +512,7 @@ const CheckoutScreen = () => {
 
         const queueId = queueMeta?.id || checkoutData?.id || closeBillData?.id;
         if (queueId) {
-          updateQueueItem(queueId, {
+          const updated = updateQueueItem(queueId, {
             transaction_preview: {
               ...offlineData,
               items: offlineData.items || [],
@@ -504,7 +524,42 @@ const CheckoutScreen = () => {
               },
             },
           }, session?.user?.id);
+
+          // Refresh Redux state so Queue Manager shows updated items
+          const userId = session?.user?.id;
+          Promise.all([updated, userId ? getQueue(userId) : null]).then(([, all]) => {
+            if (all) dispatch(setQueueItems(all));
+          });
         }
+
+        // Inject into history cache so it shows offline
+        const HISTORY_CACHE_KEY = 'cache_order_history';
+        const existing = getCache(HISTORY_CACHE_KEY) || [];
+        const historyEntry = {
+          id: queueId || offlineData?.id,
+          code: offlineData?.code || `OFF-${queueId}`,
+          total_charges: offlineData?.total_charges || 0,
+          bill_name: offlineData?.bill_name || snapshot?.billName || '',
+          created_at: new Date().toISOString(),
+          status: 'completed',
+          payment_method: snapshot?.paymentMethod || selectedMethod || null,
+          total_payment: offlineData?.total_payment || 0,
+          payment_ref: snapshot?.paymentRef ?? paymentRef ?? '',
+          items: offlineData?.items || [],
+          membership: offlineData?.membership || null,
+          session: offlineData?.session || null,
+          discount_value: offlineData?.discount_value || 0,
+          service_charge_value: offlineData?.service_charge_value || 0,
+          subtotal_nett: offlineData?.total_charges || 0,
+          subtotal_gross: offlineData?.total_charges || 0,
+          from_queue: true,
+          offline_queued: true,
+          offline_meta: {
+            queue_id: queueId,
+          },
+        };
+        setCache(HISTORY_CACHE_KEY, [historyEntry, ...existing]);
+        console.log('[checkout] history cache updated — total entries:', existing.length + 1);
 
         openModal(<SuccessModal data={offlineData} backToMenu />, 'w-md');
         return;
