@@ -38,10 +38,11 @@ const BillScreen = () => {
     open(<Kitchen data={detail} />);
   };
 
-  const onRefund = id => {
+  const onRefund = (id, status) => {
     openModal(
       <Refund
         id={id}
+        status={status}
         onClose={() => {
           bill()
           closeModal();
@@ -162,10 +163,10 @@ const BillScreen = () => {
               </div>
               <div
                 className="bg-error text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
-                onClick={() => onRefund(detail?.id)}
+                onClick={() => onRefund(detail?.id, detail?.status)}
               >
                 <TrashIcon />
-                refund
+                {detail?.status === 'pending' ? 'cancel' : 'refund'}
               </div>
             </div>
           </div>

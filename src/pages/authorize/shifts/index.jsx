@@ -59,10 +59,11 @@ const ShiftScreen = () => {
     showOrder(v);
   };
 
-  const onRefund = async id => {
+  const onRefund = async (id, status) => {
     openModal(
       <Refund
         id={id}
+        status={status}
         onClose={() => {
           show(sessionResult?.data?.data?.[selectedIndex]?.id);
           closeModal();
@@ -453,10 +454,10 @@ const ShiftScreen = () => {
           </div>
           <div
             className="bg-error text-base-100 flex flex-1 cursor-pointer place-content-center place-items-center gap-2 px-4 text-sm capitalize"
-            onClick={() => onRefund(orderDetail?.id)}
+            onClick={() => onRefund(orderDetail?.id, orderDetail?.status)}
           >
             <TrashIcon />
-            refund
+            {orderDetail?.status === 'pending' ? 'cancel' : 'refund'}
           </div>
         </div>
       </Drawer.Content>

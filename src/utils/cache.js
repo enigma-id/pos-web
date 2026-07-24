@@ -90,7 +90,14 @@ export const setPaymentMethodsCache = (channelId, methods) => {
 
 export const getPaymentMethodsCache = channelId => {
   const key = `payment_methods_${channelId ?? 'default'}`;
-  return getSalesCacheValue(key) || [];
+  const data = getSalesCacheValue(key);
+  if (data && data.length > 0) return data;
+
+  // Fallback to default key if channel-specific not found
+  if (channelId) {
+    return getSalesCacheValue('payment_methods_default') || [];
+  }
+  return [];
 };
 
 //
