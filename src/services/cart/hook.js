@@ -34,7 +34,7 @@ import {
 import { useLazyGetCatalogDetailQuery } from '../catalog/action';
 import { $failure } from '../form/action';
 import { useLazyShowQuery } from '../sales/order/action';
-import { getQueue } from '../offline/queue';
+import { getAllSessions } from '../offline/queue';
 import { loadOfflineBill } from './slice';
 import { getCache, setCache } from '../../utils/cache';
 
@@ -292,59 +292,54 @@ const useCart = catalog_id => {
   const mergeOfflineBills = async (serverData) => {
     if (!userId) return serverData;
 
-    let queueItems = [];
+    let sessions = [];
     try {
-      queueItems = await getQueue(userId);
+      sessions = await getAllSessions(userId);
     } catch {
       return serverData;
     }
 
-    // Filter: pending save-bills (body.status === 'pending', has bill_name)
-    const offlineBills = queueItems.filter(item =>
-      String(item?.url || '').toLowerCase().includes('/sales/order') &&
-      item?.body?.status === 'pending' &&
-      item?.body?.bill_name
-    );
+    // Flatten semua orders dari semua session, filter pending + punya bill_name
+    const offlineOrders = sessions
+      .flatMap(s => (s.orders || []).map(o => ({ ...o, _sessionSyncId: s.sync_id })))
+      .filter(o => o.status === 'pending' && o.billName);
 
-    if (offlineBills.length === 0) return serverData;
+    if (offlineOrders.length === 0) return serverData;
 
     // Collect server tickets for dedup
     const serverTickets = new Set(
       serverData.map(b => b?.ticket || b?.bill_name).filter(Boolean)
     );
 
-    // Transform queue items → API response shape, skip dupe tickets
-    const transformed = offlineBills
-      .filter(item => {
-        const ticket = item?.body?.bill_name;
+    // Transform session orders → API response shape
+    const transformed = offlineOrders
+      .filter(order => {
+        const ticket = order.billName;
         return ticket && !serverTickets.has(ticket);
       })
-      .map(item => {
-        const preview = item?.transaction_preview || {};
-        return {
-          id: preview?.id || item?.id,
-          bill_name: preview?.bill_name || item?.body?.bill_name || '',
-          ticket: item?.body?.bill_name || '',
-          total_charges: preview?.total_charges || preview?.total_bill || 0,
-          code: preview?.code || `OFF-${item?.id}`,
-          ordered_at: preview?.created_at || item?.createdAt,
-          created_at: preview?.created_at || item?.createdAt,
-          items: preview?.items || [],
-          membership: preview?.membership || null,
-          session: preview?.session || null,
-          discount_value: preview?.discount_value || 0,
-          service_charge_value: preview?.service_charge_value || 0,
-          total_payment: preview?.total_payment || 0,
-          payment_method: preview?.payment_method || null,
-          payment_ref: preview?.payment_ref || '',
-          subtotal_nett: preview?.subtotal_nett || preview?.total_bill || 0,
-          subtotal_gross: preview?.subtotal_gross || preview?.total_bill || 0,
-          note: item?.body?.note || '',
-          from_queue: true,
-          queue_id: item?.id,
-          offline_queued: true,
-        };
-      });
+      .map(order => ({
+        id: order.sync_id,
+        bill_name: order.billName || '',
+        ticket: order.billName || '',
+        total_charges: order.totalPayment || 0,
+        code: `OFF-${order.sync_id?.slice(0, 8)}`,
+        ordered_at: order.paidAt || order.createdAt,
+        created_at: order.paidAt || order.createdAt,
+        items: order.items || [],
+        membership: order.membershipId ? { id: order.membershipId } : null,
+        session: null,
+        discount_value: order.discountValue || 0,
+        service_charge_value: 0,
+        total_payment: order.totalPayment || 0,
+        payment_method: order.paymentMethodId ? { id: order.paymentMethodId } : null,
+        payment_ref: order.paymentRef || '',
+        subtotal_nett: order.totalPayment || 0,
+        subtotal_gross: order.totalPayment || 0,
+        note: '',
+        from_queue: true,
+        queue_id: order.sync_id,
+        offline_queued: true,
+      }));
 
     return [...serverData, ...transformed];
   };
@@ -368,18 +363,23 @@ const useCart = catalog_id => {
     try {
       // Queue item → use local data, no server fetch
       if (data?.from_queue) {
-        // Get full queue item from IndexedDB to ensure we have body/content
-        const queueId = data?.queue_id;
-        let queueItem = null;
-        if (queueId) {
+        const orderId = data?.queue_id || data?.id;
+        let orderItem = null;
+        if (orderId) {
           try {
-            const all = await getQueue(userId);
-            queueItem = all.find(x => x.id === queueId);
+            const sessions = await getAllSessions(userId);
+            for (const s of sessions) {
+              const found = (s.orders || []).find(o => o.sync_id === orderId);
+              if (found) {
+                orderItem = { ...found };
+                break;
+              }
+            }
           } catch {}
         }
 
-        if (queueItem) {
-          dispatch(loadOfflineBill(queueItem));
+        if (orderItem) {
+          dispatch(loadOfflineBill(orderItem));
         }
         return;
       }

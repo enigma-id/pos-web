@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 
 import BillModal from './saveBill';
@@ -11,12 +11,19 @@ import { AddUserIcon, EditIcon, TrashIcon, UserIcon } from '../../../components/
 import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
-import { buildOfflineTransactionPayload, updateQueueItem } from '../../../services/offline';
+import { buildOfflineTransactionPayload, setWarning } from '../../../services/offline';
+import { appendOrderToSession, getAllSessions, getOrCreateOfflineSession } from '../../../services/offline/queue';
+import { setSessions } from '../../../services/offline/slice';
+import { resetCart } from '../../../services/cart/slice';
+import { v4 as uuidv4 } from 'uuid';
+import { store } from '../../../services/store';
+import { $failure } from '../../../services/form/action';
 // import useOutlet from '../../../services/outlet/hooks';
 import { currencyFormat } from '../../../utils/common';
 
 const Cart = ({ onUpdate }) => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const CartState = useSelector(state => state?.Cart);
   const FormState = useSelector(state => state?.Form);
   const Channel = useSelector(state => state?.SalesChannel);
@@ -24,6 +31,7 @@ const Cart = ({ onUpdate }) => {
 
   const [updateTicket, setUpdateTicket] = React.useState(false);
   const saveBillOfflineDataRef = React.useRef(null);
+  const isOfflineSaveRef = React.useRef(false);
   const { showCustomer } = useSidebar();
   const { openModal, closeModal } = useModal();
 
@@ -68,6 +76,79 @@ const Cart = ({ onUpdate }) => {
   };
 
   const onBillCreate = async ticket => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    const userId = session?.user?.id;
+
+    if (isOffline) {
+      // Auto-create session kalo start online trus offline
+      const active = await getOrCreateOfflineSession(userId, session);
+      const syncId = active?.sync_id;
+      if (!syncId) {
+        dispatch(setWarning('No active session. Please start a session first.'));
+        return;
+      }
+
+      const allItems = [...(CartState?.items?.list || []), ...(CartState?.items?.bill || [])];
+      const orderItems = allItems.map(item => ({
+        catalog_id: item.catalog_id || item.id,
+        catalog_name: item.name || '',
+        quantity: item.quantity,
+        unit_price: item.unit_price || 0,
+        addons: item.additionals_flat || [],
+        ...(item.is_custom ? { is_custom: true } : {}),
+      }));
+
+      const orderSyncId = uuidv4();
+      const order = {
+        sync_id: orderSyncId,
+        sessionSyncId: syncId,
+        salesChannelId: Channel?.selectedChannel?.id,
+        paymentMethodId: null,
+        membershipId: CartState?.meta?.customer?.id || null,
+        paymentRef: '',
+        billName: ticket,
+        discountPercentage: CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
+        discountValue: CartState?.discount?.cart?.type === 'nominal' ? CartState?.discount?.cart?.value : 0,
+        categoryDiscounts: [],
+        items: orderItems,
+        status: 'pending',
+        totalPayment: 0,
+        paidAt: null,
+        isOfflineMode: true,
+        refSyncId: '',
+      };
+
+      try {
+        await appendOrderToSession(syncId, order, userId);
+      } catch (err) {
+        dispatch($failure(err));
+        return;
+      }
+
+      try {
+        const fresh = await getAllSessions(userId);
+        dispatch(setSessions(fresh));
+      } catch {}
+
+      dispatch(setWarning('Bill saved offline.'));
+
+      const successData = {
+        ...order,
+        offline_queued: true,
+        total_payment: order.totalPayment,
+        bill_name: order.billName,
+        payment_method: null,
+      };
+
+      // ⛔️ Flag: skip stale mutation effect
+      isOfflineSaveRef.current = true;
+
+      openModal(<SuccessModal data={successData} />, 'w-md');
+
+      dispatch(resetCart());
+      return; // ⛔️ skip mutation API
+    }
+
     const discount_categories = CartState?.discount?.category?.filter(
       (cat) =>
         cat &&
@@ -145,7 +226,6 @@ const Cart = ({ onUpdate }) => {
     if (discount_categories?.length > 0) {
       payload.category_discounts = discount_categories;
     }
-
 
     const cartSnapshot = JSON.parse(JSON.stringify(CartState || {}));
     if (!cartSnapshot?.meta) {
@@ -270,7 +350,6 @@ const Cart = ({ onUpdate }) => {
 
   const handleModalPrint = data => {
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-    const isQueued = Boolean(data?.offline_queued);
 
     let printData = data;
     if (isOffline && saveBillOfflineDataRef.current) {
@@ -278,22 +357,6 @@ const Cart = ({ onUpdate }) => {
         ...saveBillOfflineDataRef.current,
         id: data?.id || saveBillOfflineDataRef.current.id,
       };
-    }
-
-    if (isQueued && printData?.id) {
-      updateQueueItem(printData.id, {
-        transaction_preview: {
-          ...printData,
-          items: printData.items || [],
-          session: {
-            ...printData.session,
-            cashier: {
-              name: printData.session?.name || printData.session?.cashier?.name || '-',
-            },
-          },
-          status: 'pending',
-        },
-      }, session?.user?.id);
     }
 
     openModal(<SuccessModal data={printData} />, 'w-md');
@@ -322,6 +385,14 @@ const Cart = ({ onUpdate }) => {
 
   React.useEffect(() => {
     if (checkoutResult?.isSuccess || updateResult?.isSuccess) {
+
+      // ⛔️ Skip — this is a stale trigger from offline path
+      if (isOfflineSaveRef.current) {
+        isOfflineSaveRef.current = false;
+        checkoutResult?.reset();
+        updateResult?.reset();
+        return;
+      }
 
       const billData = checkoutResult?.data?.data || updateResult?.data?.data || {};
 

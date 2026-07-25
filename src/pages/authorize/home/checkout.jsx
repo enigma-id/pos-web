@@ -22,7 +22,11 @@ import Keypad from '../../../components/ui/keypad';
 import useModal from '../../../components/ui/modal/hook';
 import useCart from '../../../services/cart/hook';
 import useMembership from '../../../services/membership/hook';
-import { buildOfflineTransactionPayload, updateQueueItem, setWarning, setQueueItems, getQueue } from '../../../services/offline';
+import { buildOfflineTransactionPayload, setWarning } from '../../../services/offline';
+import { appendOrderToSession, getAllSessions } from '../../../services/offline/queue';
+import { setSessions, setOfflineSessionEnded } from '../../../services/offline/slice';
+import { resetCart } from '../../../services/cart/slice';
+import { v4 as uuidv4 } from 'uuid';
 import { getCache, setCache } from '../../../utils/cache';
 // import useOutlet from '../../../services/outlet/hooks';
 import useOrder from '../../../services/sales/order/hook';
@@ -60,6 +64,7 @@ const CheckoutScreen = () => {
 
   const { checkSaldo, checkResult } = useMembership();
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+  const activeSyncId = useSelector(state => state?.Offline?.activeSyncId);
   const { open: openPrint } = usePrintWindow({ title: 'Print Preview', autoClose: true });
   const { openModal, closeModal } = useModal();
 
@@ -242,6 +247,93 @@ const CheckoutScreen = () => {
       payload.payment_ref = card?.reff_code;
     }
 
+    // ===== OFFLINE PATH =====
+    if (isOffline) {
+      const syncId = activeSyncId;
+      if (!syncId) {
+        dispatch(setWarning('No active session. Please start a session first.'));
+        return;
+      }
+
+      const orderSyncId = uuidv4();
+      const now = new Date().toISOString();
+
+      // Build items with catalog_name + unit_price for preview
+      const orderItems = allItems.map(item => ({
+        catalog_id: item.catalog_id,
+        catalog_name: item.name || '',
+        quantity: item.quantity,
+        unit_price: item.unit_price || 0,
+        addons: item.additionals_flat || [],
+        ...(item.is_custom ? { is_custom: true } : {}),
+      }));
+
+      const order = {
+        sync_id: orderSyncId,
+        sessionSyncId: syncId,
+        salesChannelId: Channel?.selectedChannel?.id,
+        paymentMethodId: selectedMethod?.id,
+        membershipId: CartState?.meta?.customer?.id || null,
+        paymentRef: selectedMethod?.provider === 'cash' ? '' : paymentRef,
+        billName: billName || CartState?.bill?.bill_name || '',
+        discountPercentage: CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
+        discountValue: CartState?.discount?.cart?.type === 'nominal' ? CartState?.discount?.cart?.value : 0,
+        categoryDiscounts: discount_categories || [],
+        items: orderItems,
+        status: 'completed',
+        totalPayment: selectedMethod?.provider === 'cash' ? Number(pay) || 0 : CartState?.meta?.grand_total || 0,
+        paidAt: now,
+        isOfflineMode: true,
+        refSyncId: '',
+      };
+
+      try {
+        await appendOrderToSession(syncId, order, session?.user?.id);
+      } catch (err) {
+        dispatch($failure(err));
+        return;
+      }
+
+      // Inject history cache
+      const HISTORY_CACHE_KEY = 'cache_order_history';
+      const existing = getCache(HISTORY_CACHE_KEY) || [];
+      const historyEntry = {
+        id: orderSyncId,
+        code: `OFF-${orderSyncId.slice(0, 8)}`,
+        total_charges: order.totalPayment,
+        bill_name: order.billName,
+        created_at: now,
+        status: 'completed',
+        payment_method: selectedMethod ? { id: selectedMethod.id, name: selectedMethod.name } : null,
+        total_payment: order.totalPayment,
+        payment_ref: selectedMethod?.provider === 'cash' ? '' : paymentRef,
+        items: orderItems,
+        membership: null,
+        discount_value: order.discountValue,
+        service_charge_value: CartState?.meta?.service_charge_value || 0,
+        subtotal_nett: order.totalPayment,
+        from_queue: true,
+        offline_queued: true,
+        offline_meta: { order_sync_id: orderSyncId },
+      };
+      setCache(HISTORY_CACHE_KEY, [historyEntry, ...existing]);
+
+      // Refresh Redux sessions
+      try {
+        const fresh = await getAllSessions(session?.user?.id);
+        dispatch(setSessions(fresh));
+      } catch {}
+
+      dispatch(setWarning('Payment saved offline. It will sync when online.'));
+      dispatch(resetCart());
+      setSelectedMethod(paymentMethod[0]);
+
+      // Show success modal
+      openModal(<SuccessModal data={order} backToMenu />, 'w-md');
+      return; // ⛔️ skip mutation API
+    }
+
+    // ===== ONLINE PATH =====
     checkoutSnapshotRef.current = {
       cartState: JSON.parse(JSON.stringify(CartState || {})),
       selectedChannel: Channel?.selectedChannel ? { ...Channel.selectedChannel } : null,
@@ -347,6 +439,66 @@ const CheckoutScreen = () => {
 
     payload.bill_name = ticket;
 
+    // ===== OFFLINE PATH =====
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (isOffline) {
+      const syncId = activeSyncId;
+      if (!syncId) {
+        dispatch(setWarning('No active session. Please start a session first.'));
+        return;
+      }
+
+      const orderSyncId = uuidv4();
+      const orderItems = allItems.map(item => ({
+        catalog_id: item.catalog_id,
+        catalog_name: item.name || '',
+        quantity: item.quantity,
+        unit_price: item.unit_price || 0,
+        addons: item.additionals_flat || [],
+        ...(item.is_custom ? { is_custom: true } : {}),
+      }));
+
+      const order = {
+        sync_id: orderSyncId,
+        sessionSyncId: syncId,
+        salesChannelId: Channel?.selectedChannel?.id,
+        paymentMethodId: null,
+        membershipId: CartState?.meta?.customer?.id || null,
+        paymentRef: '',
+        billName: ticket,
+        discountPercentage: CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
+        discountValue: CartState?.discount?.cart?.type === 'nominal' ? CartState?.discount?.cart?.value : 0,
+        categoryDiscounts: discount_categories || [],
+        items: orderItems,
+        status: 'pending',
+        totalPayment: 0,
+        paidAt: null,
+        isOfflineMode: true,
+        offline_queued: true,
+        refSyncId: '',
+      };
+
+      try {
+        await appendOrderToSession(syncId, order, session?.user?.id);
+      } catch (err) {
+        dispatch($failure(err));
+        return;
+      }
+
+      // Refresh Redux sessions
+      try {
+        const fresh = await getAllSessions(session?.user?.id);
+        dispatch(setSessions(fresh));
+      } catch {}
+
+      dispatch(setWarning('Bill saved offline.'));
+      dispatch(resetCart());
+      setSelectedMethod(paymentMethod[0]);
+      openModal(<SuccessModal data={order} backToMenu />, 'w-md');
+      return; // ⛔️ skip mutation API
+    }
+
+    // ===== ONLINE PATH =====
     checkoutSnapshotRef.current = {
       cartState: JSON.parse(JSON.stringify(CartState || {})),
       selectedChannel: Channel?.selectedChannel ? { ...Channel.selectedChannel } : null,
@@ -480,84 +632,8 @@ const CheckoutScreen = () => {
   React.useEffect(() => {
     const checkoutData = checkoutResult?.data?.data || {};
     const closeBillData = closeBillResult?.data?.data || {};
-    const isQueued = Boolean(checkoutData?.offline_queued || closeBillData?.offline_queued);
 
     if (checkoutResult?.isSuccess || closeBillResult?.isSuccess) {
-      if (isQueued) {
-        dispatch(
-          setWarning('Payment queued offline. It will sync automatically when network is restored.')
-        );
-
-        const queueMeta = checkoutData?.offline_meta || closeBillData?.offline_meta || {};
-
-        const snapshot = checkoutSnapshotRef.current || {};
-        const offlineData = buildOfflineTransactionPayload({
-          cartState: snapshot?.cartState || CartState,
-          selectedChannel: Channel?.selectedChannel,
-          paymentMethod: snapshot?.paymentMethod || selectedMethod,
-          paymentRef: snapshot?.paymentRef ?? paymentRef,
-          billName: snapshot?.billName ?? billName,
-          authSession: session,
-          queueMeta: {
-            ...queueMeta,
-            requestBody: snapshot?.requestBody || null,
-          },
-        });
-
-        const queueId = queueMeta?.id || checkoutData?.id || closeBillData?.id;
-        if (queueId) {
-          const updated = updateQueueItem(queueId, {
-            transaction_preview: {
-              ...offlineData,
-              items: offlineData.items || [],
-              session: {
-                ...offlineData.session,
-                cashier: {
-                  name: offlineData.session?.name || '-',
-                },
-              },
-            },
-          }, session?.user?.id);
-
-          // Refresh Redux state so Queue Manager shows updated items
-          const userId = session?.user?.id;
-          Promise.all([updated, userId ? getQueue(userId) : null]).then(([, all]) => {
-            if (all) dispatch(setQueueItems(all));
-          });
-        }
-
-        // Inject into history cache so it shows offline
-        const HISTORY_CACHE_KEY = 'cache_order_history';
-        const existing = getCache(HISTORY_CACHE_KEY) || [];
-        const historyEntry = {
-          id: queueId || offlineData?.id,
-          code: offlineData?.code || `OFF-${queueId}`,
-          total_charges: offlineData?.total_charges || 0,
-          bill_name: offlineData?.bill_name || snapshot?.billName || '',
-          created_at: new Date().toISOString(),
-          status: 'completed',
-          payment_method: snapshot?.paymentMethod || selectedMethod || null,
-          total_payment: offlineData?.total_payment || 0,
-          payment_ref: snapshot?.paymentRef ?? paymentRef ?? '',
-          items: offlineData?.items || [],
-          membership: offlineData?.membership || null,
-          session: offlineData?.session || null,
-          discount_value: offlineData?.discount_value || 0,
-          service_charge_value: offlineData?.service_charge_value || 0,
-          subtotal_nett: offlineData?.total_charges || 0,
-          subtotal_gross: offlineData?.total_charges || 0,
-          from_queue: true,
-          offline_queued: true,
-          offline_meta: {
-            queue_id: queueId,
-          },
-        };
-        setCache(HISTORY_CACHE_KEY, [historyEntry, ...existing]);
-
-        openModal(<SuccessModal data={offlineData} backToMenu />, 'w-md');
-        return;
-      }
-
       setSelectedMethod(paymentMethod[0]);
       const id = checkoutData?.id || closeBillData?.id;
       if (id) {
@@ -567,18 +643,12 @@ const CheckoutScreen = () => {
   }, [checkoutResult?.isSuccess, closeBillResult?.isSuccess]);
 
   React.useEffect(() => {
-    const checkoutData = checkoutResult?.data?.data || {};
-    const closeBillData = closeBillResult?.data?.data || {};
-    const isQueued = Boolean(checkoutData?.offline_queued || closeBillData?.offline_queued);
-
-    if (!isQueued && (closeBillResult?.isSuccess || checkoutResult?.isSuccess) && showResult?.isSuccess) {
+    if ((closeBillResult?.isSuccess || checkoutResult?.isSuccess) && showResult?.isSuccess) {
       openSuccess(showResult?.data?.data);
     }
   }, [
     checkoutResult?.isSuccess,
     closeBillResult?.isSuccess,
-    checkoutResult?.data?.data?.offline_queued,
-    closeBillResult?.data?.data?.offline_queued,
     showResult?.isSuccess,
     showResult?.data?.data,
   ]);

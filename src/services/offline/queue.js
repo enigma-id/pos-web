@@ -115,6 +115,53 @@ export const getActiveSession = async userId => {
 };
 
 /**
+ * Dapetin session buat operasi offline.
+ * - Kalo ada offline session aktif → pake itu.
+ * - Kalo ada server session ID (authSession.sales_session.id) → auto-create offline session dgn referenceId.
+ * - Kalo gak ada → return null.
+ */
+export const getOrCreateOfflineSession = async (userId, authSession) => {
+  // 1. Cari offline session aktif
+  const active = await getActiveSession(userId);
+  if (active) return active;
+
+  // 2. Cek server session ID — start online, sekarang offline
+  const serverId = authSession?.sales_session?.id;
+  if (serverId) {
+    // Cek apa udah ada offline session dgn referenceId ini
+    const db = await ensureDB(userId);
+    const all = await db.getAll(STORES.offlineSessions);
+    const existing = all.find(s => s.referenceId === serverId && !s.session.close_at);
+    if (existing) return existing;
+
+    // Buat baru
+    const sync_id = uuidv4();
+    const now = getISO();
+    const doc = {
+      sync_id,
+      referenceId: serverId,
+      session: {
+        open_at: now,
+        cash_started: 0,
+        close_at: null,
+        cash_finished: null,
+      },
+      orders: [],
+      topups: [],
+      memberships: [],
+      syncStatus: 'pending',
+      error: null,
+      createdAt: now,
+    };
+
+    await db.add(STORES.offlineSessions, doc);
+    return doc;
+  }
+
+  return null;
+};
+
+/**
  * Ambil semua session yg belum di-sync (pending, syncing, failed).
  */
 export const getPendingSessions = async userId => {
@@ -291,44 +338,43 @@ export const getAllMetadata = async userId => {
   return db.getAll(STORES.metadata);
 };
 
-// ========== BACKWARD COMPAT — pendingRequests (Phase 2 nanti di-refactor) ==========
+// ========== ORDER OPERATIONS ==========
 
 /**
- * Backward compat: getQueue masih dipanggil cart/hook.js untuk save-bill.
- * Di Phase 1 pendingRequests store sudah dihapus.
- * Selalu return [] — nanti Phase 2 ganti dengan baca dari session.orders.
+ * Append order ke session.orders[].
+ * Order shape:
+ * {
+ *   sync_id: "uuid",
+ *   sessionSyncId: "sync_id",
+ *   salesChannelId: "...",
+ *   paymentMethodId: 0,
+ *   membershipId: null,
+ *   paymentRef: "",
+ *   billName: "",
+ *   discountPercentage: 0,
+ *   discountValue: 0,
+ *   categoryDiscounts: [],
+ *   items: [{ catalog_id, catalog_name, quantity, unit_price, addons }],
+ *   status: "pending" | "completed",
+ *   totalPayment: 0,
+ *   paidAt: "ISO",
+ *   isOfflineMode: true,
+ *   refSyncId: ""
+ * }
  */
-export const getQueue = async () => {
-  return [];
-};
+export const appendOrderToSession = async (syncId, order, userId) => {
+  const db = await ensureDB(userId);
+  const existing = await db.get(STORES.offlineSessions, syncId);
+  if (!existing) throw new Error(`Session not found: ${syncId}`);
 
-export const getQueueByStatus = async () => {
-  return [];
-};
+  if (!Array.isArray(existing.orders)) {
+    existing.orders = [];
+  }
 
-export const getQueueItem = async () => {
-  return null;
-};
+  existing.orders.push(order);
 
-/**
- * Backward compat: updateQueueItem masih dipanggil checkout.jsx.
- * Di Phase 1 pendingRequests sudah dihapus — no-op.
- * Akan di-refactor di Phase 2 saat order flow pindah ke session.orders.
- */
-export const updateQueueItem = async () => {
-  return null;
-};
-
-export const addToQueue = async () => {
-  return null;
-};
-
-export const removeFromQueue = async () => {
-  return true;
-};
-
-export const clearQueue = async () => {
-  return true;
+  await db.put(STORES.offlineSessions, existing);
+  return existing;
 };
 
 // ========== PENDING COUNT HELPER ==========

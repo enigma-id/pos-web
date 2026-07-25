@@ -565,19 +565,43 @@ const cartSlice = createSlice({
     },
 
     loadOfflineBill: (state, action) => {
-      const queueItem = action.payload;
-      const preview = queueItem?.transaction_preview || {};
-      const body = queueItem?.body || {};
+      const order = action.payload;
+      // New shape: flat order from session blob (no wrapper)
+      // Old shape: { transaction_preview, body }
+      const isFlatOrder = order?.sync_id && !order?.transaction_preview && !order?.body;
+
+      let preview, body;
+      if (isFlatOrder) {
+        // Build preview directly from order fields
+        preview = {
+          id: order.sync_id,
+          bill_name: order.billName || '',
+          total_charges: order.totalPayment || 0,
+          total_bill: order.totalPayment || 0,
+          discount_value: order.discountValue || 0,
+          is_discount_percentage: order.discountPercentage > 0,
+          items: (order.items || []).map(item => ({
+            ...item,
+            catalog: { name: item.catalog_name, id: item.catalog_id },
+            unit_nett: item.unit_price,
+          })),
+          membership: order.membershipId ? { id: order.membershipId } : null,
+        };
+        body = { ...order, bill_name: order.billName };
+      } else {
+        preview = order?.transaction_preview || {};
+        body = order?.body || {};
+      }
 
       // Set bill metadata from preview, falling back to body
       state.bill = {
-        id: preview?.id,
+        id: order?.sync_id || preview?.id,
         bill_name: preview?.bill_name || body?.bill_name || '',
         total_bill: preview?.total_charges || preview?.total_bill || 0,
         membership:
           preview?.membership || (body?.membership_id ? { id: body.membership_id } : null),
         from_offline_queue: true,
-        queue_id: queueItem?.id,
+        queue_id: order?.sync_id || order?.id,
       };
 
       // Reset cart items

@@ -9,7 +9,6 @@ const initialState = {
   warning: null,
   error: null,
   lastSyncTime: null,
-  items: [],             // BACKWARD COMPAT — PendingDrawer masih baca items
   sessions: [],
   activeSyncId: null,
   apiReachable: true,
@@ -76,10 +75,6 @@ const offlineSlice = createSlice({
     clearOfflineSessionEnded: state => {
       state.offlineSessionEnded = false;
     },
-    setQueueItems: () => {
-      // Backward compat — no-op. pendingRequests queue dihapus di Phase 1.
-      // Masih dipanggil checkout.jsx, akan di-refactor di Phase 2.
-    },
     resetOfflineState: () => initialState,
   },
 });
@@ -102,7 +97,6 @@ export const {
   clearOfflineSummary,
   setOfflineSessionEnded,
   clearOfflineSessionEnded,
-  setQueueItems,
   resetOfflineState,
 } = offlineSlice.actions;
 

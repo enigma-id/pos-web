@@ -1,3 +1,4 @@
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Kitchen, Receipt, Modal } from '../../../components/ui';
@@ -22,17 +23,6 @@ const SuccessModal = ({ data, backToMenu }) => {
   const handleOpenPrintKitchen = () => {
     openPrint(<Kitchen data={data} />);
   };
-
-  //   React.useEffect(() => {
-  //     if (!id) return;
-  //     show(id);
-  //   }, [id]);
-
-  //   React.useEffect(() => {
-  //     if (showResult?.isSuccess) {
-  //       setData(showResult?.data?.data);
-  //     }
-  //   }, [showResult]);
 
   return (
     <>

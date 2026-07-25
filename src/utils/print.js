@@ -15,7 +15,21 @@ export function usePrintWindow({
   const rootRef = useRef(null);
 
   const open = children => {
-    if (printInProgress.current) return; // cegah double print
+    // Kalo window masih hidup dan ada print di progress → re-print, jangan block
+    if (printWindow.current && !printWindow.current.closed) {
+      if (container.current) {
+        if (!rootRef.current) {
+          rootRef.current = createRoot(container.current);
+        }
+        rootRef.current.render(children);
+        setTimeout(() => {
+          printWindow.current?.focus();
+          printWindow.current?.print();
+        }, 500);
+      }
+      return;
+    }
+    if (printInProgress.current) return; // cegah double print kalo window blom ready
     printInProgress.current = true;
 
     // Jika belum dibuka atau sudah ditutup, buka jendela baru
@@ -78,6 +92,7 @@ export function usePrintWindow({
       const interval = setInterval(() => {
         if (printWindow.current?.closed) {
           clearInterval(interval);
+          printInProgress.current = false;
           setReady(false);
           rootRef.current = null;
           onClose?.();

@@ -4,50 +4,19 @@ import { useSelector } from 'react-redux';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 
 const getApiCategory = (item) => {
-  const cat = item?._category;
-  if (cat) return cat;
-
-  const url = item?.url;
-
-  if (!url) return 'unknown';
-  const path = String(url).toLowerCase();
-  if (path.includes('/sales/session')) return 'shifts';
-  if (path.includes('/sales/order')) {
-    const status = item?.body?.status;
-    if (path.includes('/checkout') || status === 'completed') return 'order';
-    if (status === 'pending') return 'bills';
-    return 'order';
-  }
-  if (path.includes('/balance') && path.includes('/topup')) return 'topup';
+  if (item._type === 'topup') return 'topup';
+  if (item._type === 'session') return 'shifts';
+  if (item.status === 'pending') return 'bills';
+  if (item.status === 'completed') return 'order';
   return 'other';
 };
 
 const getApiType = (item) => {
-  // Explicit tag paling prioritas
-  if (item?._apiType) return item._apiType;
-
-  const url = item?.url;
-
-  if (!url) return 'unknown';
-
-  const path = String(url).toLowerCase();
-  const parts = path.split('/').filter(Boolean);
-  const last = parts[parts.length - 1] || 'unknown';
-
-  if (path.includes('/sales/session')) {
-    return last === 'close' ? 'end' : 'start';
-  }
-
-  if (path.includes('/sales/order')) {
-    const status = item?.body?.status;
-    if (status === 'pending') return 'save bill';
-    if (path.includes('/checkout') || status === 'completed') return 'checkout';
-    return 'order';
-  }
-
-  if (path.includes('/balance') && path.includes('/topup')) return 'topup';
-
-  return last;
+  if (item._type === 'topup') return 'topup';
+  if (item._type === 'session') return item.body?.cash_finished ? 'close session' : 'start session';
+  if (item.status === 'pending') return 'save bill';
+  if (item.status === 'completed') return 'checkout';
+  return 'order';
 };
 
 const statusConfig = {
@@ -57,45 +26,30 @@ const statusConfig = {
 };
 
 const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
-  const items = useSelector(state => state?.Offline?.items || []);
   const sessions = useSelector(state => state?.Offline?.sessions || []);
   const [activeTab, setActiveTab] = useState('order');
 
   const categorized = React.useMemo(() => {
-    const result = items.reduce(
-      (acc, item) => {
-        const cat = getApiCategory(item);
-        acc[cat]?.push(item);
-        if (item.status === 'failed') {
-          acc.failedCount[cat] = (acc.failedCount[cat] || 0) + 1;
-        }
-        return acc;
-      },
-      { order: [], bills: [], shifts: [], topup: [], other: [], failedCount: {} }
-    );
+    const result = { order: [], bills: [], shifts: [], topup: [], other: [], failedCount: {} };
 
-    // Merge sessions from Offline.sessions into shifts tab
-    // Tiap session = 1 sync request via POST /sales/sync (open + close dikirim bareng)
     for (const s of sessions) {
       if (s.syncStatus === 'synced') continue;
+
+      // Session-level items (shifts tab)
       const isClosed = !!s.session?.close_at;
       const hasReference = !!s.referenceId;
-
-      // Session start online → cuma close yg perlu sync
-      // Session start offline → open + close sync bareng (1 item)
       const isOfflineOnly = !hasReference && isClosed;
       const shiftItem = {
         id: s.sync_id,
         sync_id: s.sync_id,
-        referenceId: s.referenceId,
-        _category: 'shifts',
-        _apiType: isOfflineOnly ? 'both' : (hasReference && isClosed ? 'end' : 'start'),
+        _type: 'session',
         status: s.syncStatus || 'pending',
         lastError: s.error || null,
         createdAt: isClosed ? s.session?.close_at : (s.createdAt || s.session?.open_at),
         body: {
           cash: isClosed ? (s.session?.cash_finished || s.session?.cash_started) : s.session?.cash_started,
           cash_started: s.session?.cash_started,
+          cash_finished: s.session?.cash_finished,
           open_at: s.session?.open_at,
           close_at: s.session?.close_at,
           orderCount: s.orders?.length || 0,
@@ -109,13 +63,45 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
         },
       };
       result.shifts.push(shiftItem);
-      if (shiftItem.status === 'failed') {
+      if (s.syncStatus === 'failed') {
         result.failedCount.shifts = (result.failedCount.shifts || 0) + 1;
+      }
+
+      // Flatten orders dari session
+      for (const o of s.orders || []) {
+        const item = {
+          ...o,
+          id: o.sync_id,
+          _sessionSyncId: s.sync_id,
+          _sessionStatus: s.syncStatus,
+          _sessionError: s.error,
+          _sessionCreatedAt: s.createdAt,
+        };
+
+        const cat = getApiCategory(item);
+        result[cat]?.push(item);
+        if (item.status === 'failed') {
+          result.failedCount[cat] = (result.failedCount[cat] || 0) + 1;
+        }
+      }
+
+      // Topups dari session
+      for (const t of s.topups || []) {
+        const item = {
+          ...t,
+          _type: 'topup',
+          _sessionSyncId: s.sync_id,
+          _sessionStatus: s.syncStatus,
+        };
+        result.topup.push(item);
+        if (s.syncStatus === 'failed') {
+          result.failedCount.topup = (result.failedCount.topup || 0) + 1;
+        }
       }
     }
 
     return result;
-  }, [items, sessions]);
+  }, [sessions]);
 
   // Merge 'other' into none — we don't show it as a tab
   const filteredItems = categorized[activeTab] || [];
@@ -238,16 +224,16 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
           {filteredItems.map(item => {
             const preview = item?.transaction_preview || {};
             const apiType = getApiType(item);
-            const code = preview?.code || `OFF-${item?.id}`;
+            const code = preview?.code || `OFF-${item?.sync_id?.slice(0, 8) || item?.id}`;
             const channelName = preview?.channel?.name || '-';
-            const paymentName = preview?.payment_method?.name || '-';
+            const paymentName = preview?.payment_method?.name || (item?.paymentMethodId ? '-' : '-');
             const cashierName = preview?.cashier?.name || preview?.session?.cashier?.name || '-';
-            const itemCount = Number(preview?.item_count) || preview?.items?.length || 0;
-            const totalCharges = Number(preview?.total_charges || preview?.total_bill) || 0;
+            const itemCount = Number(preview?.item_count) || preview?.items?.length || item?.items?.length || 0;
+            const totalCharges = Number(preview?.total_charges || preview?.total_bill) || item?.totalPayment || 0;
             const displayTotal = totalCharges;
-            const createdAt = preview?.created_at || item?.createdAt;
+            const createdAt = preview?.created_at || item?.paidAt || item?.createdAt || item?._sessionCreatedAt;
             const status = statusConfig[item.status] || statusConfig.pending;
-            const itemsList = preview?.items || [];
+            const itemsList = preview?.items || item?.items || [];
 
             const isSession = apiType === 'start' || apiType === 'end' || apiType === 'both';
             // Specialized rendering for Topup
@@ -464,11 +450,11 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
                                   {product.quantity}
                                 </span>
                                 <span className="text-[13px] font-bold uppercase truncate leading-tight">
-                                  {product.catalog?.name || product.description || 'Unknown Item'}
+                                  {product.catalog?.name || product.catalog_name || product.description || 'Unknown Item'}
                                 </span>
                               </div>
                               <span className="text-[13px] text-base-content/60 font-medium whitespace-nowrap">
-                                {currencyFormat(Number(product.unit_nett || 0) * Number(product.quantity || 0))}
+                                {currencyFormat(Number(product.unit_nett || product.unit_price || 0) * Number(product.quantity || 0))}
                               </span>
                             </div>
 
@@ -476,7 +462,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
                             {product.addons?.length > 0 && (
                               <div className="ml-5 border-l border-base-content/10 pl-2 flex flex-col gap-0.5">
                                 {product.addons?.map((add, aIdx) => {
-                                 const suffix = add?.addon?.type === 'quantity' || add?.addon?.type === 'checkbox' ? `(${product?.quantity} x ${add?.quantity}) x ${currencyFormat(add?.unit_nett || 0)}` : '';
+                          const suffix = add?.addon?.type === 'quantity' || add?.addon?.type === 'checkbox' ? `(${product?.quantity} x ${add?.quantity}) x ${currencyFormat(add?.unit_nett || 0)}` : '';
                                 return (
                                     <div key={aIdx} className="flex justify-between text-[11px] text-base-content/40 italic">
                                     <span>+ {add.catalog?.name} {suffix}</span>
