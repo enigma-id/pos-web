@@ -24,7 +24,7 @@ import useCart from '../../../services/cart/hook';
 import useMembership from '../../../services/membership/hook';
 import { buildOfflineTransactionPayload, setWarning } from '../../../services/offline';
 import { appendOrderToSession, getAllSessions, getOrCreateOfflineSession } from '../../../services/offline/queue';
-import { setSessions, setOfflineSessionEnded } from '../../../services/offline/slice';
+import { setSessions, setPendingCount, setOfflineSessionEnded } from '../../../services/offline/slice';
 import { resetCart } from '../../../services/cart/slice';
 import { $failure } from '../../../services/form/action';
 import { v4 as uuidv4 } from 'uuid';
@@ -328,6 +328,7 @@ const CheckoutScreen = () => {
       try {
         const fresh = await getAllSessions(session?.user?.id);
         dispatch(setSessions(fresh));
+        dispatch(setPendingCount(fresh.filter(s => s.syncStatus !== 'synced').length));
       } catch {}
 
       dispatch(setWarning('Payment saved offline. It will sync when online.'));
@@ -497,6 +498,7 @@ const CheckoutScreen = () => {
       try {
         const fresh = await getAllSessions(session?.user?.id);
         dispatch(setSessions(fresh));
+        dispatch(setPendingCount(fresh.filter(s => s.syncStatus !== 'synced').length));
       } catch {}
 
       dispatch(setWarning('Bill saved offline.'));
@@ -642,10 +644,8 @@ const CheckoutScreen = () => {
   }, [checkResult]);
 
   React.useEffect(() => {
-    console.log('[checkout useEffect1] triggered, isSuccess:', checkoutResult?.isSuccess, closeBillResult?.isSuccess, 'flag:', isOfflineSaveRef.current);
     // ⛔️ Skip stale mutation trigger from offline path
     if (isOfflineSaveRef.current) {
-      console.log('[checkout useEffect1] OFFLINE flag set — SKIPPING');
       isOfflineSaveRef.current = false;
       return;
     }
@@ -657,19 +657,16 @@ const CheckoutScreen = () => {
       setSelectedMethod(paymentMethod[0]);
       const id = checkoutData?.id || closeBillData?.id;
       if (id) {
-        console.log('[checkout useEffect1] calling show with id:', id);
         show(id);
       }
     }
   }, [checkoutResult?.isSuccess, closeBillResult?.isSuccess]);
 
   React.useEffect(() => {
-    console.log('[checkout useEffect2] triggered, isSuccess:', checkoutResult?.isSuccess, closeBillResult?.isSuccess, 'showResult:', showResult?.isSuccess, 'flag:', isOfflineSaveRef.current);
     // ⛔️ Skip stale mutation trigger from offline path
     if (isOfflineSaveRef.current) return;
 
     if ((closeBillResult?.isSuccess || checkoutResult?.isSuccess) && showResult?.isSuccess) {
-      console.log('[checkout useEffect2] calling openSuccess');
       openSuccess(showResult?.data?.data);
     }
   }, [

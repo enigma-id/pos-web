@@ -15,33 +15,48 @@ const getISO = () => new Date().toISOString();
 
 const getDBName = userId => `pos-offline-queue-${userId}`;
 
-const ensureDB = userId => {
+const ensureDB = async userId => {
   if (!userId) throw new Error('userId required for queue DB');
   const key = String(userId);
+
+  const open = async () => {
+    const db = await openDB(getDBName(userId), DB_VERSION, {
+      upgrade(db, oldVersion) {
+        if (db.objectStoreNames.contains('pendingRequests')) {
+          db.deleteObjectStore('pendingRequests');
+        }
+
+        if (!db.objectStoreNames.contains(STORES.offlineSessions)) {
+          const store = db.createObjectStore(STORES.offlineSessions, { keyPath: 'sync_id' });
+          store.createIndex('syncStatus', 'syncStatus', { unique: false });
+          store.createIndex('createdAt', 'createdAt', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains(STORES.metadata)) {
+          db.createObjectStore(STORES.metadata, { keyPath: 'key' });
+        }
+      },
+    });
+    return db;
+  };
+
   if (!dbInstances.has(key)) {
-    dbInstances.set(
-      key,
-      openDB(getDBName(userId), DB_VERSION, {
-        upgrade(db, oldVersion) {
-          // Hapus pendingRequests store kalo ada (v2→v3)
-          if (db.objectStoreNames.contains('pendingRequests')) {
-            db.deleteObjectStore('pendingRequests');
-          }
-
-          if (!db.objectStoreNames.contains(STORES.offlineSessions)) {
-            const store = db.createObjectStore(STORES.offlineSessions, { keyPath: 'sync_id' });
-            store.createIndex('syncStatus', 'syncStatus', { unique: false });
-            store.createIndex('createdAt', 'createdAt', { unique: false });
-          }
-
-          if (!db.objectStoreNames.contains(STORES.metadata)) {
-            db.createObjectStore(STORES.metadata, { keyPath: 'key' });
-          }
-        },
-      })
-    );
+    dbInstances.set(key, open());
   }
-  return dbInstances.get(key);
+
+  try {
+    const db = await dbInstances.get(key);
+    // Verify db is still open — closing connection gives undefined name
+    if (db.name) return db;
+  } catch {
+    // Connection was closed (StrictMode remount race), reopen
+    dbInstances.delete(key);
+  }
+
+  // Retry once
+  const reopened = open();
+  dbInstances.set(key, reopened);
+  return reopened;
 };
 
 export const closeUserDB = async userId => {

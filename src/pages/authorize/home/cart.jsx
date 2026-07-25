@@ -13,7 +13,7 @@ import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
 import { buildOfflineTransactionPayload, setWarning } from '../../../services/offline';
 import { appendOrderToSession, getAllSessions, getOrCreateOfflineSession } from '../../../services/offline/queue';
-import { setSessions } from '../../../services/offline/slice';
+import { setSessions, setPendingCount } from '../../../services/offline/slice';
 import { resetCart } from '../../../services/cart/slice';
 import { v4 as uuidv4 } from 'uuid';
 import { store } from '../../../services/store';
@@ -128,6 +128,7 @@ const Cart = ({ onUpdate }) => {
       try {
         const fresh = await getAllSessions(userId);
         dispatch(setSessions(fresh));
+        dispatch(setPendingCount(fresh.filter(s => s.syncStatus !== 'synced').length));
       } catch {}
 
       dispatch(setWarning('Bill saved offline.'));
