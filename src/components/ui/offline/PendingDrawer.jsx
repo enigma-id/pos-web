@@ -227,7 +227,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
           {filteredItems.map(item => {
             const preview = item?.transaction_preview || {};
             const apiType = getApiType(item);
-            const code = preview?.code || `OFF-${item?.sync_id?.slice(0, 8) || item?.id}`;
+            const code = preview?.code || item?.code || `OFF-${item?.sync_id?.slice(0, 8) || item?.id}`;
             const channelName = preview?.channel?.name || item?.salesChannelName || item?.salesChannelId || '-';
             const paymentName = preview?.payment_method?.name || (item?.paymentMethodId ? '-' : '-');
             const cashierName = preview?.cashier?.name || preview?.session?.cashier?.name || '-';

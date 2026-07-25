@@ -154,6 +154,7 @@ export const syncPendingSessions = async () => {
                   quantity: a.quantity || 1,
                 })),
               })),
+              code: o.code || '',
               status: o.status || 'pending',
               total_payment: o.totalPayment || o.total_payment || 0,
               paid_at: o.paidAt || o.paid_at || null,
@@ -251,10 +252,6 @@ export const syncPendingSessions = async () => {
     await setLastSyncTimeMeta(now, userId);
     storeRef.dispatch(setLastSyncTime(now));
 
-    // Clear cached server data biar pages re-fetch dari API
-    try {
-      localStorage.removeItem('cache_openbills');
-    } catch {}
   } catch (error) {
     if (storeRef) {
       storeRef.dispatch(setOfflineError(error?.message || 'Sync manager error'));

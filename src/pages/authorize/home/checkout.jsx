@@ -280,8 +280,11 @@ const CheckoutScreen = () => {
         ...(item.is_custom ? { is_custom: true } : {}),
       }));
 
+      const now2 = new Date();
+      const code = `${now2.toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
       const order = {
         sync_id: orderSyncId,
+        code,
         sessionSyncId: syncId,
         salesChannelId: Channel?.selectedChannel?.id,
         salesChannelName: Channel?.selectedChannel?.name,
@@ -525,6 +528,7 @@ const CheckoutScreen = () => {
 
       const order = {
         sync_id: orderSyncId,
+        code: `${new Date().toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`,
         sessionSyncId: syncId,
         salesChannelId: Channel?.selectedChannel?.id,
         salesChannelName: Channel?.selectedChannel?.name,

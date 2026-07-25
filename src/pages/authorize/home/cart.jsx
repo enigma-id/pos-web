@@ -105,8 +105,11 @@ const Cart = ({ onUpdate }) => {
       }));
 
       const orderSyncId = uuidv4();
+      const now = new Date();
+      const code = `${now.toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
       const order = {
         sync_id: orderSyncId,
+        code,
         sessionSyncId: syncId,
         salesChannelId: Channel?.selectedChannel?.id,
         salesChannelName: Channel?.selectedChannel?.name,

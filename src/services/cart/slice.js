@@ -79,11 +79,11 @@ function getCategoryDiscount(item, itemCategories) {
   if (!discount_type || !discount_value) return 0;
 
   if (discount_type === 'percentage') {
-    return Math.floor(item.unit_price * (discount_value / 100));
+    return Math.ceil(item.unit_price * (discount_value / 100));
   }
 
   if (discount_type === 'nominal') {
-    return Math.floor(discount_value > item?.unit_price ? item?.unit_price : discount_value);
+    return Math.ceil(discount_value > item?.unit_price ? item?.unit_price : discount_value);
   }
 
   return 0;
@@ -93,7 +93,7 @@ function calculateCartLevelDiscount(subtotal, type, value) {
   if (!type || !value) return 0;
 
   if (type === 'percentage') {
-    return Math.floor((subtotal * value) / 100);
+    return Math.ceil((subtotal * value) / 100);
   }
 
   if (type === 'nominal') {
@@ -254,7 +254,7 @@ function calculateAdditionalsPerItem(additionals = []) {
 
 function recalculateGrandTotalWithServiceCharge(state) {
   if (state.meta.service_charge_percentage > 0) {
-    state.meta.service_charge_value = Math.floor(
+    state.meta.service_charge_value = Math.ceil(
       (state.meta.subtotal - state.discount.cart.amount) *
         (state.meta.service_charge_percentage / 100)
     );
