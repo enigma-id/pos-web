@@ -22,6 +22,7 @@ const HistoryScreen = () => {
   const [data, setData] = React.useState([]);
   const isOnline = useSelector(state => state?.Offline?.isOnline);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+  const lastSyncTime = useSelector(state => state?.Offline?.lastSyncTime);
 
   const { history, historyResult, historyData, show: showOrder, showResult: showOrderResult } = useOrder();
 
@@ -52,7 +53,7 @@ const HistoryScreen = () => {
 
   React.useEffect(() => {
     history();
-  }, []);
+  }, [lastSyncTime]);
 
   // Re-read cache when offline pending count changes
   const offlinePendingCount = useSelector(state => state?.Offline?.pendingCount);

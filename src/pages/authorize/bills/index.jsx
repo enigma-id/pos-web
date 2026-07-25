@@ -23,6 +23,7 @@ const BillScreen = () => {
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const isOnline = useSelector(state => state?.Offline?.isOnline);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+  const lastSyncTime = useSelector(state => state?.Offline?.lastSyncTime);
 
   const { show, showResult } = useOrder();
   const { bill, billResult, billData } = useCart();
@@ -54,7 +55,7 @@ const BillScreen = () => {
 
   React.useEffect(() => {
     bill()
-  }, []);
+  }, [lastSyncTime]);
 
   // Reset to first item on new data
   React.useEffect(() => {

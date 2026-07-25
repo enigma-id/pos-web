@@ -402,18 +402,16 @@ export const appendOrderToSession = async (syncId, order, userId) => {
 
 /**
  * Hitung total item yg perlu sync/action:
- * - orders pending/failed
+ * - semua orders (pending/completed) — semua perlu sync ke server
  * - topups
- * - session itu sendiri (open/close) kalo status pending/syncing/failed
+ * - session itu sendiri (open/close) kalo status pending/syncing/failed & gak punya item
  */
 export const getOfflinePendingCount = async userId => {
   const sessions = await getAllSessions(userId);
   return sessions.reduce((sum, s) => {
     if (s.syncStatus === 'synced') return sum;
-    const itemCount = (s.orders || []).filter(o => o.status === 'pending' || o.status === 'failed').length
+    const itemCount = (s.orders || []).length // semua offline orders perlu sync
       + (s.topups || []).length;
-    // Kalo ada item → itu yg dihitung
-    // Kalo gak ada item tapi session pending → session itu sendiri (open/close offline)
     return sum + (itemCount > 0 ? itemCount : 1);
   }, 0);
 };

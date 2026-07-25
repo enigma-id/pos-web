@@ -65,10 +65,11 @@ const broadcastOfflineState = async () => {
 
   const all = await getAllSessions(userId);
   const failed = all.filter(s => s.syncStatus === 'failed');
-  // Hitung total pending items (orders pending + topups)
+  // Hitung total items yg perlu sync (semua offline orders + topups)
   const pendingCount = all.reduce((sum, s) => {
     if (s.syncStatus === 'synced') return sum;
-    return sum + (s.orders || []).filter(o => o.status === 'pending' || o.status === 'failed').length + (s.topups || []).length;
+    const itemCount = (s.orders || []).length + (s.topups || []).length;
+    return sum + (itemCount > 0 ? itemCount : 1);
   }, 0);
 
   storeRef.dispatch(setSessions(all));
@@ -199,6 +200,19 @@ export const syncPendingSessions = async () => {
             // Hapus dari IndexedDB setelah sync sukses
             await deleteOfflineSession(session.sync_id, userId);
 
+            // Hapus offline entries dari history cache — backend udah punya data ini
+            try {
+              const HISTORY_CACHE_KEY = 'cache_order_history';
+              const existing = JSON.parse(localStorage.getItem(HISTORY_CACHE_KEY) || '[]');
+              const syncedOrderIds = new Set(response?.orders?.map(o => o.sync_id || o.id) || []);
+              const cleaned = existing.filter(e =>
+                !e?.offline_queued || !syncedOrderIds.has(e?.id) && !syncedOrderIds.has(e?.offline_meta?.order_sync_id)
+              );
+              if (cleaned.length !== existing.length) {
+                localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(cleaned));
+              }
+            } catch {}
+
             success = true;
             break;
           }
@@ -239,6 +253,11 @@ export const syncPendingSessions = async () => {
     const now = new Date().toISOString();
     await setLastSyncTimeMeta(now, userId);
     storeRef.dispatch(setLastSyncTime(now));
+
+    // Clear cached server data biar pages re-fetch dari API
+    try {
+      localStorage.removeItem('cache_openbills');
+    } catch {}
   } catch (error) {
     if (storeRef) {
       storeRef.dispatch(setOfflineError(error?.message || 'Sync manager error'));
