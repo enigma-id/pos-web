@@ -1,19 +1,28 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 
 import { Input, NFCField } from '../../../components/ui';
 import { PlusIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useMembership from '../../../services/membership/hook';
+import { appendMembershipToSession, getAllSessions, getOfflinePendingCount, getOrCreateOfflineSession } from '../../../services/offline/queue';
+import { setSessions, setPendingCount, setWarning } from '../../../services/offline/slice';
+import { setMemberCache, getCache, setCache } from '../../../utils/cache';
 
 const CreateSection = ({ onClose }) => {
+  const dispatch = useDispatch();
   const FormState = useSelector(state => state?.Form);
+  const authSession = useSelector(state => state?.Auth?.session);
+  const authUser = useSelector(state => state?.Auth?.user);
+  const userId = authSession?.user?.id || authUser?.id;
   const { create, createResult } = useMembership();
   const { openModal, closeModal } = useModal();
 
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
+
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
 
   const handleRead = uid => {
     const payload = {
@@ -22,6 +31,52 @@ const CreateSection = ({ onClose }) => {
       card_id: uid,
     };
 
+    // ===== OFFLINE PATH =====
+    if (isOffline) {
+      const handleOffline = async () => {
+        const sessionDoc = await getOrCreateOfflineSession(userId, authSession);
+        const syncId = sessionDoc?.sync_id;
+        if (!syncId) {
+          dispatch(setWarning('No active session. Please start a session first.'));
+          closeModal();
+          return;
+        }
+
+        dispatch(setSessions([sessionDoc]));
+
+        const membershipItem = {
+          sync_id: uid,
+          card_id: uid,
+          name,
+          reff_code: phone,
+        };
+
+        await appendMembershipToSession(syncId, membershipItem, userId);
+        setMemberCache(uid, { card_id: uid, name, reff_code: phone, saldo: 0 });
+
+        // Update table cache untuk offline fallback
+        const TABLE_CACHE_KEY = 'cache_table_membership';
+        const existing = getCache(TABLE_CACHE_KEY);
+        const tableData = Array.isArray(existing?.data) ? existing.data : [];
+        setCache(TABLE_CACHE_KEY, {
+          ...existing,
+          data: [{ card_id: uid, name, reff_code: phone, saldo: 0 }, ...tableData],
+        });
+
+        const fresh = await getAllSessions(userId);
+        dispatch(setSessions(fresh));
+        const c = await getOfflinePendingCount(userId);
+        dispatch(setPendingCount(c));
+
+        closeModal();
+        onClose();
+      };
+
+      handleOffline();
+      return; // ⛔️ skip mutation API
+    }
+
+    // ===== ONLINE PATH =====
     create(payload);
   };
 

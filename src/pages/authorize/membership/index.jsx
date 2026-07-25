@@ -1,12 +1,13 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import CardContent from './card.content';
 import DrawerCreate from './drawer.create';
 import DrawerDetail from './drawer.detail';
 import createTableConfig from './table.config';
 import { Drawer, Modal, NFCField } from '../../../components/ui';
-import { CardSearchIcon, PlusIcon } from '../../../components/ui/icon';
+import { CardSearchIcon, PlusIcon, EditIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useTable from '../../../components/ui/table';
 import useMembership from '../../../services/membership/hook';
@@ -16,6 +17,7 @@ import useDrawer from '../../../utils/drawer';
 const TABLE_CACHE_KEY = 'cache_table_membership';
 
 const MembershipScreen = () => {
+  const navigate = useNavigate();
   const {  open: openDrawer, isOpen: drawerOpen } = useDrawer();
 
   const { checkSaldo, checkResult } = useMembership();
@@ -145,7 +147,25 @@ const MembershipScreen = () => {
     <Drawer.Wrapper>
       <div>
         <Table.Tools>
-          <div className="flex h-full place-content-end place-items-center">
+          <div className="flex h-full place-content-end place-items-center gap-2">
+            <div
+              className="btn bg-primary/15 text-primary h-full rounded-none border-0 px-4"
+              onClick={() => navigate('/membership/create-manual')}
+            >
+              <EditIcon /> Create (Manual)
+            </div>
+            <div
+              className="btn bg-primary/15 text-primary h-full rounded-none border-0 px-4"
+              onClick={() => navigate('/membership/topup-manual')}
+            >
+              <CardSearchIcon /> Topup (Manual)
+            </div>
+            <div
+              className="btn bg-primary/15 text-primary h-full rounded-none border-0 px-4"
+              onClick={() => navigate('/membership/change-card')}
+            >
+              <CardSearchIcon /> Change Card
+            </div>
             <div
               className="btn bg-primary/15 text-primary h-full rounded-none border-0 px-6"
               onClick={onScan}
@@ -169,7 +189,7 @@ const MembershipScreen = () => {
 
       <DrawerCreate type={type} onClose={() => setType('')} onRefresh={() => Table.boot()} />
 
-      <DrawerDetail membership={data} type={type} onClose={() => setType('')} />
+      <DrawerDetail membership={data} type={type} onClose={() => setType('')} onRefresh={() => Table.boot()} />
     </Drawer.Wrapper>
   );
 };

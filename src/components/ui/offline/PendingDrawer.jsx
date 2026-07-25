@@ -4,7 +4,8 @@ import { useSelector } from 'react-redux';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 
 const getApiCategory = (item) => {
-  if (item._type === 'topup') return 'topup';
+  if (item._type === 'topup') return 'member';
+  if (item._type === 'membership') return 'member';
   if (item._type === 'session') return 'shifts';
   if (item.status === 'pending') return 'bills';
   if (item.status === 'completed') return 'order';
@@ -13,6 +14,7 @@ const getApiCategory = (item) => {
 
 const getApiType = (item) => {
   if (item._type === 'topup') return 'topup';
+  if (item._type === 'membership') return 'create member';
   if (item._type === 'session') return item.body?.cash_finished ? 'close session' : 'start session';
   if (item.status === 'pending') return 'save bill';
   if (item.status === 'completed') return 'checkout';
@@ -30,7 +32,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
   const [activeTab, setActiveTab] = useState('order');
 
   const categorized = React.useMemo(() => {
-    const result = { order: [], bills: [], shifts: [], topup: [], other: [], failedCount: {} };
+    const result = { order: [], bills: [], shifts: [], member: [], other: [], failedCount: {} };
 
     for (const s of sessions) {
       if (s.syncStatus === 'synced') continue;
@@ -96,9 +98,30 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
           _sessionSyncId: s.sync_id,
           _sessionStatus: s.syncStatus,
         };
-        result.topup.push(item);
+        result.member.push(item);
         if (s.syncStatus === 'failed') {
-          result.failedCount.topup = (result.failedCount.topup || 0) + 1;
+          result.failedCount.member = (result.failedCount.member || 0) + 1;
+        }
+      }
+
+      // Memberships dari session
+      for (const m of s.memberships || []) {
+        const item = {
+          ...m,
+          id: m.sync_id,
+          _type: 'membership',
+          _sessionSyncId: s.sync_id,
+          _sessionStatus: s.syncStatus,
+          transaction_preview: {
+            code: `MEM-${(m.sync_id || '').slice(0, 8)}`,
+            member_name: m.name,
+            member_code: m.reff_code,
+            created_at: m.created_at,
+          },
+        };
+        result.member.push(item);
+        if (s.syncStatus === 'failed') {
+          result.failedCount.member = (result.failedCount.member || 0) + 1;
         }
       }
     }
@@ -114,7 +137,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
   const tabs = [
     { id: 'order', label: 'Order', icon: '🛒' },
     { id: 'bills', label: 'Bills', icon: '📋' },
-    { id: 'topup', label: 'Topup', icon: '💰' },
+    { id: 'member', label: 'Member', icon: '👤' },
     { id: 'shifts', label: 'Shifts', icon: '💼' },
   ];
 
@@ -218,7 +241,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
           {filteredItems.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-base-content/30 italic">
               <span className="text-4xl mb-3 opacity-20">
-                {activeTab === 'topup' ? '💰' : activeTab === 'order' ? '🛒' : activeTab === 'bills' ? '📋' : '💼'}
+                {activeTab === 'member' ? '👤' : activeTab === 'order' ? '🛒' : activeTab === 'bills' ? '📋' : '💼'}
               </span>
               <span className="text-xs font-medium">No {activeTab} items in queue</span>
             </div>
@@ -244,8 +267,9 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
             const itemsList = preview?.items || item?.items || [];
 
             const isSession = apiType === 'start' || apiType === 'end' || apiType === 'both';
-            // Specialized rendering for Topup
+            // Specialized rendering for Member (topup + create member)
             const isTopup = apiType === 'topup';
+            const isCreateMember = apiType === 'create member';
 
             if (isSession) {
               const sessionLabel = apiType === 'both' ? 'Open & Close Session' : (apiType === 'start' ? 'Open Session' : 'Close Session');
@@ -373,6 +397,73 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
                       <div className="text-right">
                         <span className="text-[9px] uppercase text-base-content/40 font-bold block">Amount</span>
                         <span className="text-sm font-black text-success">{currencyFormat(nominal)}</span>
+                      </div>
+                    </div>
+
+                    {item.lastError && (
+                      <div className="mt-2 text-[10px] text-error bg-error/10 rounded px-2 py-1 leading-tight">
+                        {item.lastError}
+                      </div>
+                    )}
+
+                    <div className="mt-2 flex gap-1">
+                      {item.status === 'pending' && (
+                        <button
+                          className="btn btn-ghost btn-xs text-base-content/50"
+                          onClick={() => onRemove?.(item.id)}
+                        >
+                          🗑️ Remove
+                        </button>
+                      )}
+                      {item.status === 'failed' && (
+                        <button
+                          className="btn btn-error btn-xs flex-1 gap-1"
+                          onClick={() => onRetry?.(item.id)}
+                        >
+                          ↻ Retry Sync
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            if (isCreateMember) {
+              const memberName = item.name || preview?.member_name || '-';
+              const memberCode = item.reff_code || preview?.member_code || '';
+              const displayName = memberCode ? `${memberName} (${memberCode})` : memberName;
+
+              return (
+                <div
+                  key={item.id}
+                  className="rounded-lg border border-base-200 bg-base-100 transition-colors hover:border-base-300 overflow-hidden"
+                >
+                  <div className="h-1 w-full bg-success" />
+                  <div className="p-2.5">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="badge badge-xs badge-success uppercase font-bold tracking-wider">
+                        👤 Create Member
+                      </span>
+                      <span className="flex-1" />
+                      <span className={`badge badge-xs ${status.badge} gap-0.5`}>
+                        <span className="text-[9px]">{status.icon}</span>
+                        {item.status}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1 text-[10px] text-base-content/50 flex-wrap mb-2">
+                      <span className="whitespace-nowrap">{dateFormat(createdAt)}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center bg-base-200/30 rounded p-2">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] uppercase text-base-content/40 font-bold">Member</span>
+                        <span className="text-[13px] font-bold">{displayName}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[9px] uppercase text-base-content/40 font-bold block">Card ID</span>
+                        <span className="text-sm font-black text-base-content">{item.card_id || '-'}</span>
                       </div>
                     </div>
 

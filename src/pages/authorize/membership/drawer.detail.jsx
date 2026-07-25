@@ -8,7 +8,7 @@ import { Drawer } from '../../../components/ui';
 import { CloseIcon, HistoryIcon, PlusIcon, RefreshIcon } from '../../../components/ui/icon';
 import useDrawer from '../../../utils/drawer';
 
-const DrawerDetail = ({ type, membership, onClose }) => {
+const DrawerDetail = ({ type, membership, onClose, onRefresh }) => {
   const { drawerRef, open: openDrawer, close: closeDrawer, } = useDrawer();
 
   const [refType, setRefType] = useState('');
@@ -47,8 +47,15 @@ const DrawerDetail = ({ type, membership, onClose }) => {
         </div>
       }
     >
-      {refType === 'history' && <HistorySection id={membership?.id} />}
-      {refType === 'update' && <UpdateSession id={membership?.id} />}
+      {refType === 'history' && <HistorySection id={membership?.id} membership={membership} />}
+      {refType === 'update' && (
+        <UpdateSession
+          id={membership?.id}
+          membership={membership}
+          onClose={() => { closeDrawer(); onClose?.(); }}
+          reboot={() => onRefresh?.()}
+        />
+      )}
     </Drawer.Content>
   );
 };

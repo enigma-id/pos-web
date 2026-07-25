@@ -1,18 +1,25 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
+import { v4 as uuidv4 } from 'uuid';
 
 import CardMockup from '../../../assets/card-mockup.jpg';
 import { PaypassIcon } from '../../../components/ui/icon';
 import TopupReceipt from '../../../components/ui/topup-receipt';
 import useMembership from '../../../services/membership/hook';
+import { appendTopupToSession, getAllSessions, getOfflinePendingCount } from '../../../services/offline/queue';
+import { setSessions, setPendingCount, setWarning } from '../../../services/offline/slice';
 import { updateMemberCacheSaldo } from '../../../utils/cache';
 import { currencyFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
 
 const CardContent = ({ data, onClose }) => {
+  const dispatch = useDispatch();
   const SalesSession = useSelector(state => state?.SalesSession?.hasSession);
   const FormState = useSelector(state => state?.Form);
+  const activeSyncId = useSelector(state => state?.Offline?.activeSyncId);
+  const authUser = useSelector(state => state?.Auth?.user);
+  const userId = authUser?.id;
   const { topup, topupResult } = useMembership();
 
   const [value, setValue] = React.useState('');
@@ -20,31 +27,78 @@ const CardContent = ({ data, onClose }) => {
   const { open: openPrint } = usePrintWindow({ title: 'Topup Receipt', autoClose: true });
   const topupSubmitted = React.useRef(false);
 
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+
   const handleTopup = () => {
     const nominal = Number(value) || 0;
     const payload = {
       nominal,
       payment_type: method,
-      __offlinePreview: {
-        type: 'topup',
-        nominal,
-        payment_method: method,
-        member_id: data?.id,
-        member_name: data?.name,
-        member_code: data?.reff_code,
-        member_card_id: data?.card_id,
-        old_saldo: data?.saldo || 0,
-        new_saldo: (data?.saldo || 0) + nominal,
-      },
     };
 
     topupSubmitted.current = true;
+
+    // ===== OFFLINE PATH =====
+    if (isOffline) {
+      if (!activeSyncId) {
+        dispatch(setWarning('No active session. Please start a session first.'));
+        topupSubmitted.current = false;
+        return;
+      }
+
+      const topupItem = {
+        sync_id: uuidv4(),
+        session_sync_id: activeSyncId,
+        membership_id: data?.id,
+        nominal,
+        payment_type: method,
+        member_name: data?.name,
+        member_code: data?.reff_code,
+        member_card_id: data?.card_id,
+        created_at: new Date().toISOString(),
+      };
+
+      appendTopupToSession(activeSyncId, topupItem, userId).then(() => {
+        // Update cache saldo
+        const newSaldo = (data?.saldo || 0) + nominal;
+        if (data?.card_id) {
+          updateMemberCacheSaldo(data.card_id, newSaldo);
+        }
+
+        // Print receipt lokal
+        openPrint(
+          <TopupReceipt
+            member={data}
+            nominal={nominal}
+            paymentMethod={method}
+            createdAt={topupItem.created_at}
+          />
+        );
+
+        // Refresh Redux sessions
+        getAllSessions(userId).then(fresh => {
+          dispatch(setSessions(fresh));
+          getOfflinePendingCount(userId).then(c => dispatch(setPendingCount(c)));
+        });
+
+        topupSubmitted.current = false;
+        onClose?.();
+      }).catch(() => {
+        topupSubmitted.current = false;
+      });
+      return; // ⛔️ skip mutation API
+    }
+
+    // ===== ONLINE PATH =====
     topup({ id: data?.id, payload });
   };
 
   // Jika sukses: update cache lokal, print receipt, then close modal
   React.useEffect(() => {
     if (topupResult?.isSuccess && topupSubmitted.current) {
+      // Skip kalo ini offline — offline path handle sendiri
+      if (topupResult?.data?.data?.offline_queued) return;
+
       topupSubmitted.current = false;
       const nominal = Number(value) || 0;
       const resData = topupResult?.data?.data || {};

@@ -398,6 +398,87 @@ export const appendOrderToSession = async (syncId, order, userId) => {
   return existing;
 };
 
+// ========== TOPUP OPERATIONS ==========
+
+/**
+ * Append topup ke session.topups[].
+ * Otomatis set session syncStatus ke 'pending' kalo sebelumnya 'synced'.
+ */
+export const appendTopupToSession = async (syncId, topup, userId) => {
+  const db = await ensureDB(userId);
+  const existing = await db.get(STORES.offlineSessions, syncId);
+  if (!existing) throw new Error(`Session not found: ${syncId}`);
+
+  if (!Array.isArray(existing.topups)) {
+    existing.topups = [];
+  }
+
+  existing.topups.push(topup);
+
+  if (existing.syncStatus === 'synced') {
+    existing.syncStatus = 'pending';
+  }
+
+  await db.put(STORES.offlineSessions, existing);
+  return existing;
+};
+
+// ========== MEMBERSHIP OPERATIONS ==========
+
+/**
+ * Append membership ke session.memberships[].
+ * Otomatis set session syncStatus ke 'pending' kalo sebelumnya 'synced'.
+ */
+export const appendMembershipToSession = async (syncId, membership, userId) => {
+  const db = await ensureDB(userId);
+  const existing = await db.get(STORES.offlineSessions, syncId);
+  if (!existing) throw new Error(`Session not found: ${syncId}`);
+
+  if (!Array.isArray(existing.memberships)) {
+    existing.memberships = [];
+  }
+
+  existing.memberships.push(membership);
+
+  if (existing.syncStatus === 'synced') {
+    existing.syncStatus = 'pending';
+  }
+
+  await db.put(STORES.offlineSessions, existing);
+  return existing;
+};
+
+/**
+ * Update membership in-place di session.memberships[].
+ * Cari oleh card_id, kalo ketemu merge data baru.
+ * Kalo ga ketemu, append aja.
+ * Otomatis set session syncStatus ke 'pending' kalo sebelumnya 'synced'.
+ */
+export const updateMembershipInSession = async (syncId, cardId, updates, userId) => {
+  const db = await ensureDB(userId);
+  const existing = await db.get(STORES.offlineSessions, syncId);
+  if (!existing) throw new Error(`Session not found: ${syncId}`);
+
+  if (!Array.isArray(existing.memberships)) {
+    existing.memberships = [];
+    existing.memberships.push({ card_id: cardId, ...updates });
+  } else {
+    const idx = existing.memberships.findIndex(m => m.card_id === cardId);
+    if (idx >= 0) {
+      existing.memberships[idx] = { ...existing.memberships[idx], ...updates };
+    } else {
+      existing.memberships.push({ card_id: cardId, ...updates });
+    }
+  }
+
+  if (existing.syncStatus === 'synced') {
+    existing.syncStatus = 'pending';
+  }
+
+  await db.put(STORES.offlineSessions, existing);
+  return existing;
+};
+
 // ========== PENDING COUNT HELPER ==========
 
 /**

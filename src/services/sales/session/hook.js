@@ -38,6 +38,63 @@ import {
 } from '../../offline/queue';
 import { syncPendingSessions } from '../../offline/syncManager';
 
+// ========== OFFLINE SUMMARY HELPER ==========
+
+const computeOfflineSummary = (session, authUser) => {
+  const orders = session.orders || [];
+  const topups = session.topups || [];
+
+  const completedOrders = orders.filter(o => o.status === 'completed');
+  const pendingOrders = orders.filter(o => o.status === 'pending');
+  const totalSales = completedOrders.reduce((sum, o) => sum + (o.totalPayment || 0), 0);
+  const totalDiscount = completedOrders.reduce((sum, o) => sum + (o.discountValue || 0), 0);
+  const totalAfterDiscount = totalSales - totalDiscount;
+  const outstandingBill = pendingOrders.reduce((sum, o) => sum + (o.totalPayment || 0), 0);
+
+  // Payment methods breakdown
+  const pmMap = {};
+  completedOrders.forEach(o => {
+    const id = o.paymentMethodId || 0;
+    if (!pmMap[id]) pmMap[id] = { payment_method_id: id, total_paid: 0, count: 0, name: o.paymentMethodId === 0 ? 'Cash' : '-' };
+    pmMap[id].total_paid += o.totalPayment || 0;
+    pmMap[id].count += 1;
+  });
+
+  // Topup summary
+  const totalTopup = topups.reduce((sum, t) => sum + (t.nominal || 0), 0);
+  const topupCash = topups.filter(t => t.payment_type === 'cash').reduce((sum, t) => sum + (t.nominal || 0), 0);
+
+  return {
+    started_at: session.session.open_at,
+    finished_at: session.session.close_at || new Date().toISOString(),
+    cash_started: session.session.cash_started,
+    cash_finished: session.session.cash_finished,
+    cashier: { name: authUser?.name || '-' },
+    summary: {
+      sales: {
+        total_sales: totalSales,
+        total_discount: totalDiscount,
+        total_after_discount: totalAfterDiscount,
+        total_service: 0,
+        grand_total: totalAfterDiscount,
+        outstanding_bill: outstandingBill,
+        outstanding_bill_payment: outstandingBill,
+      },
+      cash: {
+        expected_cash: (session.session.cash_started || 0) + totalSales + topupCash,
+        topup_cash: topupCash,
+      },
+      payment_methods: Object.values(pmMap),
+      category_solds: [],
+      topups: topups.map(t => ({
+        type: t.payment_type || 'cash',
+        total_nominal: t.nominal || 0,
+      })),
+    },
+    orders: orders,
+  };
+};
+
 const getDeviceInfo = async () => {
   const info = {};
 
@@ -280,29 +337,7 @@ const useSession = () => {
         const updated = allSessions.find(s => s.sync_id === activeId.id);
 
         if (updated) {
-          computedSummary = {
-            started_at: updated.session.open_at,
-            finished_at: updated.session.close_at || new Date().toISOString(),
-            cash_started: updated.session.cash_started,
-            cash_finished: data?.cash_finished || 0,
-            cashier: { name: authUser?.name || '-' },
-            summary: {
-              sales: {
-                total_sales: 0,
-                total_discount: 0,
-                total_after_discount: 0,
-                total_service: 0,
-                grand_total: 0,
-                outstanding_bill: 0,
-                outstanding_bill_payment: 0,
-              },
-              cash: { expected_cash: updated.session.cash_started, topup_cash: 0 },
-              payment_methods: [],
-              category_solds: [],
-              topups: [],
-            },
-            orders: updated.orders || [],
-          };
+          computedSummary = computeOfflineSummary(updated, authUser);
         }
       }
 
@@ -354,30 +389,12 @@ const useSession = () => {
       const activeId = await getActiveSessionId(authSession, userId);
       if (activeId) {
         const allSessions = await getAllSessions(userId);
-        const sessionData = allSessions.find(s => s.sync_id === activeId.id);
+        let sessionData = allSessions.find(s => s.sync_id === activeId.id);
+        if (!sessionData && activeId.source === 'reference') {
+          sessionData = allSessions.find(s => s.referenceId === activeId.id);
+        }
         if (sessionData) {
-          const computedSummary = {
-            started_at: sessionData.session.open_at,
-            cash_started: sessionData.session.cash_started,
-            cash_finished: sessionData.session.cash_finished,
-            cashier: { name: authUser?.name || authSession?.user?.name || '-' },
-            summary: {
-              sales: {
-                total_sales: 0,
-                total_discount: 0,
-                total_after_discount: 0,
-                total_service: 0,
-                grand_total: 0,
-                outstanding_bill: 0,
-                outstanding_bill_payment: 0,
-              },
-              cash: { expected_cash: sessionData.session.cash_started },
-              payment_methods: [],
-              category_solds: [],
-              topups: [],
-            },
-            orders: sessionData.orders || [],
-          };
+          const computedSummary = computeOfflineSummary(sessionData, authSession?.user || authUser);
 
           dispatch(setOfflineSummary(computedSummary));
           return;

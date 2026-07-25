@@ -10,7 +10,7 @@ import useMembership from '../../../services/membership/hook';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 
-const HistorySection = ({ id }) => {
+const HistorySection = ({ id, membership }) => {
   const [logs, setLogs] = React.useState([]);
   const [page, setPage] = React.useState(1);
   const [hasMore, setHasMore] = React.useState(true);
@@ -175,7 +175,7 @@ const HistorySection = ({ id }) => {
 
   if (showResult?.isLoading) return <div>loading...</div>;
 
-  const data = showResult?.data?.data;
+  const data = showResult?.data?.data || membership;
 
   if (selectedOrder) {
     return (
