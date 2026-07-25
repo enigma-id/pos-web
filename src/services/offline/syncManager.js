@@ -2,10 +2,12 @@ import { baseQuery } from '../baseQuery';
 import {
   getPendingSessions,
   getAllSessions,
+  getOfflinePendingCount,
   setSyncStatus,
   updateSyncResult,
   deleteOfflineSession,
   setLastSyncTime as setLastSyncTimeMeta,
+  STORES,
 } from './queue';
 import {
   setApiReachable,
@@ -62,11 +64,15 @@ const broadcastOfflineState = async () => {
   }
 
   const all = await getAllSessions(userId);
-  const pending = all.filter(s => s.syncStatus === 'pending' || s.syncStatus === 'syncing');
   const failed = all.filter(s => s.syncStatus === 'failed');
+  // Hitung total pending items (orders pending + topups)
+  const pendingCount = all.reduce((sum, s) => {
+    if (s.syncStatus === 'synced') return sum;
+    return sum + (s.orders || []).filter(o => o.status === 'pending' || o.status === 'failed').length + (s.topups || []).length;
+  }, 0);
 
   storeRef.dispatch(setSessions(all));
-  storeRef.dispatch(setPendingCount(pending.length));
+  storeRef.dispatch(setPendingCount(pendingCount));
   storeRef.dispatch(setFailedCount(failed.length));
 };
 
@@ -217,7 +223,7 @@ const syncOfflineState = async () => {
   const active = allSessions.find(s => s.syncStatus === 'pending' && !s.session.close_at);
 
   storeRef.dispatch(setSessions(allSessions));
-  storeRef.dispatch(setPendingCount(allSessions.filter(s => s.syncStatus !== 'synced').length));
+  storeRef.dispatch(setPendingCount(await getOfflinePendingCount(userId)));
   storeRef.dispatch(setFailedCount(allSessions.filter(s => s.syncStatus === 'failed').length));
 
   if (active) {
@@ -319,7 +325,40 @@ export const retryFailedItem = async () => {
   return false;
 };
 
-export const removeFailedItem = async () => {
-  // Backward compat — no-op in Phase 1
-  return true;
+export const removeFailedItem = async (itemId) => {
+  const userId = storeRef?.getState()?.Auth?.session?.user?.id;
+  if (!userId || !itemId) return false;
+
+  try {
+    const { ensureDB } = await import('./queue');
+    const sessions = await getAllSessions(userId);
+
+    for (const s of sessions) {
+      const orderIdx = (s.orders || []).findIndex(o => o.sync_id === itemId);
+      if (orderIdx !== -1) {
+        s.orders.splice(orderIdx, 1);
+        const db = await ensureDB(userId);
+        await db.put(STORES.offlineSessions, s);
+        const fresh = await getAllSessions(userId);
+        storeRef.dispatch(setSessions(fresh));
+        storeRef.dispatch(setPendingCount(await getOfflinePendingCount(userId)));
+        storeRef.dispatch(setFailedCount(fresh.filter(x => x.syncStatus === 'failed').length));
+        return true;
+      }
+    }
+
+    // Maybe session-level ID
+    const session = sessions.find(s => s.sync_id === itemId);
+    if (session) {
+      await deleteOfflineSession(itemId, userId);
+      const fresh = await getAllSessions(userId);
+      storeRef.dispatch(setSessions(fresh));
+      storeRef.dispatch(setPendingCount(await getOfflinePendingCount(userId)));
+      storeRef.dispatch(setFailedCount(fresh.filter(x => x.syncStatus === 'failed').length));
+      return true;
+    }
+  } catch (e) {
+    console.error('[removeFailedItem] error:', e);
+  }
+  return false;
 };

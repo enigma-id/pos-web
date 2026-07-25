@@ -317,31 +317,56 @@ const useCart = catalog_id => {
         const ticket = order.billName;
         return ticket && !serverTickets.has(ticket);
       })
-      .map(order => ({
-        id: order.sync_id,
-        bill_name: order.billName || '',
-        ticket: order.billName || '',
-        total_charges: order.totalPayment || 0,
-        code: `OFF-${order.sync_id?.slice(0, 8)}`,
-        ordered_at: order.paidAt || order.createdAt,
-        created_at: order.paidAt || order.createdAt,
-        items: order.items || [],
-        membership: order.membershipId ? { id: order.membershipId } : null,
-        session: null,
-        discount_value: order.discountValue || 0,
-        service_charge_value: 0,
-        total_payment: order.totalPayment || 0,
-        payment_method: order.paymentMethodId ? { id: order.paymentMethodId } : null,
-        payment_ref: order.paymentRef || '',
-        subtotal_nett: order.totalPayment || 0,
-        subtotal_gross: order.totalPayment || 0,
-        note: '',
-        from_queue: true,
-        queue_id: order.sync_id,
-        offline_queued: true,
-      }));
+      .map(order => {
+        // Calculate total from items unit_price × quantity
+        const itemsTransformed = (order.items || []).map(item => ({
+          catalog: { name: item.catalog_name || '' },
+          catalog_name: item.catalog_name || '',
+          unit_nett: item.unit_price || 0,
+          quantity: item.quantity || 0,
+          addons: (item.addons || []).map(a => ({
+            catalog_name: a?.catalog_name || a?.name || '',
+            unit_nett: a?.unit_price || 0,
+            quantity: a?.quantity || 1,
+          })),
+        }));
+        const itemsTotal = itemsTransformed.reduce(
+          (sum, item) => sum + (item.unit_nett * item.quantity) +
+            item.addons.reduce((asum, a) => asum + (a.unit_nett * a.quantity), 0),
+          0
+        );
+        const totalCharges = order.totalPayment || (itemsTotal + (order.serviceChargeValue || 0));
 
-    return [...serverData, ...transformed];
+        return {
+          id: order.sync_id,
+          bill_name: order.billName || '',
+          ticket: order.billName || '',
+          total_charges: totalCharges,
+          code: `OFF-${order.sync_id?.slice(0, 8)}`,
+          ordered_at: order.paidAt || order.createdAt,
+          created_at: order.paidAt || order.createdAt,
+          items: itemsTransformed,
+          membership: order.membershipId ? { id: order.membershipId } : null,
+          sales_channel: order.salesChannelName ? { name: order.salesChannelName } : null,
+          session: {
+            cashier: { name: order.cashierName || '-' },
+          },
+          discount_value: order.discountValue || 0,
+          service_charge_value: order.serviceChargeValue || 0,
+          total_payment: order.totalPayment || 0,
+          payment_method: order.paymentMethodId ? { id: order.paymentMethodId } : null,
+          payment_ref: order.paymentRef || '',
+          subtotal_nett: totalCharges,
+          subtotal_gross: totalCharges,
+          note: '',
+          from_queue: true,
+          queue_id: order.sync_id,
+          offline_queued: true,
+        };
+      });
+
+    // Offline pending items di atas
+    return [...transformed, ...serverData];
   };
 
   const update = async ({ id, payload }) => {

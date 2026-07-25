@@ -23,7 +23,7 @@ import useModal from '../../../components/ui/modal/hook';
 import useCart from '../../../services/cart/hook';
 import useMembership from '../../../services/membership/hook';
 import { buildOfflineTransactionPayload, setWarning } from '../../../services/offline';
-import { appendOrderToSession, getAllSessions, getOrCreateOfflineSession } from '../../../services/offline/queue';
+import { appendOrderToSession, getAllSessions, getOrCreateOfflineSession, getOfflinePendingCount } from '../../../services/offline/queue';
 import { setSessions, setPendingCount, setOfflineSessionEnded } from '../../../services/offline/slice';
 import { resetCart } from '../../../services/cart/slice';
 import { $failure } from '../../../services/form/action';
@@ -270,7 +270,13 @@ const CheckoutScreen = () => {
         catalog_name: item.name || '',
         quantity: item.quantity,
         unit_price: item.unit_price || 0,
-        addons: item.additionals_flat || [],
+        addons: (item.additionals_flat || []).map(a => ({
+          addon_group_id: a.addon_group_id,
+          addon_item_id: a.addon_item_id,
+          catalog_name: a.name || '',
+          unit_price: a.unit_price || 0,
+          quantity: a.quantity || 1,
+        })),
         ...(item.is_custom ? { is_custom: true } : {}),
       }));
 
@@ -278,10 +284,12 @@ const CheckoutScreen = () => {
         sync_id: orderSyncId,
         sessionSyncId: syncId,
         salesChannelId: Channel?.selectedChannel?.id,
+        salesChannelName: Channel?.selectedChannel?.name,
         paymentMethodId: selectedMethod?.id,
         membershipId: CartState?.meta?.customer?.id || null,
         paymentRef: selectedMethod?.provider === 'cash' ? '' : paymentRef,
         billName: billName || CartState?.bill?.bill_name || '',
+        cashierName: session?.user?.name || '',
         discountPercentage: CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
         discountValue: CartState?.discount?.cart?.type === 'nominal' ? CartState?.discount?.cart?.value : 0,
         categoryDiscounts: discount_categories || [],
@@ -328,15 +336,43 @@ const CheckoutScreen = () => {
       try {
         const fresh = await getAllSessions(session?.user?.id);
         dispatch(setSessions(fresh));
-        dispatch(setPendingCount(fresh.filter(s => s.syncStatus !== 'synced').length));
+        dispatch(setPendingCount(await getOfflinePendingCount(session?.user?.id)));
       } catch {}
+
+      // Build receipt-ready shape
+      const paySuccessData = {
+        ...order,
+        total_charges: order.totalPayment,
+        total_payment: order.totalPayment,
+        code: `OFF-${order.sync_id.slice(0, 8)}`,
+        paid_at: now,
+        bill_name: order.billName,
+        sales_channel: Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null,
+        payment_method: selectedMethod ? { id: selectedMethod.id, name: selectedMethod.name } : null,
+        payment_ref: selectedMethod?.provider === 'cash' ? '' : paymentRef,
+        session: { cashier: { name: session?.user?.name || '' } },
+        items: orderItems.map(i => ({
+          catalog: { name: i.catalog_name || '' },
+          catalog_name: i.catalog_name || '',
+          quantity: i.quantity || 0,
+          unit_nett: i.unit_price || 0,
+          discount_value: 0,
+          addons: (i.addons || []).map(a => ({
+            catalog_name: a.catalog_name || '',
+            unit_nett: a.unit_price || 0,
+            quantity: a.quantity || 1,
+          })),
+        })),
+        service_charge_value: CartState?.meta?.service_charge_value || 0,
+        discount_value: order.discountValue,
+      };
 
       dispatch(setWarning('Payment saved offline. It will sync when online.'));
       dispatch(resetCart());
       setSelectedMethod(paymentMethod[0]);
 
       // Show success modal
-      openModal(<SuccessModal data={order} backToMenu />, 'w-md');
+      openModal(<SuccessModal data={paySuccessData} backToMenu />, 'w-md');
       return; // ⛔️ skip mutation API
     }
 
@@ -463,7 +499,13 @@ const CheckoutScreen = () => {
         catalog_name: item.name || '',
         quantity: item.quantity,
         unit_price: item.unit_price || 0,
-        addons: item.additionals_flat || [],
+        addons: (item.additionals_flat || []).map(a => ({
+          addon_group_id: a.addon_group_id,
+          addon_item_id: a.addon_item_id,
+          catalog_name: a.name || '',
+          unit_price: a.unit_price || 0,
+          quantity: a.quantity || 1,
+        })),
         ...(item.is_custom ? { is_custom: true } : {}),
       }));
 
@@ -471,10 +513,13 @@ const CheckoutScreen = () => {
         sync_id: orderSyncId,
         sessionSyncId: syncId,
         salesChannelId: Channel?.selectedChannel?.id,
+        salesChannelName: Channel?.selectedChannel?.name,
         paymentMethodId: null,
         membershipId: CartState?.meta?.customer?.id || null,
         paymentRef: '',
         billName: ticket,
+        cashierName: session?.user?.name || '',
+        serviceChargeValue: CartState?.meta?.service_charge_value || 0,
         discountPercentage: CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
         discountValue: CartState?.discount?.cart?.type === 'nominal' ? CartState?.discount?.cart?.value : 0,
         categoryDiscounts: discount_categories || [],
@@ -498,17 +543,45 @@ const CheckoutScreen = () => {
       try {
         const fresh = await getAllSessions(session?.user?.id);
         dispatch(setSessions(fresh));
-        dispatch(setPendingCount(fresh.filter(s => s.syncStatus !== 'synced').length));
+        dispatch(setPendingCount(await getOfflinePendingCount(session?.user?.id)));
       } catch {}
 
       dispatch(setWarning('Bill saved offline.'));
+
+      // Build receipt-ready shape
+      const successData = {
+        ...order,
+        total_charges: order.totalPayment || orderItems.reduce((s, i) => s + (i.unit_price || 0) * (i.quantity || 0), 0),
+        total_payment: order.totalPayment || 0,
+        code: `OFF-${order.sync_id.slice(0, 8)}`,
+        paid_at: order.paidAt || new Date().toISOString(),
+        bill_name: order.billName,
+        sales_channel: Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null,
+        payment_method: { id: selectedMethod?.id, name: selectedMethod?.name },
+        payment_ref: selectedMethod?.provider === 'cash' ? '' : paymentRef,
+        session: { cashier: { name: session?.user?.name || '' } },
+        items: orderItems.map(i => ({
+          catalog: { name: i.catalog_name || '' },
+          catalog_name: i.catalog_name || '',
+          quantity: i.quantity || 0,
+          unit_nett: i.unit_price || 0,
+          discount_value: 0,
+          addons: (i.addons || []).map(a => ({
+            catalog_name: a.catalog_name || '',
+            unit_nett: a.unit_price || 0,
+            quantity: a.quantity || 1,
+          })),
+        })),
+        service_charge_value: CartState?.meta?.service_charge_value || 0,
+        discount_value: order.discountValue,
+      };
 
       // ⛔️ Flag: skip stale mutation effect
       isOfflineSaveRef.current = true;
 
       dispatch(resetCart());
       setSelectedMethod(paymentMethod[0]);
-      openModal(<SuccessModal data={order} backToMenu />, 'w-md');
+      openModal(<SuccessModal data={successData} backToMenu />, 'w-md');
       return; // ⛔️ skip mutation API
     }
 

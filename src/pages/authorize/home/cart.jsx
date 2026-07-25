@@ -12,7 +12,7 @@ import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
 import { buildOfflineTransactionPayload, setWarning } from '../../../services/offline';
-import { appendOrderToSession, getAllSessions, getOrCreateOfflineSession } from '../../../services/offline/queue';
+import { appendOrderToSession, getAllSessions, getOrCreateOfflineSession, getOfflinePendingCount } from '../../../services/offline/queue';
 import { setSessions, setPendingCount } from '../../../services/offline/slice';
 import { resetCart } from '../../../services/cart/slice';
 import { v4 as uuidv4 } from 'uuid';
@@ -94,7 +94,13 @@ const Cart = ({ onUpdate }) => {
         catalog_name: item.name || '',
         quantity: item.quantity,
         unit_price: item.unit_price || 0,
-        addons: item.additionals_flat || [],
+        addons: (item.additionals_flat || []).map(a => ({
+          addon_group_id: a.addon_group_id,
+          addon_item_id: a.addon_item_id,
+          catalog_name: a.name || '',
+          unit_price: a.unit_price || 0,
+          quantity: a.quantity || 1,
+        })),
         ...(item.is_custom ? { is_custom: true } : {}),
       }));
 
@@ -103,10 +109,13 @@ const Cart = ({ onUpdate }) => {
         sync_id: orderSyncId,
         sessionSyncId: syncId,
         salesChannelId: Channel?.selectedChannel?.id,
+        salesChannelName: Channel?.selectedChannel?.name,
         paymentMethodId: null,
         membershipId: CartState?.meta?.customer?.id || null,
         paymentRef: '',
         billName: ticket,
+        cashierName: session?.user?.name || '',
+        serviceChargeValue: CartState?.meta?.service_charge_value || 0,
         discountPercentage: CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
         discountValue: CartState?.discount?.cart?.type === 'nominal' ? CartState?.discount?.cart?.value : 0,
         categoryDiscounts: [],
@@ -128,17 +137,40 @@ const Cart = ({ onUpdate }) => {
       try {
         const fresh = await getAllSessions(userId);
         dispatch(setSessions(fresh));
-        dispatch(setPendingCount(fresh.filter(s => s.syncStatus !== 'synced').length));
+        dispatch(setPendingCount(await getOfflinePendingCount(userId)));
       } catch {}
 
       dispatch(setWarning('Bill saved offline.'));
 
+      const itemsTotal = orderItems.reduce((s, i) => s + (i.unit_price || 0) * (i.quantity || 0), 0);
+      const totalCharges = itemsTotal + (Number(order.serviceChargeValue) || 0);
+
       const successData = {
         ...order,
         offline_queued: true,
+        total_charges: totalCharges,
         total_payment: order.totalPayment,
+        code: `OFF-${order.sync_id.slice(0, 8)}`,
+        paid_at: order.paidAt || new Date().toISOString(),
         bill_name: order.billName,
+        sales_channel: Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null,
         payment_method: null,
+        payment_ref: '',
+        session: { cashier: { name: session?.user?.name || '' } },
+        items: orderItems.map(i => ({
+          catalog: { name: i.catalog_name || '' },
+          catalog_name: i.catalog_name || '',
+          quantity: i.quantity || 0,
+          unit_nett: i.unit_price || 0,
+          discount_value: 0,
+          addons: (i.addons || []).map(a => ({
+            catalog_name: a.catalog_name || '',
+            unit_nett: a.unit_price || 0,
+            quantity: a.quantity || 1,
+          })),
+        })),
+        service_charge_value: order.serviceChargeValue || 0,
+        discount_value: order.discountValue,
       };
 
       // ⛔️ Flag: skip stale mutation effect

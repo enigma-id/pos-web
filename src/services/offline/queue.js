@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 const DB_VERSION = 3;
 
-const STORES = {
+export const STORES = {
   offlineSessions: 'offlineSessions',
   metadata: 'metadata',
 };
@@ -15,7 +15,7 @@ const getISO = () => new Date().toISOString();
 
 const getDBName = userId => `pos-offline-queue-${userId}`;
 
-const ensureDB = async userId => {
+export const ensureDB = async userId => {
   if (!userId) throw new Error('userId required for queue DB');
   const key = String(userId);
 
@@ -164,7 +164,7 @@ export const getOrCreateOfflineSession = async (userId, authSession) => {
       orders: [],
       topups: [],
       memberships: [],
-      syncStatus: 'pending',
+      syncStatus: 'synced', // referenced to server session — no need to sync
       error: null,
       createdAt: now,
     };
@@ -357,6 +357,7 @@ export const getAllMetadata = async userId => {
 
 /**
  * Append order ke session.orders[].
+ * Otomatis set session syncStatus ke 'pending' kalo sebelumnya 'synced'.
  * Order shape:
  * {
  *   sync_id: "uuid",
@@ -388,13 +389,31 @@ export const appendOrderToSession = async (syncId, order, userId) => {
 
   existing.orders.push(order);
 
+  // Consistent rule: session yg ada pending data → syncStatus = 'pending'
+  if (existing.syncStatus === 'synced') {
+    existing.syncStatus = 'pending';
+  }
+
   await db.put(STORES.offlineSessions, existing);
   return existing;
 };
 
 // ========== PENDING COUNT HELPER ==========
 
+/**
+ * Hitung total item yg perlu sync/action:
+ * - orders pending/failed
+ * - topups
+ * - session itu sendiri (open/close) kalo status pending/syncing/failed
+ */
 export const getOfflinePendingCount = async userId => {
   const sessions = await getAllSessions(userId);
-  return sessions.filter(s => s.syncStatus !== 'synced').length;
+  return sessions.reduce((sum, s) => {
+    if (s.syncStatus === 'synced') return sum;
+    const itemCount = (s.orders || []).filter(o => o.status === 'pending' || o.status === 'failed').length
+      + (s.topups || []).length;
+    // Kalo ada item → itu yg dihitung
+    // Kalo gak ada item tapi session pending → session itu sendiri (open/close offline)
+    return sum + (itemCount > 0 ? itemCount : 1);
+  }, 0);
 };

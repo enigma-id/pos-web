@@ -225,12 +225,17 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
             const preview = item?.transaction_preview || {};
             const apiType = getApiType(item);
             const code = preview?.code || `OFF-${item?.sync_id?.slice(0, 8) || item?.id}`;
-            const channelName = preview?.channel?.name || '-';
+            const channelName = preview?.channel?.name || item?.salesChannelName || item?.salesChannelId || '-';
             const paymentName = preview?.payment_method?.name || (item?.paymentMethodId ? '-' : '-');
             const cashierName = preview?.cashier?.name || preview?.session?.cashier?.name || '-';
             const itemCount = Number(preview?.item_count) || preview?.items?.length || item?.items?.length || 0;
             const totalCharges = Number(preview?.total_charges || preview?.total_bill) || item?.totalPayment || 0;
-            const displayTotal = totalCharges;
+            // Fallback: calculate from items when totalPayment is 0 (pending save-bill)
+            const itemsTotal = (item?.items || []).reduce((sum, p) =>
+              sum + (Number(p.unit_nett || p.unit_price || 0) * Number(p.quantity || 0))
+                + (p.addons || []).reduce((asum, a) => asum + (Number(a.unit_nett || a.unit_price || 0) * Number(a.quantity || 0)), 0),
+            0);
+            const displayTotal = totalCharges || itemsTotal + (Number(item?.serviceChargeValue) || 0);
             const createdAt = preview?.created_at || item?.paidAt || item?.createdAt || item?._sessionCreatedAt;
             const status = statusConfig[item.status] || statusConfig.pending;
             const itemsList = preview?.items || item?.items || [];
@@ -418,7 +423,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
 
                   {/* Row 2: Metadata - single compact line */}
                   <div className="flex items-center gap-1 text-[10px] text-base-content/50 flex-wrap">
-                    <span className="truncate max-w-24">{preview?.bill_name || cashierName}</span>
+                    <span className="truncate max-w-24">{preview?.bill_name || item?.billName || item?.bill_name || cashierName}</span>
                     <span>·</span>
                     <span className="truncate">{channelName}</span>
                     <span>·</span>
