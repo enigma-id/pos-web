@@ -116,6 +116,7 @@ const Cart = ({ onUpdate }) => {
         billName: ticket,
         cashierName: session?.user?.name || '',
         serviceChargeValue: CartState?.meta?.service_charge_value || 0,
+        serviceChargePercentage: CartState?.meta?.service_charge_percentage || 0,
         discountPercentage: CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
         discountValue: CartState?.discount?.cart?.type === 'nominal' ? CartState?.discount?.cart?.value : 0,
         categoryDiscounts: [],

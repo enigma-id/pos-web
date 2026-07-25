@@ -101,10 +101,14 @@ export const syncPendingSessions = async () => {
 
       for (let attempt = 0; attempt < MAX_RETRY; attempt += 1) {
         try {
-          const sessionId = session.referenceId || session.sync_id;
+          // Session payload — hanya kirim kalo bener-bener offline session (no referenceId)
+          // atau session udah di-close. Kalo cuma reference (start online, masih open) → null
+          const hasReference = !!session.referenceId;
+          const isClosed = !!session.session?.close_at;
+          const sendSession = isClosed || !hasReference;
 
           const payload = {
-            session: session.session.close_at || session.session.open_at
+            session: sendSession
               ? {
                   sync_id: session.sync_id,
                   id: session.referenceId || '',
@@ -118,10 +122,43 @@ export const syncPendingSessions = async () => {
                 }
               : null,
             orders: (session.orders || []).map(o => ({
-              ...o,     // existing fields (items, catalog_id, quantity, total_payment, etc)
-              sync_id: o.sync_id || '',        // client UUID, idempotency key
-              id: o.id || o.serverId || '',    // server UUID kalo udah pernah sync
-              session_sync_id: o.session_sync_id || sessionId,
+              sync_id: o.sync_id || '',
+              id: o.id || o.serverId || '',
+              sales_channel_id: o.salesChannelId || o.sales_channel_id,
+              sales_channel_name: o.salesChannelName || o.sales_channel_name || '',
+              payment_method_id: o.paymentMethodId || o.payment_method_id || null,
+              membership_id: o.membershipId || o.membership_id || null,
+              payment_ref: o.paymentRef || o.payment_ref || '',
+              bill_name: o.billName || o.bill_name || '',
+              cashier_name: o.cashierName || o.cashier_name || '',
+              service_charge_value: o.serviceChargeValue || o.service_charge_value || 0,
+              service_charge_percentage: o.serviceChargePercentage || o.service_charge_percentage || 0,
+              discount_percentage: o.discountPercentage || o.discount_percentage || 0,
+              discount_value: o.discountValue || o.discount_value || 0,
+              category_discounts: (o.categoryDiscounts || o.category_discounts || []).map(cd => ({
+                category_id: cd.category_id || cd.id,
+                discount_percentage: cd.discount_percentage,
+                discount_value: cd.discount_value,
+              })),
+              items: (o.items || []).map(item => ({
+                catalog_id: item.catalog_id,
+                catalog_name: item.catalog_name || '',
+                quantity: item.quantity || 0,
+                unit_price: item.unit_price || 0,
+                addons: (item.addons || []).map(a => ({
+                  addon_group_id: a.addon_group_id,
+                  addon_item_id: a.addon_item_id,
+                  catalog_name: a.catalog_name || '',
+                  unit_price: a.unit_price || 0,
+                  quantity: a.quantity || 1,
+                })),
+              })),
+              status: o.status || 'pending',
+              total_payment: o.totalPayment || o.total_payment || 0,
+              paid_at: o.paidAt || o.paid_at || null,
+              is_offline_mode: true,
+              ref_sync_id: o.refSyncId || o.ref_sync_id || '',
+              session_sync_id: session.referenceId || session.sync_id,
             })),
             memberships: session.memberships || [],
             topups: session.topups || [],

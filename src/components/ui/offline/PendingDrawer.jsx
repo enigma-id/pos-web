@@ -36,9 +36,10 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
       if (s.syncStatus === 'synced') continue;
 
       // Session-level items (shifts tab)
+      // Skip session yg start online & belum close — itu cuma mirror server session
       const isClosed = !!s.session?.close_at;
-      const hasReference = !!s.referenceId;
-      const isOfflineOnly = !hasReference && isClosed;
+      const isOfflineSession = !s.referenceId;
+      const skipShift = !isOfflineSession && !isClosed;
       const shiftItem = {
         id: s.sync_id,
         sync_id: s.sync_id,
@@ -62,9 +63,11 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
           created_at: isClosed ? s.session?.close_at : (s.createdAt || s.session?.open_at),
         },
       };
-      result.shifts.push(shiftItem);
-      if (s.syncStatus === 'failed') {
-        result.failedCount.shifts = (result.failedCount.shifts || 0) + 1;
+      if (!skipShift) {
+        result.shifts.push(shiftItem);
+        if (s.syncStatus === 'failed') {
+          result.failedCount.shifts = (result.failedCount.shifts || 0) + 1;
+        }
       }
 
       // Flatten orders dari session
