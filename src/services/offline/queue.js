@@ -492,7 +492,8 @@ export const getOfflinePendingCount = async userId => {
   return sessions.reduce((sum, s) => {
     if (s.syncStatus === 'synced') return sum;
     const itemCount = (s.orders || []).length // semua offline orders perlu sync
-      + (s.topups || []).length;
+      + (s.topups || []).length
+      + (s.memberships || []).length;
     return sum + (itemCount > 0 ? itemCount : 1);
   }, 0);
 };

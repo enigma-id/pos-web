@@ -27,7 +27,7 @@ const statusConfig = {
   pending: { badge: 'badge-info', icon: '◷' },
 };
 
-const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
+const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh }) => {
   const sessions = useSelector(state => state?.Offline?.sessions || []);
   const [activeTab, setActiveTab] = useState('order');
 
@@ -206,6 +206,11 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
             <h3 className="text-sm font-black text-base-content uppercase tracking-widest">
               Queue Manager
             </h3>
+            {onRefresh && (
+              <button className="btn btn-ghost btn-xs btn-circle" onClick={onRefresh}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              </button>
+            )}
             {Object.values(categorized.failedCount).reduce((a, b) => a + b, 0) > 0 && (
               <span className="badge badge-error badge-sm gap-1.5 font-bold px-2 py-2.5">
                 <span className="animate-bounce">✕</span>
@@ -360,9 +365,9 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
             }
 
             if (isTopup) {
-              const nominal = Number(preview?.nominal) || 0;
-              const memberName = preview?.member_name || '-';
-              const memberCode = preview?.member_code || '';
+              const nominal = Number(preview?.nominal || item?.nominal || 0);
+              const memberName = preview?.member_name || item?.member_name || '-';
+              const topupPayment = item?.payment_type || preview?.payment_type || '-';
 
               return (
                 <div
@@ -375,7 +380,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
                       <span className="badge badge-xs badge-info uppercase font-bold tracking-wider">
                         💰 Topup
                       </span>
-                      <span className="text-xs font-bold text-base-content truncate flex-1">{code}</span>
+                      <span className="flex-1" />
                       <span className={`badge badge-xs ${status.badge} gap-0.5`}>
                         <span className="text-[9px]">{status.icon}</span>
                         {item.status}
@@ -384,18 +389,17 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
 
                     <div className="flex items-center gap-1 text-[10px] text-base-content/50 flex-wrap mb-2">
                       <span className="truncate">{memberName}</span>
-                      {memberCode && <><span>·</span><span className="truncate">{memberCode}</span></>}
                       <span>·</span>
                       <span className="whitespace-nowrap">{dateFormat(createdAt)}</span>
                     </div>
 
-                    <div className="flex justify-between items-center bg-base-200/30 rounded p-2">
-                      <div className="flex flex-col">
-                        <span className="text-[9px] uppercase text-base-content/40 font-bold">Payment</span>
-                        <span className="text-[13px] font-bold">{paymentName}</span>
+                    <div className="bg-base-200/30 rounded p-2">
+                      <div className="flex justify-between text-[9px] uppercase text-base-content/40 font-bold">
+                        <span>Payment</span>
+                        <span>Amount</span>
                       </div>
-                      <div className="text-right">
-                        <span className="text-[9px] uppercase text-base-content/40 font-bold block">Amount</span>
+                      <div className="flex justify-between items-center mt-0.5">
+                        <span className="text-[13px] font-bold capitalize">{topupPayment}</span>
                         <span className="text-sm font-black text-success">{currencyFormat(nominal)}</span>
                       </div>
                     </div>

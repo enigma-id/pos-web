@@ -7,9 +7,9 @@ import CardMockup from '../../../assets/card-mockup.jpg';
 import { PaypassIcon } from '../../../components/ui/icon';
 import TopupReceipt from '../../../components/ui/topup-receipt';
 import useMembership from '../../../services/membership/hook';
-import { appendTopupToSession, getAllSessions, getOfflinePendingCount } from '../../../services/offline/queue';
+import { appendTopupToSession, getAllSessions, getOfflinePendingCount, getOrCreateOfflineSession } from '../../../services/offline/queue';
 import { setSessions, setPendingCount, setWarning } from '../../../services/offline/slice';
-import { updateMemberCacheSaldo } from '../../../utils/cache';
+import { updateMemberCacheSaldo, getCache, setCache } from '../../../utils/cache';
 import { currencyFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
 
@@ -17,9 +17,9 @@ const CardContent = ({ data, onClose }) => {
   const dispatch = useDispatch();
   const SalesSession = useSelector(state => state?.SalesSession?.hasSession);
   const FormState = useSelector(state => state?.Form);
-  const activeSyncId = useSelector(state => state?.Offline?.activeSyncId);
+  const authSession = useSelector(state => state?.Auth?.session);
   const authUser = useSelector(state => state?.Auth?.user);
-  const userId = authUser?.id;
+  const userId = authSession?.user?.id || authUser?.id;
   const { topup, topupResult } = useMembership();
 
   const [value, setValue] = React.useState('');
@@ -40,29 +40,44 @@ const CardContent = ({ data, onClose }) => {
 
     // ===== OFFLINE PATH =====
     if (isOffline) {
-      if (!activeSyncId) {
-        dispatch(setWarning('No active session. Please start a session first.'));
-        topupSubmitted.current = false;
-        return;
-      }
+      const handleOffline = async () => {
+        const sessionDoc = await getOrCreateOfflineSession(userId, authSession);
+        const syncId = sessionDoc?.sync_id;
+        if (!syncId) {
+          dispatch(setWarning('No active session. Please start a session first.'));
+          topupSubmitted.current = false;
+          return;
+        }
+        dispatch(setSessions([sessionDoc]));
 
-      const topupItem = {
-        sync_id: uuidv4(),
-        session_sync_id: activeSyncId,
-        membership_id: data?.id,
-        nominal,
-        payment_type: method,
-        member_name: data?.name,
-        member_code: data?.reff_code,
-        member_card_id: data?.card_id,
-        created_at: new Date().toISOString(),
-      };
+        const topupItem = {
+          sync_id: uuidv4(),
+          session_sync_id: syncId,
+          membership_id: data?.id,
+          nominal,
+          payment_type: method,
+          member_name: data?.name,
+          member_code: data?.reff_code,
+          member_card_id: data?.card_id,
+          created_at: new Date().toISOString(),
+        };
 
-      appendTopupToSession(activeSyncId, topupItem, userId).then(() => {
+        await appendTopupToSession(syncId, topupItem, userId);
         // Update cache saldo
         const newSaldo = (data?.saldo || 0) + nominal;
         if (data?.card_id) {
           updateMemberCacheSaldo(data.card_id, newSaldo);
+
+          // Update table cache juga biar list page kebaca
+          const TABLE_CACHE_KEY = 'cache_table_membership';
+          const existing = getCache(TABLE_CACHE_KEY);
+          const tableData = Array.isArray(existing?.data) ? existing.data : [];
+          const updated = tableData.map(m =>
+            String(m.card_id) === String(data.card_id)
+              ? { ...m, saldo: newSaldo }
+              : m
+          );
+          setCache(TABLE_CACHE_KEY, { ...existing, data: updated });
         }
 
         // Print receipt lokal
@@ -76,16 +91,16 @@ const CardContent = ({ data, onClose }) => {
         );
 
         // Refresh Redux sessions
-        getAllSessions(userId).then(fresh => {
-          dispatch(setSessions(fresh));
-          getOfflinePendingCount(userId).then(c => dispatch(setPendingCount(c)));
-        });
+        const fresh = await getAllSessions(userId);
+        dispatch(setSessions(fresh));
+        const c = await getOfflinePendingCount(userId);
+        dispatch(setPendingCount(c));
 
         topupSubmitted.current = false;
         onClose?.();
-      }).catch(() => {
-        topupSubmitted.current = false;
-      });
+      };
+
+      handleOffline();
       return; // ⛔️ skip mutation API
     }
 
@@ -196,7 +211,7 @@ const CardContent = ({ data, onClose }) => {
         <div className="mt-4">
           <div
             className={`btn btn-primary btn-block btn-xl !rounded-none !rounded-b ${
-              topupResult?.isLoading || !SalesSession ? 'btn-disabled' : ''
+              topupResult?.isLoading || (!isOffline && !SalesSession) ? 'btn-disabled' : ''
             }`}
             onClick={handleTopup}
           >

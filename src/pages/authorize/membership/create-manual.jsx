@@ -2,6 +2,7 @@
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
+import { v4 as uuidv4 } from 'uuid';
 
 import { Input } from '../../../components/ui';
 import { BackIcon, PlusIcon } from '../../../components/ui/icon';
@@ -48,7 +49,7 @@ const CreateManual = () => {
         dispatch(setSessions([sessionDoc]));
 
         const membershipItem = {
-          sync_id: cardId.trim(),
+          sync_id: uuidv4(),
           card_id: cardId.trim(),
           name,
           reff_code: phone,

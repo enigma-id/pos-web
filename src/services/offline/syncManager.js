@@ -162,8 +162,27 @@ export const syncPendingSessions = async () => {
               ref_sync_id: o.refSyncId || o.ref_sync_id || '',
               session_sync_id: session.referenceId || session.sync_id,
             })),
-            memberships: session.memberships || [],
-            topups: session.topups || [],
+            memberships: (session.memberships || []).map(m => ({
+              sync_id: m.sync_id || m.card_id,
+              card_id: m.card_id,
+              name: m.name || '',
+              reff_code: m.reff_code || '',
+            })),
+            topups: (session.topups || []).map(t => {
+              // Cari membership_sync_id dari session.memberships by card_id
+              const matchedMember = (session.memberships || []).find(m => String(m.card_id) === String(t.card_id || t.member_card_id));
+              return {
+                session_sync_id: session.referenceId || t.session_sync_id || session.sync_id,
+                membership_id: t.membership_id,
+                membership_sync_id: matchedMember?.sync_id || null,
+                nominal: t.nominal || 0,
+                payment_type: t.payment_type || 'cash',
+                card_id: t.card_id || t.member_card_id || '',
+                member_name: t.member_name || '',
+                member_code: t.member_code || '',
+                created_at: t.created_at,
+              };
+            }),
           };
 
           const fakeApi = {

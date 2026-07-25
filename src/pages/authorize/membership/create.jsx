@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { v4 as uuidv4 } from 'uuid';
 
 import { Input, NFCField } from '../../../components/ui';
 import { PlusIcon } from '../../../components/ui/icon';
@@ -45,7 +46,7 @@ const CreateSection = ({ onClose }) => {
         dispatch(setSessions([sessionDoc]));
 
         const membershipItem = {
-          sync_id: uid,
+          sync_id: uuidv4(),
           card_id: uid,
           name,
           reff_code: phone,

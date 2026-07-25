@@ -7,8 +7,9 @@ import { BurgerIcon, HistoryIcon, ListIcon, MenuIcon, ReceiptIcon, UserIcon } fr
 import { OfflineBanner, PendingDrawer, SyncIndicator } from './offline';
 import useSidebar from './sidebar/hook';
 import { loadOfflineBill } from '../../services/cart/slice';
+import { getAllSessions, getOfflinePendingCount } from '../../services/offline/queue';
 import { removeFailedItem, retryFailedItem, syncNow } from '../../services/offline';
-import { setNetworkState } from '../../services/offline/slice';
+import { setSessions, setNetworkState, setPendingCount } from '../../services/offline/slice';
 import useNetworkStatus from '../../services/offline/useNetworkStatus';
 import useSession from '../../services/sales/session/hook';
 import { isActive } from '../../utils/common';
@@ -16,6 +17,7 @@ import { isActive } from '../../utils/common';
 const Layout = ({ children }) => {
   const dispatch = useDispatch();
   const Offline = useSelector(state => state?.Offline);
+  const authUser = useSelector(state => state?.Auth?.user);
   const { isOnline, wasOffline } = useNetworkStatus();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [showBanner, setShowBanner] = useState(true);
@@ -76,6 +78,16 @@ const Layout = ({ children }) => {
 
   const handleOpenBill = queueItem => {
     dispatch(loadOfflineBill(queueItem));
+  };
+
+  const refreshQueue = async () => {
+    const userId = authUser?.id;
+    if (userId) {
+      const fresh = await getAllSessions(userId);
+      dispatch(setSessions(fresh));
+      const c = await getOfflinePendingCount(userId);
+      dispatch(setPendingCount(c));
+    }
   };
 
   const banner = (() => {
@@ -268,6 +280,7 @@ const Navbar = () => {
         onRetry={retryFailedItem}
         onRemove={removeFailedItem}
         onOpenBill={handleOpenBill}
+        onRefresh={refreshQueue}
       />
     </div>
   );
