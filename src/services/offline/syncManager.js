@@ -200,14 +200,11 @@ export const syncPendingSessions = async () => {
             // Hapus dari IndexedDB setelah sync sukses
             await deleteOfflineSession(session.sync_id, userId);
 
-            // Hapus offline entries dari history cache — backend udah punya data ini
+            // Hapus semua offline entries dari history cache — server udah punya data
             try {
               const HISTORY_CACHE_KEY = 'cache_order_history';
               const existing = JSON.parse(localStorage.getItem(HISTORY_CACHE_KEY) || '[]');
-              const syncedOrderIds = new Set(response?.orders?.map(o => o.sync_id || o.id) || []);
-              const cleaned = existing.filter(e =>
-                !e?.offline_queued || !syncedOrderIds.has(e?.id) && !syncedOrderIds.has(e?.offline_meta?.order_sync_id)
-              );
+              const cleaned = existing.filter(e => !e?.offline_queued);
               if (cleaned.length !== existing.length) {
                 localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(cleaned));
               }

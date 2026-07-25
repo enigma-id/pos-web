@@ -35,18 +35,9 @@ const useOrder = id => {
         const res = await triggerHistory(params).unwrap();
         const serverData = res?.data || [];
 
-        // Merge server data with existing cache (preserve offline-only entries)
-        const existing = getCache(HISTORY_CACHE_KEY) || [];
-        const offlineEntries = existing.filter(e => e?.offline_queued);
-        const merged = [...serverData, ...offlineEntries];
-
-        if (merged.length > 0) {
-          setCache(HISTORY_CACHE_KEY, merged);
-        } else {
-          setCache(HISTORY_CACHE_KEY, serverData);
-        }
-
-        setMergedHistoryData(merged);
+        // After sync, server already has all data — no need to merge offline entries
+        setCache(HISTORY_CACHE_KEY, serverData);
+        setMergedHistoryData(serverData);
         return;
       } catch (error) {
         if (import.meta.env.DEV) {
