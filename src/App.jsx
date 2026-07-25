@@ -23,7 +23,9 @@ const App = () => {
   const { getUser } = useAuth();
 
   React.useEffect(() => {
-    getUser();
+    if (isAuthenticated) {
+      getUser();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

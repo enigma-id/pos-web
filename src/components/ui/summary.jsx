@@ -3,7 +3,11 @@ import React from 'react';
 import { currencyFormat, dateFormat } from '../../utils/common';
 
 const Summary = ({ data }) => {
+  console.log('======Summary print========1', data);
+
   if (!data) return;
+
+  console.log('======Summary print========', data);
 
   const formatFinishedAt = dateString => {
     const date = new Date(dateString);
@@ -124,7 +128,9 @@ const Summary = ({ data }) => {
             }}
           >
             <p style={{ marginBlock: 2, fontSize: 11 }}>Expected Cash</p>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(data?.summary?.cash?.expected_cash, false)}</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>
+              {currencyFormat(data?.summary?.cash?.expected_cash, false)}
+            </p>
           </div>
           <div
             style={{
@@ -201,10 +207,7 @@ const Summary = ({ data }) => {
           >
             <p style={{ marginBlock: 2, fontSize: 11 }}>After Discount</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
-              {currencyFormat(
-                data?.summary?.sales?.total_after_discount,
-                false
-              )}
+              {currencyFormat(data?.summary?.sales?.total_after_discount, false)}
             </p>
           </div>
           <div
@@ -263,7 +266,9 @@ const Summary = ({ data }) => {
               }}
             >
               <p style={{ marginBlock: 2, fontSize: 11, textTransform: 'uppercase' }}>{t?.type}</p>
-              <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(t?.total_nominal, false)}</p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>
+                {currencyFormat(t?.total_nominal, false)}
+              </p>
             </div>
           ))}
         </div>
@@ -296,7 +301,9 @@ const Summary = ({ data }) => {
               }}
             >
               <p style={{ marginBlock: 2, fontSize: 11 }}>{cat?.name}</p>
-              <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(cat?.total_paid, false)}</p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>
+                {currencyFormat(cat?.total_paid, false)}
+              </p>
             </div>
           ))}
         </div>

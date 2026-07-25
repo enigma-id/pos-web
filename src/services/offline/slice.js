@@ -9,8 +9,12 @@ const initialState = {
   warning: null,
   error: null,
   lastSyncTime: null,
-  items: [],
+  items: [],             // BACKWARD COMPAT — PendingDrawer masih baca items
+  sessions: [],
+  activeSyncId: null,
   apiReachable: true,
+  offlineSummary: null,
+  offlineSessionEnded: false,
 };
 
 const offlineSlice = createSlice({
@@ -48,11 +52,33 @@ const offlineSlice = createSlice({
     setLastSyncTime: (state, action) => {
       state.lastSyncTime = action.payload || null;
     },
-    setQueueItems: (state, action) => {
-      state.items = Array.isArray(action.payload) ? action.payload : [];
+    setSessions: (state, action) => {
+      state.sessions = Array.isArray(action.payload) ? action.payload : [];
+    },
+    setActiveSyncId: (state, action) => {
+      state.activeSyncId = action.payload || null;
+    },
+    clearActiveSyncId: state => {
+      state.activeSyncId = null;
     },
     setApiReachable: (state, action) => {
       state.apiReachable = !!action.payload;
+    },
+    setOfflineSummary: (state, action) => {
+      state.offlineSummary = action.payload || null;
+    },
+    clearOfflineSummary: state => {
+      state.offlineSummary = null;
+    },
+    setOfflineSessionEnded: (state, action) => {
+      state.offlineSessionEnded = !!action.payload;
+    },
+    clearOfflineSessionEnded: state => {
+      state.offlineSessionEnded = false;
+    },
+    setQueueItems: () => {
+      // Backward compat — no-op. pendingRequests queue dihapus di Phase 1.
+      // Masih dipanggil checkout.jsx, akan di-refactor di Phase 2.
     },
     resetOfflineState: () => initialState,
   },
@@ -68,8 +94,15 @@ export const {
   setOfflineError,
   clearOfflineError,
   setLastSyncTime,
-  setQueueItems,
+  setSessions,
+  setActiveSyncId,
+  clearActiveSyncId,
   setApiReachable,
+  setOfflineSummary,
+  clearOfflineSummary,
+  setOfflineSessionEnded,
+  clearOfflineSessionEnded,
+  setQueueItems,
   resetOfflineState,
 } = offlineSlice.actions;
 

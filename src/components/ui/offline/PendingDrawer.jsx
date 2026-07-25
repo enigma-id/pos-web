@@ -4,6 +4,9 @@ import { useSelector } from 'react-redux';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 
 const getApiCategory = (item) => {
+  const cat = item?._category;
+  if (cat) return cat;
+
   const url = item?.url;
 
   if (!url) return 'unknown';
@@ -20,6 +23,9 @@ const getApiCategory = (item) => {
 };
 
 const getApiType = (item) => {
+  // Explicit tag paling prioritas
+  if (item?._apiType) return item._apiType;
+
   const url = item?.url;
 
   if (!url) return 'unknown';
@@ -29,7 +35,7 @@ const getApiType = (item) => {
   const last = parts[parts.length - 1] || 'unknown';
 
   if (path.includes('/sales/session')) {
-    return last === 'close' ? 'close session' : 'start session';
+    return last === 'close' ? 'end' : 'start';
   }
 
   if (path.includes('/sales/order')) {
@@ -52,20 +58,64 @@ const statusConfig = {
 
 const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
   const items = useSelector(state => state?.Offline?.items || []);
+  const sessions = useSelector(state => state?.Offline?.sessions || []);
   const [activeTab, setActiveTab] = useState('order');
 
-  const categorized = React.useMemo(() => items.reduce(
-    (acc, item) => {
-      const cat = getApiCategory(item);
-      acc[cat]?.push(item);
+  const categorized = React.useMemo(() => {
+    const result = items.reduce(
+      (acc, item) => {
+        const cat = getApiCategory(item);
+        acc[cat]?.push(item);
+        if (item.status === 'failed') {
+          acc.failedCount[cat] = (acc.failedCount[cat] || 0) + 1;
+        }
+        return acc;
+      },
+      { order: [], bills: [], shifts: [], topup: [], other: [], failedCount: {} }
+    );
 
-      if (item.status === 'failed') {
-        acc.failedCount[cat] = (acc.failedCount[cat] || 0) + 1;
+    // Merge sessions from Offline.sessions into shifts tab
+    // Tiap session = 1 sync request via POST /sales/sync (open + close dikirim bareng)
+    for (const s of sessions) {
+      if (s.syncStatus === 'synced') continue;
+      const isClosed = !!s.session?.close_at;
+      const hasReference = !!s.referenceId;
+
+      // Session start online → cuma close yg perlu sync
+      // Session start offline → open + close sync bareng (1 item)
+      const isOfflineOnly = !hasReference && isClosed;
+      const shiftItem = {
+        id: s.sync_id,
+        sync_id: s.sync_id,
+        referenceId: s.referenceId,
+        _category: 'shifts',
+        _apiType: isOfflineOnly ? 'both' : (hasReference && isClosed ? 'end' : 'start'),
+        status: s.syncStatus || 'pending',
+        lastError: s.error || null,
+        createdAt: isClosed ? s.session?.close_at : (s.createdAt || s.session?.open_at),
+        body: {
+          cash: isClosed ? (s.session?.cash_finished || s.session?.cash_started) : s.session?.cash_started,
+          cash_started: s.session?.cash_started,
+          open_at: s.session?.open_at,
+          close_at: s.session?.close_at,
+          orderCount: s.orders?.length || 0,
+        },
+        session: s.session || {},
+        transaction_preview: {
+          code: `SES-${(s.sync_id || '').slice(0, 8)}`,
+          cashier: { name: s.cashier_name || '-' },
+          session: { cashier: { name: s.cashier_name || '-' } },
+          created_at: isClosed ? s.session?.close_at : (s.createdAt || s.session?.open_at),
+        },
+      };
+      result.shifts.push(shiftItem);
+      if (shiftItem.status === 'failed') {
+        result.failedCount.shifts = (result.failedCount.shifts || 0) + 1;
       }
-      return acc;
-    },
-    { order: [], bills: [], shifts: [], topup: [], other: [], failedCount: {} }
-  ), [items]);
+    }
+
+    return result;
+  }, [items, sessions]);
 
   // Merge 'other' into none — we don't show it as a tab
   const filteredItems = categorized[activeTab] || [];
@@ -199,15 +249,14 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
             const status = statusConfig[item.status] || statusConfig.pending;
             const itemsList = preview?.items || [];
 
-            // Specialized rendering for Session Start/End
-            const isSession = apiType === 'start' || apiType === 'end';
+            const isSession = apiType === 'start' || apiType === 'end' || apiType === 'both';
             // Specialized rendering for Topup
             const isTopup = apiType === 'topup';
 
             if (isSession) {
-              const sessionLabel = apiType === 'start' ? 'Open Session' : 'Close Session';
-              const sessionIcon = apiType === 'start' ? '🚪' : '🏁';
-              const sessionColor = apiType === 'start' ? 'badge-success' : 'badge-warning';
+              const sessionLabel = apiType === 'both' ? 'Open & Close Session' : (apiType === 'start' ? 'Open Session' : 'Close Session');
+              const sessionIcon = apiType === 'both' ? '🔄' : (apiType === 'start' ? '🚪' : '🏁');
+              const sessionColor = apiType === 'both' ? 'badge-info' : (apiType === 'start' ? 'badge-success' : 'badge-warning');
               const cashAmount = item?.body?.cash || 0;
 
               return (
@@ -221,27 +270,43 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
                       <span className={`badge badge-xs ${sessionColor} uppercase font-bold tracking-wider`}>
                         {sessionIcon} {sessionLabel}
                       </span>
-                      <span className="text-[10px] font-bold text-base-content/50 flex-1 truncate">
-                        {dateFormat(createdAt)}
-                      </span>
+                      {apiType !== 'both' && (
+                        <span className="text-[10px] font-bold text-base-content/50 flex-1 truncate">
+                          {dateFormat(createdAt)}
+                        </span>
+                      )}
                       <span className={`badge badge-xs ${status.badge} gap-0.5`}>
                         <span className="text-[9px]">{status.icon}</span>
                         {item.status}
                       </span>
                     </div>
+                    {apiType === 'both' && (
+                      <div className="flex gap-3 text-[10px] text-base-content/50 font-bold mb-1.5">
+                        <span>Open: {dateFormat(item?.body?.open_at || item?.createdAt)}</span>
+                        <span>Close: {dateFormat(item?.body?.close_at || createdAt)}</span>
+                      </div>
+                    )}
 
                     <div className="flex justify-between items-center bg-base-200/30 rounded p-2">
-                      <div className="flex flex-col">
+                      <div className="flex flex-col gap-1">
                         <span className="text-[9px] uppercase text-base-content/40 font-bold">
-                          {apiType === 'start' ? 'Starting Cash' : 'Ending Cash'}
+                          {apiType === 'both' ? 'Starting Cash' : (apiType === 'start' ? 'Starting Cash' : 'Ending Cash')}
                         </span>
                         <span className="text-sm font-black text-base-content">
-                          {currencyFormat(cashAmount)}
+                          {currencyFormat(apiType === 'both' ? (item?.body?.cash_started || item?.body?.cash) : cashAmount)}
                         </span>
+                        {apiType === 'both' && (
+                          <>
+                            <span className="text-[9px] uppercase text-base-content/40 font-bold">Ending Cash</span>
+                            <span className="text-sm font-black text-base-content">
+                              {currencyFormat(item?.body?.cash || 0)}
+                            </span>
+                          </>
+                        )}
                       </div>
                       <div className="text-right">
-                        <span className="text-[9px] uppercase text-base-content/40 font-bold block">Cashier</span>
-                        <span className="text-[10px] font-bold">{cashierName}</span>
+                        <span className="text-[9px] uppercase text-base-content/40 font-bold block">Total Orders</span>
+                        <span className="text-[10px] font-bold">{item?.body?.orderCount || 0}</span>
                       </div>
                     </div>
 
@@ -252,9 +317,9 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
                       </div>
                     )}
 
-                    {/* Action buttons */}
+                    {/* Action buttons — session ga perlu retry, auto lewat heartbeat */}
                     <div className="mt-2 flex gap-1">
-                      {item.status === 'pending' && (
+                      {(item.status === 'pending' && !isSession) && (
                         <button
                           className="btn btn-ghost btn-xs text-base-content/50"
                           onClick={() => onRemove?.(item.id)}
@@ -262,7 +327,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
                           🗑️ Remove
                         </button>
                       )}
-                      {item.status === 'failed' && (
+                      {(item.status === 'failed' && !isSession) && (
                         <button
                           className="btn btn-error btn-xs flex-1 gap-1"
                           onClick={() => onRetry?.(item.id)}

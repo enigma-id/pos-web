@@ -1,16 +1,17 @@
 import { openDB, deleteDB } from 'idb';
 import { v4 as uuidv4 } from 'uuid';
 
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 const STORES = {
-  pendingRequests: 'pendingRequests',
+  offlineSessions: 'offlineSessions',
   metadata: 'metadata',
 };
 
 const dbInstances = new Map();
 
 const getNow = () => Date.now();
+const getISO = () => new Date().toISOString();
 
 const getDBName = userId => `pos-offline-queue-${userId}`;
 
@@ -21,10 +22,15 @@ const ensureDB = userId => {
     dbInstances.set(
       key,
       openDB(getDBName(userId), DB_VERSION, {
-        upgrade(db) {
-          if (!db.objectStoreNames.contains(STORES.pendingRequests)) {
-            const store = db.createObjectStore(STORES.pendingRequests, { keyPath: 'id' });
-            store.createIndex('status', 'status', { unique: false });
+        upgrade(db, oldVersion) {
+          // Hapus pendingRequests store kalo ada (v2→v3)
+          if (db.objectStoreNames.contains('pendingRequests')) {
+            db.deleteObjectStore('pendingRequests');
+          }
+
+          if (!db.objectStoreNames.contains(STORES.offlineSessions)) {
+            const store = db.createObjectStore(STORES.offlineSessions, { keyPath: 'sync_id' });
+            store.createIndex('syncStatus', 'syncStatus', { unique: false });
             store.createIndex('createdAt', 'createdAt', { unique: false });
           }
 
@@ -36,14 +42,6 @@ const ensureDB = userId => {
     );
   }
   return dbInstances.get(key);
-};
-
-const sortFIFO = items => {
-  return [...items].sort((a, b) => {
-    const aTime = a?.createdAt || 0;
-    const bTime = b?.createdAt || 0;
-    return aTime - bTime;
-  });
 };
 
 export const closeUserDB = async userId => {
@@ -70,193 +68,185 @@ export const initQueueDB = async userId => {
   return true;
 };
 
-export const addToQueue = async (request, userId) => {
+// ========== CREATE ==========
+
+/**
+ * Buat session offline baru.
+ * Sync status: "pending"
+ */
+export const createOfflineSession = async ({ cash_started, latitude, longitude, battery_health }, userId) => {
   const db = await ensureDB(userId);
-  const now = getNow();
+  const sync_id = uuidv4();
+  const now = getISO();
 
-  // If it's an open-bill request, check if a bill with the same ticket/bill_name already exists in the queue
-  const isSaveBill =
-    String(request?.url).toLowerCase().includes('/sales/order') &&
-    request?.body?.status === 'pending';
-  const ticketName = request?.body?.ticket || request?.body?.bill_name;
-
-  if (isSaveBill && ticketName) {
-    const allItems = await db.getAll(STORES.pendingRequests);
-    const existingBill = allItems.find(
-      item =>
-        String(item?.url).toLowerCase().includes('/sales/order') &&
-        item?.body?.status === 'pending' &&
-        (item?.body?.ticket === ticketName || item?.body?.bill_name === ticketName)
-    );
-
-    if (existingBill) {
-      // Merge items instead of adding a new entry
-      const existingItems = Array.isArray(existingBill.body?.items) ? existingBill.body.items : [];
-      const newItems = Array.isArray(request?.body?.items) ? request.body.items : [];
-
-      // Simple merge logic: for each new item, check if it exists (catalog_id)
-      const mergedItems = [...existingItems];
-      newItems.forEach(newItem => {
-        const existingItemIndex = mergedItems.findIndex(
-          ei =>
-            ei.catalog_id === newItem.catalog_id &&
-            JSON.stringify(ei.addons) === JSON.stringify(newItem.addons)
-        );
-
-        if (existingItemIndex >= 0) {
-          mergedItems[existingItemIndex].quantity += newItem.quantity;
-        } else {
-          mergedItems.push(newItem);
-        }
-      });
-
-      const updatedBill = {
-        ...existingBill,
-        body: {
-          ...existingBill.body,
-          ...request?.body,
-          items: mergedItems,
-        },
-        updatedAt: now,
-      };
-
-      // Recalculate transaction_preview if it exists
-      if (existingBill.transaction_preview) {
-        const preview = existingBill.transaction_preview;
-
-        // If the new request has a high-fidelity preview, use it
-        const newPreview = request?.transaction_preview;
-
-        const totalBill = mergedItems.reduce(
-          (sum, item) => sum + Number(item.unit_price) * Number(item.quantity),
-          0
-        );
-        const itemCount = mergedItems.reduce((sum, item) => sum + Number(item.quantity), 0);
-
-        updatedBill.transaction_preview = {
-          ...preview,
-          ...newPreview,
-          items: mergedItems,
-          total_bill: totalBill,
-          total_charges: totalBill,
-          item_count: itemCount,
-        };
-      }
-
-      await db.put(STORES.pendingRequests, updatedBill);
-      return updatedBill;
-    }
-  }
-
-  // If it's a checkout request, remove any matching pending save-bill
-  const isCheckout =
-    String(request?.url).toLowerCase().includes('/sales/order') &&
-    request?.body?.status === 'completed' &&
-    ticketName;
-
-  if (isCheckout && ticketName) {
-    const allItems = await db.getAll(STORES.pendingRequests);
-    const pendingBills = allItems.filter(
-      item =>
-        String(item?.url).toLowerCase().includes('/sales/order') &&
-        item?.body?.status === 'pending' &&
-        (item?.body?.ticket === ticketName || item?.body?.bill_name === ticketName)
-    );
-    for (const bill of pendingBills) {
-      await db.delete(STORES.pendingRequests, bill.id);
-    }
-  }
-
-  const item = {
-    id: request?.id || uuidv4(),
-    url: request?.url || '',
-    method: request?.method || 'POST',
-    body: request?.body ?? null,
-    params: request?.params ?? null,
-    headers: request?.headers || {},
-    token: request?.token || null,
-    type: request?.type || 'mutation',
-    status: request?.status || 'pending',
-    retryCount: request?.retryCount || 0,
-    lastError: request?.lastError || null,
-    transaction_preview: request?.transaction_preview ?? null,
-    createdAt: request?.createdAt || now,
-    updatedAt: now,
+  const doc = {
+    sync_id,
+    referenceId: null,
+    session: {
+      open_at: now,
+      cash_started,
+      close_at: null,
+      cash_finished: null,
+      latitude: latitude ?? null,
+      longitude: longitude ?? null,
+      battery_health: battery_health ?? null,
+    },
+    orders: [],
+    topups: [],
+    memberships: [],
+    syncStatus: 'pending',
+    error: null,
+    createdAt: now,
   };
 
-  await db.put(STORES.pendingRequests, item);
-  return item;
+  await db.add(STORES.offlineSessions, doc);
+  return doc;
 };
 
-export const getQueue = async userId => {
+// ========== READ ==========
+
+/**
+ * Ambil session yg masih aktif (syncStatus = "pending" DAN session.close_at == null).
+ */
+export const getActiveSession = async userId => {
   const db = await ensureDB(userId);
-  const all = await db.getAll(STORES.pendingRequests);
-  return sortFIFO(all);
+  const all = await db.getAll(STORES.offlineSessions);
+  return all.find(s => s.syncStatus === 'pending' && !s.session.close_at) || null;
 };
 
-export const getQueueByStatus = async (status, userId) => {
+/**
+ * Ambil semua session yg belum di-sync (pending, syncing, failed).
+ */
+export const getPendingSessions = async userId => {
   const db = await ensureDB(userId);
-  const all = await db.getAllFromIndex(STORES.pendingRequests, 'status', status);
-  return sortFIFO(all);
+  const all = await db.getAll(STORES.offlineSessions);
+  return all.filter(s => s.syncStatus !== 'synced');
 };
 
-export const getQueueItem = async (id, userId) => {
+/**
+ * Ambil semua session.
+ * Sorted by createdAt DESC.
+ */
+export const getAllSessions = async userId => {
   const db = await ensureDB(userId);
-  return db.get(STORES.pendingRequests, id);
+  const all = await db.getAll(STORES.offlineSessions);
+  return all.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 };
 
-export const updateQueueItem = async (id, updates = {}, userId) => {
-  const db = await ensureDB(userId);
-  const existing = await db.get(STORES.pendingRequests, id);
-  if (!existing) return null;
-
-  const next = {
-    ...existing,
-    ...updates,
-    updatedAt: getNow(),
-  };
-
-  await db.put(STORES.pendingRequests, next);
-  return next;
-};
-
-export const removeFromQueue = async (id, userId) => {
-  const db = await ensureDB(userId);
-  await db.delete(STORES.pendingRequests, id);
-
-  // Also remove matching entry from history cache (offline checkout entries)
-  try {
-    const { getCache, setCache } = await import('../../utils/cache');
-    const HISTORY_CACHE_KEY = 'cache_order_history';
-    const existing = getCache(HISTORY_CACHE_KEY) || [];
-    const filtered = existing.filter(e => {
-      const entryQueueId = e?.offline_meta?.queue_id || e?.id;
-      return String(entryQueueId) !== String(id);
-    });
-    if (filtered.length !== existing.length) {
-      setCache(HISTORY_CACHE_KEY, filtered);
+/**
+ * Resolve active session ID dari berbagai source.
+ * Flow:
+ *   1. Cek authSession?.sales_session?.id          → server ID (online)
+ *   2. Cek offline_sessions.referenceId            → server ID (udah sync)
+ *   3. Cek offline_sessions.sync_id (yg masih open) → client UUID
+ */
+export const getActiveSessionId = async (authSession, userId) => {
+  // Cari offline session yg masih open dulu (lebih fresh)
+  if (userId) {
+    const all = await getAllSessions(userId);
+    const offlineActive = all.find(s => s.syncStatus === 'pending' && !s.session.close_at);
+    if (offlineActive) {
+      return { id: offlineActive.sync_id, source: 'sync_id' };
     }
-  } catch {
-    // fail silently
   }
 
+  // 1. Server session ID dari auth (pas online) — fallback
+  const serverId = authSession?.sales_session?.id;
+  if (serverId) {
+    return { id: serverId, source: 'server' };
+  }
+
+  if (!userId) return null;
+
+  const allS = await getAllSessions(userId);
+
+  // 2. Cari yg punya referenceId (udah pernah sync, masih open)
+  const byReference = allS.find(s => s.referenceId && s.syncStatus === 'synced' && !s.session.close_at);
+  if (byReference) {
+    return { id: byReference.referenceId, source: 'reference' };
+  }
+
+  return null;
+};
+
+// ========== UPDATE ==========
+
+/**
+ * Update session close info.
+ */
+export const updateSessionClose = async (syncId, { cash_finished, latitude, longitude, battery_health }, userId) => {
+  const db = await ensureDB(userId);
+  const existing = await db.get(STORES.offlineSessions, syncId);
+  if (!existing) throw new Error(`Session not found: ${syncId}`);
+
+  existing.session.close_at = getISO();
+  existing.session.cash_finished = cash_finished ?? null;
+  if (latitude != null) existing.session.latitude = latitude;
+  if (longitude != null) existing.session.longitude = longitude;
+  if (battery_health != null) existing.session.battery_health = battery_health;
+
+  await db.put(STORES.offlineSessions, existing);
+  return existing;
+};
+
+/**
+ * Set sync status + error.
+ */
+export const setSyncStatus = async (syncId, status, { error, userId } = {}) => {
+  const db = await ensureDB(userId);
+  const existing = await db.get(STORES.offlineSessions, syncId);
+  if (!existing) throw new Error(`Session not found: ${syncId}`);
+
+  existing.syncStatus = status;
+  if (error) existing.error = error;
+  else existing.error = null;
+
+  await db.put(STORES.offlineSessions, existing);
+  return existing;
+};
+
+/**
+ * Simpan hasil sync sukses.
+ * referenceId = server session.id
+ * orderMap = { localSyncId: serverOrderId, ... }
+ */
+export const updateSyncResult = async (syncId, { referenceId, orderMap }, userId) => {
+  const db = await ensureDB(userId);
+  const existing = await db.get(STORES.offlineSessions, syncId);
+  if (!existing) throw new Error(`Session not found: ${syncId}`);
+
+  existing.referenceId = referenceId ?? existing.referenceId;
+  existing.syncStatus = 'synced';
+
+  // Map order sync_ids ke server IDs
+  if (orderMap) {
+    existing.orders = (existing.orders || []).map(o => ({
+      ...o,
+      serverId: orderMap[o.sync_id] || o.serverId || null,
+    }));
+  }
+
+  await db.put(STORES.offlineSessions, existing);
+  return existing;
+};
+
+// ========== DELETE ==========
+
+/**
+ * Hapus session dari IndexedDB.
+ * Dipake pas sync sukses full.
+ */
+export const deleteOfflineSession = async (syncId, userId) => {
+  const db = await ensureDB(userId);
+  await db.delete(STORES.offlineSessions, syncId);
   return true;
 };
 
-export const clearQueue = async userId => {
-  const db = await ensureDB(userId);
-  await db.clear(STORES.pendingRequests);
-  return true;
-};
+// ========== METADATA (Retain) ==========
 
 const METADATA_KEYS = {
   lastSyncTime: 'lastSyncTime',
   syncAttempt: 'syncAttempt',
-};
-
-export const getPendingCount = async userId => {
-  const pending = await getQueueByStatus('pending', userId);
-  return pending.length;
 };
 
 export const setLastSyncTime = async (timestamp, userId) => {
@@ -301,46 +291,49 @@ export const getAllMetadata = async userId => {
   return db.getAll(STORES.metadata);
 };
 
-// --- Legacy migration helpers ---
+// ========== BACKWARD COMPAT — pendingRequests (Phase 2 nanti di-refactor) ==========
 
-export const getLegacyQueue = async () => {
-  let db;
-  try {
-    db = await openDB('pos-offline-queue', 1);
-  } catch {
-    return [];
-  }
-  const all = await db.getAll('pendingRequests');
-  db.close();
-  return all;
+/**
+ * Backward compat: getQueue masih dipanggil cart/hook.js untuk save-bill.
+ * Di Phase 1 pendingRequests store sudah dihapus.
+ * Selalu return [] — nanti Phase 2 ganti dengan baca dari session.orders.
+ */
+export const getQueue = async () => {
+  return [];
 };
 
-export const migrateLegacyQueue = async userId => {
-  const legacy = await getLegacyQueue();
-  if (legacy.length === 0) return { migrated: 0 };
+export const getQueueByStatus = async () => {
+  return [];
+};
 
-  let written = 0;
-  const skipped = [];
+export const getQueueItem = async () => {
+  return null;
+};
 
-  for (const item of legacy) {
-    try {
-      await addToQueue(item, userId);
-      written++;
-    } catch {
-      skipped.push(item.id);
-    }
-  }
+/**
+ * Backward compat: updateQueueItem masih dipanggil checkout.jsx.
+ * Di Phase 1 pendingRequests sudah dihapus — no-op.
+ * Akan di-refactor di Phase 2 saat order flow pindah ke session.orders.
+ */
+export const updateQueueItem = async () => {
+  return null;
+};
 
-  // Only delete legacy if all items were written successfully
-  if (skipped.length === 0) {
-    try {
-      const legacyDb = await openDB('pos-offline-queue', 1);
-      legacyDb.close();
-      await deleteDB('pos-offline-queue');
-    } catch {
-      // Legacy DB may not exist, ignore
-    }
-  }
+export const addToQueue = async () => {
+  return null;
+};
 
-  return { migrated: written, skipped: skipped.length };
+export const removeFromQueue = async () => {
+  return true;
+};
+
+export const clearQueue = async () => {
+  return true;
+};
+
+// ========== PENDING COUNT HELPER ==========
+
+export const getOfflinePendingCount = async userId => {
+  const sessions = await getAllSessions(userId);
+  return sessions.filter(s => s.syncStatus !== 'synced').length;
 };

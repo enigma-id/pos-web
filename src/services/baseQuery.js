@@ -1,9 +1,5 @@
 import { fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-
-import { changeServiceCharge, resetCart } from './cart/slice';
-import { addToQueue, getPendingCount } from './offline/queue';
-import { setApiReachable, setPendingCount, setQueueItems, setWarning } from './offline/slice';
-import { getSalesCacheValue } from '../utils/cache';
+import { setApiReachable } from './offline/slice';
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: import.meta.env.VITE_API_URL || 'https://api.envio.co.id/dev/pos',
@@ -27,186 +23,10 @@ const rawBaseQuery = fetchBaseQuery({
   },
 });
 
-const isMutationMethod = method => {
-  const upper = String(method || 'GET').toUpperCase();
-  return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(upper);
-};
-
-const toObjectHeaders = headers => {
-  if (!headers) return {};
-  if (typeof headers.entries === 'function') {
-    return Object.fromEntries(headers.entries());
-  }
-  return headers;
-};
-
-const buildTransactionPreview = ({ args, queued }) => {
-  // Priority 1: Use pre-built preview if provided in args or body
-  const customPreview = args?.__offlinePreview || args?.body?.__offlinePreview;
-  if (customPreview) {
-    return {
-      ...customPreview,
-      // Ensure code and date are set if missing
-      code: customPreview.code || `OFF-${queued?.id ?? Date.now()}`,
-      created_at: customPreview.created_at || queued?.createdAt || new Date().toISOString(),
-    };
-  }
-
-  const body = args?.body || {};
-
-  // Detect topup payload (has nominal + payment_type, no items)
-  if (body?.nominal != null && body?.payment_type && !Array.isArray(body?.items)) {
-    return {
-      type: 'topup',
-      code: `TOPUP-${Date.now()}`,
-      total_payment: Number(body.nominal) || 0,
-      item_count: 1,
-      nominal: Number(body.nominal) || 0,
-      payment_method: { name: body.payment_type },
-      member_id: args?.id || body?.member_id || null,
-      created_at: queued?.createdAt || new Date().toISOString(),
-    };
-  }
-
-  const rawItems = Array.isArray(body?.items) ? body.items : [];
-  const totalPayment = Number(body?.total_payment);
-  const safeTotalPayment = totalPayment;
-
-  return {
-    code: body?.code || `OFF-${queued?.id ?? Date.now()}`,
-    channel: {
-      id: body?.channel_id ?? null,
-      name: body?.channel_name || 'Unknown Channel',
-    },
-    payment_method: {
-      id: body?.payment_method_id ?? 0,
-      name: body?.payment_method_name || (body?.payment_method_id === 0 ? 'Cash' : 'Non Cash'),
-    },
-    total_payment: safeTotalPayment,
-    item_count: rawItems.reduce((sum, item) => sum + (Number(item?.quantity) || 0), 0),
-    created_at: queued?.createdAt || new Date().toISOString(),
-  };
-};
-
-const queueOfflineMutation = async (args, api) => {
-  const url = String(args?.url || '');
-  const method = String(args?.method || 'GET').toUpperCase();
-
-  const state = api?.getState?.();
-  const token = state?.Auth?.token || null;
-  const userId = state?.Auth?.session?.user?.id;
-
-  // If no userId (not logged in), skip queue
-  if (!userId) {
-    return {
-      data: {
-        status: 'error',
-        message: 'Cannot queue offline mutation: no user logged in.',
-      },
-    };
-  }
-
-  // Special handling for Session Start to provide immediate UI feedback
-  const isSessionStart = url.includes('/sales/session') && !url.includes('/sales/session/close');
-  // const isSessionEnd = url.includes('/sales/session/close');
-
-  const previewData = buildTransactionPreview({ args, queued: { id: null } });
-
-  const isOrder = url.includes('/sales/order');
-
-  const bodyWithOffline =
-    isOrder && args?.body && typeof args.body === 'object'
-      ? { ...args.body, is_offline_mode: true }
-      : args?.body;
-
-  const queuedRaw = await addToQueue(
-    {
-      url: args?.url,
-      method,
-      body: bodyWithOffline,
-      params: args?.params,
-      headers: {
-        ...toObjectHeaders(args?.headers),
-      },
-      token,
-      type: 'mutation',
-      status: 'pending',
-      transaction_preview: previewData,
-    },
-    userId
-  );
-
-  const queued = {
-    ...queuedRaw,
-    transaction_preview: {
-      ...previewData,
-      code: previewData?.code || `OFF-${queuedRaw?.id ?? Date.now()}`,
-    },
-  };
-
-  const pendingCount = await getPendingCount(userId);
-  api.dispatch(setPendingCount(pendingCount));
-
-  const offlineState = api?.getState?.()?.Offline;
-  const existingItems = Array.isArray(offlineState?.items) ? offlineState.items : [];
-  api.dispatch(setQueueItems([...existingItems.filter(item => item?.id !== queued?.id), queued]));
-  if (pendingCount >= 100) {
-    api.dispatch(setWarning('Many pending transactions. Contact support.'));
-  } else {
-    api.dispatch(setWarning(null));
-  }
-
-  // If session start, we mock the response to allow the UI to proceed
-  if (isSessionStart) {
-    return {
-      data: {
-        status: 'success',
-        data: {
-          id: queued?.id,
-          offline_queued: true,
-          is_offline_session: true,
-        },
-        message: 'Session started locally.',
-      },
-    };
-  }
-
-  const cachedCharge = getSalesCacheValue('service_charge');
-  api.dispatch(resetCart());
-  api.dispatch(changeServiceCharge(cachedCharge));
-
-  return {
-    data: {
-      status: 'success',
-      data: {
-        id: queued?.id,
-        queued_at: queued?.createdAt,
-        offline_queued: true,
-      },
-      message: 'Transaction saved. Will sync when online.',
-    },
-  };
-};
-
 export const baseQuery = async (args, api, extraOptions) => {
-  const isSkipOffline = !!(typeof args === 'object' && args?.__skipOfflineQueue);
-  const method = typeof args === 'object' ? args.method : 'GET';
-  const offlineMutation = typeof args === 'object' && isMutationMethod(method);
-
-  // 1) Browser offline — queue
-  if (!isSkipOffline && offlineMutation && typeof navigator !== 'undefined' && !navigator.onLine) {
-    return queueOfflineMutation(args, api);
-  }
-
-  // 2) API is known-dead (previous 5xx / network timeout) — queue same as offline
-  const state = api?.getState?.();
-  if (!isSkipOffline && offlineMutation && state?.Offline?.apiReachable === false) {
-    return queueOfflineMutation(args, api);
-  }
-
   const result = await rawBaseQuery(args, api, extraOptions);
 
-  // Detect dead API (network error / timeout / 5xx) — treat like offline
+  // Detect dead API
   if (result?.error) {
     const status = result.error.status;
     const isNetworkError = status == null || status === 'TIMEOUT' || status === 'FETCH_ERROR' || status === 'PARSING_ERROR';
@@ -214,14 +34,12 @@ export const baseQuery = async (args, api, extraOptions) => {
 
     if (isNetworkError || isServerError) {
       api.dispatch(setApiReachable(false));
-
-      if (offlineMutation && !isSkipOffline) {
-        return queueOfflineMutation(args, api);
-      }
     }
-  } else if (state?.Offline?.apiReachable === false) {
-    // Any successful request means API is reachable again — restore
-    api.dispatch(setApiReachable(true));
+  } else {
+    const state = api?.getState?.();
+    if (state?.Offline?.apiReachable === false) {
+      api.dispatch(setApiReachable(true));
+    }
   }
 
   if (import.meta.env.DEV) {

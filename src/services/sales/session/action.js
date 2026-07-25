@@ -20,6 +20,13 @@ export const salesSessionApi = createApi({
         body: payload,
       }),
     }),
+    sync: builder.mutation({
+      query: payload => ({
+        url: '/sales/sync',
+        method: 'POST',
+        body: payload,
+      }),
+    }),
     summary: builder.query({
       query: params => ({
         url: '/sales/session/summary',
@@ -49,7 +56,6 @@ export const salesSessionApi = createApi({
         url: '/sales/session/device',
         method: 'PUT',
         body: payload,
-        __skipOfflineQueue: true,
       }),
     }),
   }),
@@ -58,6 +64,7 @@ export const salesSessionApi = createApi({
 export const {
   useStartMutation,
   useEndMutation,
+  useSyncMutation,
   useUpdateDeviceMutation,
   useLazySummaryQuery,
   useLazySessionQuery,

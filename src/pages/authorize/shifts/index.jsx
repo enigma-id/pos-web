@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
+import { useSelector } from 'react-redux';
 
 import {
   Drawer,
@@ -42,6 +43,13 @@ const ShiftScreen = () => {
 
   const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
 
+  const offlineSessions = useSelector(state => state.Offline.sessions);
+  const isOnline = useSelector(state => state?.Offline?.isOnline !== false);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable !== false);
+  const authUser = useSelector(state => state?.Auth?.user);
+
+  const isOffline = !isOnline || !apiReachable;
+
   const handleOpenPrint = () => {
     open(<Receipt data={orderDetail} />);
   };
@@ -65,7 +73,12 @@ const ShiftScreen = () => {
         id={id}
         status={status}
         onClose={() => {
-          show(sessionResult?.data?.data?.[selectedIndex]?.id);
+          if (isOffline) {
+            // For offline, just close drawer
+            closeDrawer();
+          } else {
+            show(sessionResult?.data?.data?.[selectedIndex]?.id);
+          }
           closeModal();
           closeDrawer();
         }}
@@ -79,6 +92,8 @@ const ShiftScreen = () => {
   }, [search]);
 
   React.useEffect(() => {
+    if (isOffline) return;
+
     const delayDebounceFn = setTimeout(
       () => {
         session({ search, limit: itemsPerPage, page: currentPage });
@@ -87,7 +102,7 @@ const ShiftScreen = () => {
     );
 
     return () => clearTimeout(delayDebounceFn);
-  }, [search, currentPage]);
+  }, [search, currentPage, isOffline]);
 
   React.useEffect(() => {
     if (sessionResult?.isSuccess) {
@@ -97,10 +112,11 @@ const ShiftScreen = () => {
   }, [sessionResult]);
 
   React.useEffect(() => {
+    if (isOffline) return;
     if (sessionResult?.isSuccess) {
       show(sessionResult?.data?.data?.[selectedIndex]?.id);
     }
-  }, [sessionResult, selectedIndex]);
+  }, [sessionResult, selectedIndex, isOffline]);
 
   React.useEffect(() => {
     if (showResult?.isSuccess) {
@@ -114,7 +130,92 @@ const ShiftScreen = () => {
     }
   }, [showOrderResult]);
 
-  const data = sessionResult?.data?.data || [];
+  // Offline: set detail dari offlineSessions saat selectedIndex berubah
+  React.useEffect(() => {
+    if (!isOffline) return;
+    const filtered = offlineSessions
+      .filter(s => s.session.close_at)
+      .map(s => ({
+        id: s.sync_id,
+        cashier: { name: authUser?.name || '-' },
+        started_at: s.session.open_at,
+        finished_at: s.session.close_at,
+        cash_started: s.session.cash_started,
+        cash_finished: s.session.cash_finished,
+        transaction_date: s.session.open_at,
+        summary: {
+          sales: {
+            total_sales: s.orders?.reduce((sum, o) => sum + (o.totalPayment || 0), 0) || 0,
+            grand_total: 0,
+            total_discount: 0,
+            total_after_discount: 0,
+            total_service: 0,
+            outstanding_bill: 0,
+            outstanding_bill_payment: 0,
+          },
+          cash: { expected_cash: s.session.cash_started, topup_cash: 0 },
+          payment_methods: [],
+          category_solds: [],
+          topups: [],
+        },
+        orders: s.orders || [],
+      }));
+
+    if (filtered[selectedIndex]) {
+      setDetail(filtered[selectedIndex]);
+    }
+  }, [selectedIndex, isOffline]);
+
+  // Offline: set detail saat session list loaded
+  React.useEffect(() => {
+    if (!isOffline || !offlineSessions?.length) return;
+    const filtered = offlineSessions
+      .filter(s => s.session.close_at)
+      .map(s => ({
+        id: s.sync_id,
+        cashier: { name: authUser?.name || '-' },
+        started_at: s.session.open_at,
+        finished_at: s.session.close_at,
+        cash_started: s.session.cash_started,
+        cash_finished: s.session.cash_finished,
+        transaction_date: s.session.open_at,
+        summary: {
+          sales: {
+            total_sales: s.orders?.reduce((sum, o) => sum + (o.totalPayment || 0), 0) || 0,
+            grand_total: 0,
+            total_discount: 0,
+            total_after_discount: 0,
+            total_service: 0,
+            outstanding_bill: 0,
+            outstanding_bill_payment: 0,
+          },
+          cash: { expected_cash: s.session.cash_started, topup_cash: 0 },
+          payment_methods: [],
+          category_solds: [],
+          topups: [],
+        },
+        orders: s.orders || [],
+      }));
+
+    if (filtered[0] && !detail) {
+      setDetail(filtered[0]);
+    }
+  }, [offlineSessions, isOffline]);
+
+  // Data source: offline vs API
+  const data = isOffline
+    ? offlineSessions
+        .filter(s => s.session.close_at)   // hanya yg udah di-close
+        .map(s => ({
+          id: s.sync_id,
+          cashier: { name: authUser?.name || '-' },
+          started_at: s.session.open_at,
+          finished_at: s.session.close_at,
+          status: 'closed',
+          transaction_date: s.session.open_at,
+        }))
+    : sessionResult?.data?.data || [];
+
   const meta = sessionResult?.data?.meta || {};
   const total = meta?.total || 0;
   const totalPages = meta?.total_pages || 0;
@@ -138,11 +239,22 @@ const ShiftScreen = () => {
                   setSearch(e.target.value);
                 }}
                 className="h-full w-full pl-15 focus-visible:!outline-none"
+                disabled={isOffline}
               />
+              {isOffline && (
+                <div className="absolute right-4 text-xs text-gray-400">Offline</div>
+              )}
             </div>
           </div>
 
           <div className="flex-1 overflow-y-auto">
+            {data.length === 0 && (
+              <div className="flex h-full place-content-center place-items-center">
+                <div className="text-base-300 text-sm">
+                  {isOffline ? 'No offline sessions available.' : 'No sessions found.'}
+                </div>
+              </div>
+            )}
             {data.map((item, index) => (
               <div
                 key={item.id}
@@ -177,22 +289,24 @@ const ShiftScreen = () => {
             ))}
           </div>
 
-          <div className="border-base-200 flex justify-end gap-4 border-t p-4">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-              className="disabled:btn-disabled btn"
-            >
-              Prev
-            </button>
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages || total === 0}
-              className="disabled:btn-disabled btn"
-            >
-              Next
-            </button>
-          </div>
+          {!isOffline && (
+            <div className="border-base-200 flex justify-end gap-4 border-t p-4">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="disabled:btn-disabled btn"
+              >
+                Prev
+              </button>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages || total === 0}
+                className="disabled:btn-disabled btn"
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Detail View */}
@@ -337,21 +451,6 @@ const ShiftScreen = () => {
                   ))}
                 </div>
 
-                {/* <div className="border-base-200 border-b pt-4 pb-2">
-                  <div className="mb-2 text-sm font-semibold">Sales Channels :</div>
-                  {detail?.sales_channels?.map((item, i) => (
-                    <div key={i} className="flex place-content-between place-items-center py-2">
-                      <div>
-                        <span className="bg-base-content rounded-lg px-3 py-1 text-sm text-white">
-                          {item?.transaction_count}
-                        </span>
-                        <span className="ps-2 text-sm">{item?.channel_name || '-'}</span>
-                      </div>
-                      <span className="text-sm">{currencyFormat(item?.subtotal)}</span>
-                    </div>
-                  ))}
-                </div> */}
-
                 <div className="border-base-200 border-b pt-4 pb-2">
                   <div className="mb-2 text-sm font-semibold">Category Sold :</div>
                   {detail?.summary?.category_solds?.map((item, i) => (
@@ -366,21 +465,6 @@ const ShiftScreen = () => {
                     </div>
                   ))}
                 </div>
-
-                {/* <div className="border-base-200 border-b pt-4 pb-2">
-                  <div className="mb-2 text-sm font-semibold">Catalog Sold :</div>
-                  {detail?.catalog_solds?.map((item, i) => (
-                    <div key={i} className="flex place-content-between place-items-center py-2">
-                      <div>
-                        <span className="bg-base-content rounded-lg px-3 py-1 text-sm text-white">
-                          {item?.quantity}
-                        </span>
-                        <span className="ps-2 text-sm">{item?.catalog_name || '-'}</span>
-                      </div>
-                      <span className="text-sm">{currencyFormat(item?.quantity, false)}</span>
-                    </div>
-                  ))}
-                </div> */}
 
                 <div className="border-base-200 border-b pt-4 pb-2">
                   <div className="mb-2 text-sm font-semibold">Sales Order :</div>

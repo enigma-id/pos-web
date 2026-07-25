@@ -2,4 +2,4 @@ export * from './queue';
 export * from './slice';
 export * from './syncManager';
 export * from './useNetworkStatus';
-export * from './localTransaction';
+export * from './localTransaction';    // retain — still used by checkout.jsx

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 export function usePrintWindow({
@@ -8,13 +8,16 @@ export function usePrintWindow({
   onClose,
   autoClose = false,
 } = {}) {
-  const [content, setContent] = useState(null);
+  const [ready, setReady] = useState(false);
+  const printInProgress = useRef(false);
   const printWindow = useRef(null);
   const container = useRef(null);
   const rootRef = useRef(null);
-  const [ready, setReady] = useState(false);
 
   const open = children => {
+    if (printInProgress.current) return; // cegah double print
+    printInProgress.current = true;
+
     // Jika belum dibuka atau sudah ditutup, buka jendela baru
     if (!printWindow.current || printWindow.current.closed) {
       printWindow.current = window.open(
@@ -75,7 +78,6 @@ export function usePrintWindow({
       const interval = setInterval(() => {
         if (printWindow.current?.closed) {
           clearInterval(interval);
-          setContent(null);
           setReady(false);
           rootRef.current = null;
           onClose?.();
@@ -85,34 +87,37 @@ export function usePrintWindow({
       setReady(true);
     }
 
-    setContent(() => children);
-  };
-
-  useEffect(() => {
-    if (content && container.current && printWindow.current && !printWindow.current.closed) {
+    // Render langsung — ga pake effect biar ga duplicate
+    if (container.current && printWindow.current && !printWindow.current.closed) {
       if (!rootRef.current) {
         rootRef.current = createRoot(container.current);
       }
-      rootRef.current.render(content);
+      rootRef.current.render(children);
 
-      // Auto print setelah render + delay kecil agar DOM siap
       setTimeout(() => {
         printWindow.current?.focus();
         printWindow.current?.print();
-
-        // Optional: auto-close setelah print
         if (autoClose) {
           setTimeout(() => {
             printWindow.current?.close();
-            // printWindow.current.onafterprint = () => printWindow.current?.close();
           }, 300);
         }
       }, 500);
     }
-  }, [content]);
+  };
+
+  const close = () => {
+    printWindow.current?.close();
+    printWindow.current = null;
+    container.current = null;
+    rootRef.current = null;
+    printInProgress.current = false;
+    setReady(false);
+  };
 
   return {
     open,
+    close,
     isOpen: ready,
     print: () => {
       if (printWindow.current && !printWindow.current.closed) {

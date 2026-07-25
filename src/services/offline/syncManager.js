@@ -1,10 +1,11 @@
 import { baseQuery } from '../baseQuery';
 import {
-  getQueue,
-  getQueueByStatus,
-  removeFromQueue,
+  getPendingSessions,
+  getAllSessions,
+  setSyncStatus,
+  updateSyncResult,
+  deleteOfflineSession,
   setLastSyncTime as setLastSyncTimeMeta,
-  updateQueueItem,
 } from './queue';
 import {
   setApiReachable,
@@ -12,15 +13,14 @@ import {
   setLastSyncTime,
   setOfflineError,
   setPendingCount,
-  setQueueItems,
+  setSessions,
   setSyncing,
-  setWarning,
+  setActiveSyncId,
 } from './slice';
 
 const MAX_RETRY = 5;
 const BASE_DELAY = 1000;
 const RECONNECT_DELAY = 3000;
-const REMOVE_DELAY = 5000;
 const HEARTBEAT_INTERVAL = 30000;
 
 let isSyncingInternal = false;
@@ -50,148 +50,27 @@ const shouldRetry = error => {
   return false;
 };
 
-const broadcastQueueState = async () => {
+const broadcastOfflineState = async () => {
   if (!storeRef) return;
 
   const userId = getCurrentUserId();
   if (!userId) {
-    storeRef.dispatch(setQueueItems([]));
+    storeRef.dispatch(setSessions([]));
     storeRef.dispatch(setPendingCount(0));
     storeRef.dispatch(setFailedCount(0));
-    storeRef.dispatch(setWarning(null));
     return;
   }
 
-  const all = await getQueue(userId);
-  const pending = all.filter(item => item.status === 'pending');
-  const failed = all.filter(item => item.status === 'failed');
+  const all = await getAllSessions(userId);
+  const pending = all.filter(s => s.syncStatus === 'pending' || s.syncStatus === 'syncing');
+  const failed = all.filter(s => s.syncStatus === 'failed');
 
-  storeRef.dispatch(setQueueItems(all));
+  storeRef.dispatch(setSessions(all));
   storeRef.dispatch(setPendingCount(pending.length));
   storeRef.dispatch(setFailedCount(failed.length));
-
-  if (pending.length >= 100) {
-    storeRef.dispatch(setWarning('Many pending transactions. Contact support.'));
-  } else {
-    storeRef.dispatch(setWarning(null));
-  }
 };
 
-const executeQueuedRequest = async item => {
-  const isOrder = String(item?.url || '').toLowerCase().includes('/sales/order');
-
-  const body = isOrder && item?.body && typeof item.body === 'object'
-    ? { ...item.body, is_offline_mode: true }
-    : item.body;
-
-  const args = {
-    url: item.url,
-    method: item.method,
-    body,
-    params: item.params,
-    headers: {
-      ...(item.headers || {}),
-      ...(item.token ? { Authorization: `Bearer ${item.token}` } : {}),
-    },
-    __skipOfflineQueue: true,
-  };
-
-  const fakeApi = {
-    ...storeRef,
-    getState: storeRef.getState,
-    dispatch: storeRef.dispatch,
-  };
-
-  return baseQuery(args, fakeApi, {});
-};
-
-const markFailed = async (item, message, userId) => {
-  await updateQueueItem(item.id, {
-    status: 'failed',
-    lastError: message || 'Sync failed',
-  }, userId);
-};
-
-// Tracks items currently being synced to prevent duplicate processing
-const syncingItems = new Set();
-
-const processItem = async (item, userId) => {
-  // Prevent duplicate processing of the same item
-  if (syncingItems.has(item.id)) {
-    console.log(`Sync already in progress for item: ${item.id}`);
-    return { ok: false };
-  }
-
-  // Add to lock
-  syncingItems.add(item.id);
-
-  try {
-    await updateQueueItem(item.id, { status: 'syncing' }, userId);
-
-    for (let attempt = item.retryCount || 0; attempt < MAX_RETRY; attempt += 1) {
-      const result = await executeQueuedRequest(item);
-
-      if (!result?.error) {
-        await updateQueueItem(item.id, { status: 'completed', retryCount: attempt }, userId);
-        await sleep(REMOVE_DELAY);
-        await removeFromQueue(item.id, userId);
-        return { ok: true };
-      }
-
-      const status = getStatusCode(result.error);
-      if (status === 401) {
-        await markFailed(item, 'Session expired. Please login again.', userId);
-        return { ok: false };
-      }
-
-      if (!shouldRetry(result.error)) {
-        await markFailed(item, result?.error?.data?.message || 'Client error, not retried', userId);
-        return { ok: false };
-      }
-
-      const nextRetryCount = attempt + 1;
-      await updateQueueItem(item.id, {
-        retryCount: nextRetryCount,
-        status: 'pending',
-        lastError: result?.error?.data?.message || 'Retrying due to server/network issue',
-      }, userId);
-
-      const delay = BASE_DELAY * 2 ** attempt;
-      await sleep(delay);
-    }
-
-    // All retries exhausted — mark failed, require manual retry
-    const lastError = 'Max retries reached. Tap to retry manually.';
-    await updateQueueItem(item.id, { status: 'failed', lastError, retryCount: MAX_RETRY }, userId);
-    return { ok: false };
-  } finally {
-    // Always remove from lock in finally block
-    syncingItems.delete(item.id);
-  }
-};
-
-const sortPendingQueue = items => {
-  return [...items].sort((a, b) => {
-    const isStartA =
-      String(a.url).includes('/sales/session') && !String(a.url).includes('/sales/session/close');
-    const isStartB =
-      String(b.url).includes('/sales/session') && !String(b.url).includes('/sales/session/close');
-    const isEndA = String(a.url).includes('/sales/session/close');
-    const isEndB = String(b.url).includes('/sales/session/close');
-
-    if (isStartA && !isStartB) return -1;
-    if (!isStartA && isStartB) return 1;
-    if (isEndA && !isEndB) return 1;
-    if (!isEndA && isEndB) return -1;
-
-    // Maintain FIFO for items with same priority
-    const aTime = a?.createdAt || 0;
-    const bTime = b?.createdAt || 0;
-    return aTime - bTime;
-  });
-};
-
-export const syncNow = async () => {
+export const syncPendingSessions = async () => {
   if (!storeRef) return;
   if (isSyncingInternal) return;
   if (typeof navigator !== 'undefined' && !navigator.onLine) return;
@@ -204,30 +83,114 @@ export const syncNow = async () => {
   storeRef.dispatch(setOfflineError(null));
 
   try {
-    let pending = await getQueueByStatus('pending', userId);
+    const pending = await getPendingSessions(userId);
+    const toSync = pending.filter(s => s.syncStatus === 'pending');
 
-    while (pending.length > 0) {
-      // Prioritize: Start Session > Transactions > End Session
-      const sorted = sortPendingQueue(pending);
-      const current = sorted[0];
+    for (const session of toSync) {
+      // Prevent duplicate processing
+      if (session.syncStatus !== 'pending') continue;
 
-      const result = await processItem(current, userId);
+      let success = false;
+      await setSyncStatus(session.sync_id, 'syncing', { userId });
 
-      const isStartSession =
-        String(current.url).includes('/sales/session') &&
-        !String(current.url).includes('/sales/session/close');
-      if (isStartSession && !result?.ok) {
-        if (storeRef) {
-          storeRef.dispatch(setOfflineError('Start session failed. Sync halted.'));
+      for (let attempt = 0; attempt < MAX_RETRY; attempt += 1) {
+        try {
+          const sessionId = session.referenceId || session.sync_id;
+
+          const payload = {
+            session: session.session.close_at || session.session.open_at
+              ? {
+                  sync_id: session.sync_id,
+                  id: session.referenceId || '',
+                  open_at: session.session.open_at,
+                  close_at: session.session.close_at,
+                  cash_started: session.session.cash_started,
+                  cash_finished: session.session.cash_finished,
+                  latitude: session.session.latitude,
+                  longitude: session.session.longitude,
+                  battery_health: session.session.battery_health,
+                }
+              : null,
+            orders: (session.orders || []).map(o => ({
+              ...o,     // existing fields (items, catalog_id, quantity, total_payment, etc)
+              sync_id: o.sync_id || '',        // client UUID, idempotency key
+              id: o.id || o.serverId || '',    // server UUID kalo udah pernah sync
+              session_sync_id: o.session_sync_id || sessionId,
+            })),
+            memberships: session.memberships || [],
+            topups: session.topups || [],
+          };
+
+          const fakeApi = {
+            ...storeRef,
+            getState: storeRef.getState,
+            dispatch: storeRef.dispatch,
+          };
+
+          const result = await baseQuery(
+            {
+              url: '/sales/sync',
+              method: 'POST',
+              body: payload,
+              __skipOfflineQueue: true,
+            },
+            fakeApi,
+            {}
+          );
+
+          if (!result?.error) {
+            const response = result?.data?.data || result?.data || {};
+            const referenceId = response?.session?.id || response?.id || null;
+            const orderMap = {};
+
+            if (Array.isArray(response?.orders)) {
+              response.orders.forEach(o => {
+                if (o.sync_id && o.id) {
+                  orderMap[o.sync_id] = o.id;
+                }
+              });
+            }
+
+            await updateSyncResult(session.sync_id, { referenceId, orderMap }, userId);
+
+            // Hapus dari IndexedDB setelah sync sukses
+            await deleteOfflineSession(session.sync_id, userId);
+
+            success = true;
+            break;
+          }
+
+          const status = getStatusCode(result.error);
+          if (status === 401) {
+            await setSyncStatus(session.sync_id, 'failed', {
+              error: 'Session expired. Please login again.',
+              userId,
+            });
+            break;
+          }
+
+          if (!shouldRetry(result.error)) {
+            await setSyncStatus(session.sync_id, 'failed', {
+              error: result?.error?.data?.message || 'Client error, not retried',
+              userId,
+            });
+            break;
+          }
+
+          const delay = BASE_DELAY * 2 ** attempt;
+          await sleep(delay);
+        } catch (err) {
+          const delay = BASE_DELAY * 2 ** attempt;
+          await sleep(delay);
         }
-        break;
       }
 
-      if (result?.stop) {
-        break;
+      if (!success) {
+        await setSyncStatus(session.sync_id, 'failed', {
+          error: 'Max retries reached.',
+          userId,
+        });
       }
-
-      pending = await getQueueByStatus('pending', userId);
     }
 
     const now = new Date().toISOString();
@@ -242,31 +205,28 @@ export const syncNow = async () => {
     if (storeRef) {
       storeRef.dispatch(setSyncing(false));
     }
-    await broadcastQueueState();
+    await broadcastOfflineState();
   }
 };
 
-export const retryFailedItem = async id => {
+const syncOfflineState = async () => {
   const userId = getCurrentUserId();
-  if (!userId) return false;
+  if (!userId) return;
 
-  const all = await getQueue(userId);
-  const item = all.find(x => x.id === id);
-  if (!item) return false;
+  const allSessions = await getAllSessions(userId);
+  const active = allSessions.find(s => s.syncStatus === 'pending' && !s.session.close_at);
 
-  await updateQueueItem(id, { status: 'pending', retryCount: 0, lastError: null }, userId);
-  await broadcastQueueState();
-  await syncNow();
-  return true;
-};
+  storeRef.dispatch(setSessions(allSessions));
+  storeRef.dispatch(setPendingCount(allSessions.filter(s => s.syncStatus !== 'synced').length));
+  storeRef.dispatch(setFailedCount(allSessions.filter(s => s.syncStatus === 'failed').length));
 
-export const removeFailedItem = async id => {
-  const userId = getCurrentUserId();
-  if (!userId) return false;
+  if (active) {
+    storeRef.dispatch(setActiveSyncId(active.sync_id));
+  }
 
-  await removeFromQueue(id, userId);
-  await broadcastQueueState();
-  return true;
+  if (allSessions.some(s => s.syncStatus === 'pending')) {
+    syncPendingSessions();
+  }
 };
 
 let prevUserId = null;
@@ -274,21 +234,26 @@ let prevUserId = null;
 export const initSyncManager = async store => {
   storeRef = store;
 
-  // Try broadcast immediately (user may already be rehydrated)
-  await broadcastQueueState();
+  // Init-time rehydration
+  await syncOfflineState();
+  await broadcastOfflineState();
   startHeartbeat();
 
-  // Subscribe to auth changes — rehydrate queue state when user logs in/out
+  // Subscribe to auth changes
   store.subscribe(() => {
     const state = store.getState();
     const userId = state?.Auth?.session?.user?.id ?? null;
     if (userId !== prevUserId) {
       prevUserId = userId;
-      broadcastQueueState();
       if (userId) {
-        syncNow();
+        syncOfflineState();
+        broadcastOfflineState();
+        syncPendingSessions();
         startHeartbeat();
       } else {
+        storeRef.dispatch(setSessions([]));
+        storeRef.dispatch(setPendingCount(0));
+        storeRef.dispatch(setFailedCount(0));
         stopHeartbeat();
       }
     }
@@ -303,7 +268,7 @@ export const initSyncManager = async store => {
         clearTimeout(reconnectTimer);
       }
       reconnectTimer = setTimeout(() => {
-        syncNow();
+        syncPendingSessions();
       }, RECONNECT_DELAY);
     };
 
@@ -313,14 +278,17 @@ export const initSyncManager = async store => {
 
 const getSyncingState = () => isSyncingInternal;
 
-// Heartbeat: retry pending queue when API is marked dead but browser is online
+// Heartbeat: retry pending/failed sessions
 const startHeartbeat = () => {
   stopHeartbeat();
   heartbeatTimer = setInterval(() => {
     if (!storeRef) return;
     const state = storeRef.getState();
-    if (state?.Offline?.apiReachable === false && state?.Offline?.pendingCount > 0) {
-      syncNow();
+    const pending = state?.Offline?.sessions?.filter(
+      s => s.syncStatus === 'pending' || s.syncStatus === 'failed'
+    ) || [];
+    if (pending.length > 0) {
+      syncPendingSessions();
     }
   }, HEARTBEAT_INTERVAL);
 };
@@ -332,4 +300,26 @@ const stopHeartbeat = () => {
   }
 };
 
-export { getSyncingState, startHeartbeat, stopHeartbeat };
+export {
+  getSyncingState,
+  startHeartbeat,
+  stopHeartbeat,
+};
+
+// ========== BACKWARD COMPAT — retained for UI components (layout, PendingDrawer) ==========
+// These no longer operate on individual queue items but are kept as no-ops so existing
+// imports don't break. Will be removed in Phase 2 when checkout is refactored.
+
+export const syncNow = async () => {
+  await syncPendingSessions();
+};
+
+export const retryFailedItem = async () => {
+  // Backward compat — no-op in Phase 1
+  return false;
+};
+
+export const removeFailedItem = async () => {
+  // Backward compat — no-op in Phase 1
+  return true;
+};

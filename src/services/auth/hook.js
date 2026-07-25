@@ -10,8 +10,8 @@ import {
 } from '../../utils/cache';
 import { changeServiceCharge, resetCart } from '../cart/slice';
 import { $failure } from '../form/action';
-import { getPendingCount, deleteUserDB, migrateLegacyQueue } from '../offline/queue';
-import { syncNow } from '../offline/syncManager';
+import { getOfflinePendingCount, deleteUserDB } from '../offline/queue';
+import { syncPendingSessions } from '../offline/syncManager';
 import { clearSelectedChannel } from '../sales/channel/slice';
 import { stopDeviceTrackingGlobal } from '../sales/session/hook';
 import { invalidateSession } from '../sales/session/slice';
@@ -34,8 +34,7 @@ const useAuth = () => {
       // Recover queue for this user (fire-and-forget)
       const userId = res?.data?.user?.id;
       if (userId) {
-        migrateLegacyQueue(userId).catch(() => {});
-        syncNow();
+        syncPendingSessions();
       }
     } catch (error) {
       dispatch($failure(error));
@@ -86,7 +85,7 @@ const useAuth = () => {
     // Clean up queue DB if empty
     if (userId) {
       try {
-        const pending = await getPendingCount(userId);
+        const pending = await getOfflinePendingCount(userId);
         if (pending === 0) {
           await deleteUserDB(userId);
         }
