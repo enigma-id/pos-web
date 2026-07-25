@@ -54,12 +54,12 @@ const HistoryScreen = () => {
     history();
   }, []);
 
-  // Re-read cache when offline queue count changes (e.g. remove from queue)
-  const offlineCount = useSelector(state => state?.Offline?.items?.length);
+  // Re-read cache when offline pending count changes
+  const offlinePendingCount = useSelector(state => state?.Offline?.pendingCount);
   React.useEffect(() => {
     if (isOnline && apiReachable !== false) return;
     history();
-  }, [offlineCount]);
+  }, [offlinePendingCount]);
 
   // Sync historyData from hook into local state
   React.useEffect(() => {
@@ -142,7 +142,12 @@ const HistoryScreen = () => {
                   </div>
                 </div>
                 <div className="flex flex-col place-content-between">
-                  <div className="text-base-300 text-end text-sm">{item?.code}</div>
+                  <div className="text-base-300 text-end text-sm">
+                    {item?.offline_queued && (
+                      <span className="badge badge-warning badge-xs me-1">pending sync</span>
+                    )}
+                    {item?.code}
+                  </div>
 
                   <div className="text-base-300 text-end text-xs">
                     {dateFormat(item?.created_at)}
