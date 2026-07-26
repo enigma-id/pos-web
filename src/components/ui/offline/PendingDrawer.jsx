@@ -565,13 +565,16 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                             {product.addons?.length > 0 && (
                               <div className="ml-5 border-l border-base-content/10 pl-2 flex flex-col gap-0.5">
                                 {product.addons?.map((add, aIdx) => {
-                          const suffix = add?.addon?.type === 'quantity' || add?.addon?.type === 'checkbox' ? `(${product?.quantity} x ${add?.quantity}) x ${currencyFormat(add?.unit_nett || 0)}` : '';
+                          const addonName = add.catalog_name || add.catalog?.name || add.name || '';
+                          const addonUnitPrice = Number(add.unit_price || add.unit_nett || 0);
+                          const addonQty = Number(add.quantity || 1);
+                          const suffix = add?.addon?.type === 'quantity' || add?.addon?.type === 'checkbox' ? `(${product?.quantity} x ${addonQty}) x ${currencyFormat(addonUnitPrice)}` : '';
                                 return (
                                     <div key={aIdx} className="flex justify-between text-[11px] text-base-content/40 italic">
-                                    <span>+ {add.catalog?.name} {suffix}</span>
-                                        {add.unit_nett > 0 && (
+                                    <span>+ {addonName} {suffix}</span>
+                                        {addonUnitPrice > 0 && (
                                       <span>
-                                        {currencyFormat(product?.quantity * add?.quantity * add?.unit_nett || 0)}
+                                        {currencyFormat(product?.quantity * addonQty * addonUnitPrice)}
                                        </span>
                                         )}
                                     </div>

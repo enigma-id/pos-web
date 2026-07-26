@@ -318,7 +318,7 @@ const CheckoutScreen = () => {
       const existing = getCache(HISTORY_CACHE_KEY) || [];
       const historyEntry = {
         id: orderSyncId,
-        code: `OFF-${orderSyncId.slice(0, 8)}`,
+        code: order.code,
         total_charges: order.totalPayment,
         bill_name: order.billName,
         created_at: now,

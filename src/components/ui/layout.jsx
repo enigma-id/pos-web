@@ -179,6 +179,16 @@ const Navbar = () => {
     navigate('/');
   };
 
+  const refreshQueue = async () => {
+    const userId = User?.id;
+    if (userId) {
+      const fresh = await getAllSessions(userId);
+      dispatch(setSessions(fresh));
+      const c = await getOfflinePendingCount(userId);
+      dispatch(setPendingCount(c));
+    }
+  };
+
   useEffect(() => {
     summary();
   }, []);

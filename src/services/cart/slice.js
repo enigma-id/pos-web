@@ -16,7 +16,12 @@ function flattenAdditionals(additionals = []) {
       const isSelected = type === 'quantity' ? (child.quantity || 0) > 0 : !!child.selected;
 
       if (isSelected) {
-        const entry = { addon_group_id, addon_item_id: child.addon_item_id ?? child.id };
+        const entry = {
+          addon_group_id,
+          addon_item_id: child.addon_item_id ?? child.id,
+          name: child.name || '',
+          unit_price: Number(child.unit_price) || 0,
+        };
 
         if (child.addon_item_id) {
           entry.id = child.id;
@@ -204,6 +209,8 @@ function convertApiOrderToCartItem(item) {
     id: add.id,
     addon_group_id: add.addon?.id || add.addon_group_id || add.id,
     addon_item_id: add.catalog?.id || add.catalog_id || add.addon_item_id,
+    name: add.catalog?.name || add.name || '',
+    unit_price: Number(add.catalog?.unit_price) || Number(add.unit_price) || 0,
     quantity: add.quantity > 0 ? add.quantity / item.quantity : 1,
   }));
 
@@ -302,6 +309,8 @@ function convertOfflineQueueItemToCartItem(item) {
   const additionalsFlat = rawAdditionals.map(add => ({
     addon_group_id: add.addon?.id || add?.addon_group_id,
     addon_item_id: add.catalog?.id || add?.addon_item_id,
+    name: add.catalog?.name || add.name || '',
+    unit_price: Number(add.catalog?.unit_price) || Number(add.unit_price) || 0,
     quantity: add?.quantity || 1,
   }));
 

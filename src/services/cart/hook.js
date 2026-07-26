@@ -345,7 +345,7 @@ const useCart = catalog_id => {
           bill_name: order.billName || '',
           ticket: order.billName || '',
           total_charges: totalCharges,
-          code: `OFF-${order.sync_id?.slice(0, 8)}`,
+          code: order.code || `OFF-${order.sync_id?.slice(0, 8)}`,
           ordered_at: order.paidAt || order.createdAt,
           created_at: order.paidAt || order.createdAt,
           items: itemsTransformed,
