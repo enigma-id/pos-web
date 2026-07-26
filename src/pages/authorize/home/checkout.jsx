@@ -316,10 +316,15 @@ const CheckoutScreen = () => {
       // Inject history cache
       const HISTORY_CACHE_KEY = 'cache_order_history';
       const existing = getCache(HISTORY_CACHE_KEY) || [];
+      const histItemsTotal = orderItems.reduce((s, i) => {
+        const itemTotal = (i.unit_price || 0) * (i.quantity || 0);
+        const addonsTotal = (i.addons || []).reduce((asum, a) => asum + (a.unit_price || 0) * (a.quantity || 0), 0);
+        return s + itemTotal + addonsTotal;
+      }, 0);
       const historyEntry = {
         id: orderSyncId,
         code: order.code,
-        total_charges: order.totalPayment,
+        total_charges: order.totalPayment || histItemsTotal,
         bill_name: order.billName,
         created_at: now,
         status: 'completed',
@@ -359,9 +364,9 @@ const CheckoutScreen = () => {
       // Build receipt-ready shape
       const paySuccessData = {
         ...order,
-        total_charges: order.totalPayment,
+        total_charges: order.totalPayment || histItemsTotal,
         total_payment: order.totalPayment,
-        code: `OFF-${order.sync_id.slice(0, 8)}`,
+        code: order.code,
         paid_at: now,
         bill_name: order.billName,
         sales_channel: Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null,
@@ -568,11 +573,16 @@ const CheckoutScreen = () => {
       dispatch(setWarning('Bill saved offline.'));
 
       // Build receipt-ready shape
+      const itemsTotalReceipt = orderItems.reduce((s, i) => {
+        const itemTotal = (i.unit_price || 0) * (i.quantity || 0);
+        const addonsTotal = (i.addons || []).reduce((asum, a) => asum + (a.unit_price || 0) * (a.quantity || 0), 0);
+        return s + itemTotal + addonsTotal;
+      }, 0);
       const successData = {
         ...order,
-        total_charges: order.totalPayment || orderItems.reduce((s, i) => s + (i.unit_price || 0) * (i.quantity || 0), 0),
+        total_charges: order.totalPayment || itemsTotalReceipt,
         total_payment: order.totalPayment || 0,
-        code: `OFF-${order.sync_id.slice(0, 8)}`,
+        code: order.code,
         paid_at: order.paidAt || new Date().toISOString(),
         bill_name: order.billName,
         sales_channel: Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null,

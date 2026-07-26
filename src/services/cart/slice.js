@@ -581,18 +581,34 @@ const cartSlice = createSlice({
 
       let preview, body;
       if (isFlatOrder) {
+        // Compute total from items (since totalPayment = 0 for pending save-bills)
+        const computedTotal = (order.items || []).reduce((sum, item) => {
+          const itemTotal = Number(item.unit_price || 0) * Number(item.quantity || 0);
+          const addonsTotal = (item.addons || []).reduce((asum, a) => asum + (Number(a.unit_price || 0) * Number(a.quantity || 0)), 0);
+          return sum + itemTotal + addonsTotal;
+        }, 0);
+        const totalCharges = order.totalPayment || (computedTotal + Number(order.serviceChargeValue || 0));
+
         // Build preview directly from order fields
         preview = {
           id: order.sync_id,
           bill_name: order.billName || '',
-          total_charges: order.totalPayment || 0,
-          total_bill: order.totalPayment || 0,
+          total_charges: totalCharges,
+          total_bill: totalCharges,
           discount_value: order.discountValue || 0,
           is_discount_percentage: order.discountPercentage > 0,
           items: (order.items || []).map(item => ({
             ...item,
             catalog: { name: item.catalog_name, id: item.catalog_id },
             unit_nett: item.unit_price,
+            discount_value: 0,
+            // Wrap flat addons so convertApiOrderToCartItem groups them with type 'checkbox'
+            addons: (item.addons || []).map((a, idx) => ({
+              addon: { id: `oad-${idx}`, name: 'Add-ons', type: 'checkbox' },
+              catalog: { id: a.addon_item_id, name: a.catalog_name || '', unit_price: a.unit_price || 0 },
+              quantity: a.quantity || 1,
+              selected: true,
+            })),
           })),
           membership: order.membershipId ? { id: order.membershipId } : null,
         };

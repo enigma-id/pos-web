@@ -186,6 +186,9 @@ const Cart = ({ onUpdate }) => {
 
       openModal(<SuccessModal data={successData} />, 'w-md');
 
+      // Refresh bills list biar button jadi Open Bill
+      bill();
+
       dispatch(resetCart());
       return; // ⛔️ skip mutation API
     }
