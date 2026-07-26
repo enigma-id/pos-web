@@ -93,13 +93,13 @@ const Cart = ({ onUpdate }) => {
         catalog_id: item.catalog_id || item.id,
         catalog_name: item.name || '',
         quantity: item.quantity,
-        unit_price: item.unit_price || 0,
+        unit_price: Number(item.unit_price) || Number(item.unit_nett) || 0,
         addons: (item.additionals_flat || []).map(a => ({
           addon_group_id: a.addon_group_id,
           addon_item_id: a.addon_item_id,
           catalog_name: a.name || '',
           unit_price: a.unit_price || 0,
-          quantity: a.quantity || 1,
+          quantity: Number(a.quantity || 1) * Number(item.quantity),
         })),
         ...(item.is_custom ? { is_custom: true } : {}),
       }));
