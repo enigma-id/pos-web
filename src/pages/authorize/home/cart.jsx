@@ -146,7 +146,11 @@ const Cart = ({ onUpdate }) => {
 
       dispatch(setWarning('Bill saved offline.'));
 
-      const itemsTotal = orderItems.reduce((s, i) => s + (i.unit_price || 0) * (i.quantity || 0), 0);
+      const itemsTotal = orderItems.reduce((s, i) => {
+        const itemTotal = (i.unit_price || 0) * (i.quantity || 0);
+        const addonsTotal = (i.addons || []).reduce((asum, a) => asum + (a.unit_price || 0) * (a.quantity || 0), 0);
+        return s + itemTotal + addonsTotal;
+      }, 0);
       const totalCharges = itemsTotal + (Number(order.serviceChargeValue) || 0);
 
       const successData = {

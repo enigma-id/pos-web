@@ -338,14 +338,7 @@ const useCart = catalog_id => {
             item.addons.reduce((asum, a) => asum + (a.unit_nett * a.quantity), 0),
           0
         );
-        const serviceCharge = order.serviceChargeValue || 0;
-        const totalCharges = order.totalPayment || (itemsTotal + serviceCharge);
-
-        // Recalculate addon total included in subtotal
-        itemsTransformed.forEach(item => {
-          item.subtotal_nett = (item.unit_nett * item.quantity) +
-            item.addons.reduce((asum, a) => asum + (a.unit_nett * a.quantity), 0);
-        });
+        const totalCharges = order.totalPayment || (itemsTotal + (order.serviceChargeValue || 0));
 
         return {
           id: order.sync_id,
