@@ -398,6 +398,28 @@ export const appendOrderToSession = async (syncId, order, userId) => {
   return existing;
 };
 
+/**
+ * Update billName dari order yang sudah ada di session blob.
+ * Dipake offline update bill name (sebelum sync).
+ */
+export const updateOrderBillName = async (syncId, orderSyncId, billName, userId) => {
+  const db = await ensureDB(userId);
+  const existing = await db.get(STORES.offlineSessions, syncId);
+  if (!existing) throw new Error(`Session not found: ${syncId}`);
+
+  const order = (existing.orders || []).find(o => o.sync_id === orderSyncId);
+  if (!order) throw new Error(`Order not found in session: ${orderSyncId}`);
+
+  order.billName = billName;
+
+  if (existing.syncStatus === 'synced') {
+    existing.syncStatus = 'pending';
+  }
+
+  await db.put(STORES.offlineSessions, existing);
+  return existing;
+};
+
 // ========== TOPUP OPERATIONS ==========
 
 /**

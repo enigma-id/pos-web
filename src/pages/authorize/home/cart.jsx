@@ -12,7 +12,7 @@ import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
 import { buildOfflineTransactionPayload, setWarning } from '../../../services/offline';
-import { appendOrderToSession, getAllSessions, getOrCreateOfflineSession, getOfflinePendingCount } from '../../../services/offline/queue';
+import { appendOrderToSession, getAllSessions, getOrCreateOfflineSession, getOfflinePendingCount, updateOrderBillName } from '../../../services/offline/queue';
 import { setSessions, setPendingCount } from '../../../services/offline/slice';
 import { resetCart } from '../../../services/cart/slice';
 import { v4 as uuidv4 } from 'uuid';
@@ -80,6 +80,30 @@ const Cart = ({ onUpdate }) => {
     const userId = session?.user?.id;
 
     if (isOffline) {
+      // Update nama bill (edit ticket) — update existing, bukan create baru
+      if (CartState?.bill?.from_offline_queue && CartState?.bill?.queue_id) {
+        try {
+          const sessions = await getAllSessions(userId);
+          for (const s of sessions) {
+            const found = (s.orders || []).find(o => o.sync_id === CartState.bill.queue_id);
+            if (found) {
+              await updateOrderBillName(s.sync_id, CartState.bill.queue_id, ticket, userId);
+              break;
+            }
+          }
+          const fresh = await getAllSessions(userId);
+          dispatch(setSessions(fresh));
+          dispatch(setPendingCount(await getOfflinePendingCount(userId)));
+        } catch (err) {
+          dispatch($failure(err));
+          return;
+        }
+        dispatch(resetCart());
+        closeModal();
+        bill();
+        return;
+      }
+
       // Auto-create session kalo start online trus offline
       const active = await getOrCreateOfflineSession(userId, session);
       const syncId = active?.sync_id;

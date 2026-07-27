@@ -26,7 +26,7 @@ const BillModal = ({ mode, count, onBillCreate }) => {
     <>
       <Modal.Header onClose={closeModal}>
         <div className="text-lg font-semibold">
-          {mode === 'open' ? `Open Bills (${count})` : 'Save Bills'}
+          {mode === 'open' ? `Open Bills (${count})` : 'Save Bill'}
         </div>
       </Modal.Header>
       <Modal.Body full={mode === 'open'}>

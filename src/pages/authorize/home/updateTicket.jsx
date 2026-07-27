@@ -11,18 +11,18 @@ const UpdateTicket = ({ data, onSubmit, isLoading }) => {
   const [ticket, setTicket] = React.useState('');
 
   useEffect(() => {
-    setTicket(data?.ticket);
+    setTicket(data?.ticket || data?.bill_name || '');
   }, [data]);
 
   return (
     <>
       <Modal.Header onClose={closeModal}>
-        <div className="text-lg font-semibold">Update Ticket</div>
+        <div className="text-lg font-semibold">Update Bill</div>
       </Modal.Header>
       <Modal.Body>
         <div className="mb-3 py-4">
           <Input
-            label="bill name"
+            label="Bill Name"
             value={ticket}
             onChange={e => setTicket(e?.target?.value)}
             error={FormState?.errors?.ticket}
@@ -37,7 +37,7 @@ const UpdateTicket = ({ data, onSubmit, isLoading }) => {
           className={`btn btn-md btn-primary px-10 text-white ${isLoading ? 'btn-disabled' : ''}`}
           onClick={() => onSubmit(ticket)}
         >
-          Update Ticket{' '}
+          Update Bill{' '}
           {isLoading ? <span className="loading loading-spinner loading-sm"></span> : null}
         </div>
       </Modal.Footer>
