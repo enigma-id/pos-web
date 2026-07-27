@@ -253,7 +253,6 @@ const useCart = catalog_id => {
   };
 
   const bill = async (search = '') => {
-    console.log('[bill] called search:', search, 'isOffline:', !navigator.onLine, 'apiDead:', apiReachable === false);
     let serverData = [];
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     const apiDead = apiReachable === false;
@@ -262,7 +261,6 @@ const useCart = catalog_id => {
       try {
         const res = await triggerBill(search ? { search } : {}).unwrap();
         serverData = res?.data || [];
-        console.log("[bill] online response length:", serverData.length);
         // Online search → simpan di cache search; online no-search → simpan di cache utama
         if (search) {
           setCache(BILLS_CACHE_KEY + "_search", serverData);
@@ -270,17 +268,15 @@ const useCart = catalog_id => {
           setCache(BILLS_CACHE_KEY, serverData);
         }
       } catch (error) {
-        console.log("[bill] online error");
+        // online error
       }
     } else {
       // Offline — selalu baca cache utama, filter client
       serverData = getCache(BILLS_CACHE_KEY) || [];
-      console.log("[bill] offline cache (main) length:", serverData.length);
     }
 
     // Merge offline pending save-bills from queue
     const merged = await mergeOfflineBills(serverData);
-    console.log('[bill] merged length:', merged.length);
 
     if (merged.length > 0 || serverData.length > 0) {
       setMergedBillData(merged);
