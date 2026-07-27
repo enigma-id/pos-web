@@ -17,7 +17,12 @@ const getApiCategory = (item) => {
 const getApiType = (item) => {
   if (item._type === 'topup') return 'topup';
   if (item._type === 'membership') return 'create member';
-  if (item._type === 'session') return item.body?.cash_finished ? 'close session' : 'start session';
+  if (item._type === 'session') {
+    const hasStart = item.body?.cash_started != null;
+    const hasEnd = item.body?.cash_finished != null;
+    if (hasStart && hasEnd) return 'both';
+    return hasEnd ? 'close' : 'start';
+  }
   if (item.status === 'pending') return 'save bill';
   if (item.status === 'completed') return 'checkout';
   return 'order';
@@ -97,6 +102,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
         const item = {
           ...t,
           _type: 'topup',
+          status: s.syncStatus,
           _sessionSyncId: s.sync_id,
           _sessionStatus: s.syncStatus,
         };
@@ -112,6 +118,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
           ...m,
           id: m.sync_id,
           _type: 'membership',
+          status: s.syncStatus,
           _sessionSyncId: s.sync_id,
           _sessionStatus: s.syncStatus,
           transaction_preview: {
@@ -134,7 +141,11 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
   const hasPendingOrFailed = sessions.some(s => s.syncStatus === 'pending' || s.syncStatus === 'failed');
 
   // Merge 'other' into none — we don't show it as a tab
-  const filteredItems = categorized[activeTab] || [];
+  // Bills tab: filter isShow !== false (hide paid/cross-session pending)
+  const filteredItems = (categorized[activeTab] || []).filter(item => {
+    if (activeTab === 'bills') return item.isShow !== false;
+    return true;
+  });
 
   if (!open) return null;
 
@@ -261,7 +272,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
             const apiType = getApiType(item);
             const code = preview?.code || item?.code || `OFF-${item?.sync_id?.slice(0, 8) || item?.id}`;
             const channelName = preview?.channel?.name || item?.salesChannelName || item?.salesChannelId || '-';
-            const paymentName = preview?.payment_method?.name || (item?.paymentMethodId ? '-' : '-');
+            const paymentName = preview?.payment_method?.name || (item?.paymentMethodId ? `Payment #${item.paymentMethodId}` : 'Cash');
             const cashierName = preview?.cashier?.name || preview?.session?.cashier?.name || '-';
             const itemCount = Number(preview?.item_count) || preview?.items?.length || item?.items?.length || 0;
             const totalCharges = Number(preview?.total_charges || preview?.total_bill) || item?.totalPayment || 0;
@@ -275,7 +286,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
             const status = statusConfig[item.status] || statusConfig.pending;
             const itemsList = preview?.items || item?.items || [];
 
-            const isSession = apiType === 'start' || apiType === 'end' || apiType === 'both';
+            const isSession = apiType === 'start' || apiType === 'close' || apiType === 'both';
             // Specialized rendering for Member (topup + create member)
             const isTopup = apiType === 'topup';
             const isCreateMember = apiType === 'create member';

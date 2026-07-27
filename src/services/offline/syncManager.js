@@ -141,7 +141,8 @@ export const syncPendingSessions = async () => {
                 discount_percentage: cd.discount_percentage,
                 discount_value: cd.discount_value,
               })),
-              items: (o.items || []).map(item => ({
+              // Pending → kirim originalItems (snapshot asli biar backend dapet item penuh)
+              items: ((o.status === 'pending' && o.originalItems?.length > 0) ? o.originalItems : (o.items || [])).map(item => ({
                 catalog_id: item.catalog_id,
                 catalog_name: item.catalog_name || '',
                 quantity: item.quantity || 0,
@@ -161,6 +162,26 @@ export const syncPendingSessions = async () => {
               is_offline_mode: true,
               ref_sync_id: o.refSyncId || o.ref_sync_id || '',
               session_sync_id: session.referenceId || session.sync_id,
+              // BARU: origin/paid session tracking + isShow + originalItems
+              origin_session_sync_id: o.originSessionSyncId || '',
+              paid_session_sync_id: o.paidSessionSyncId || '',
+              is_show: o.isShow !== false,
+              original_items: (o.originalItems || []).map(oi => ({
+                catalog_id: oi.catalog_id,
+                catalog_name: oi.catalog_name || '',
+                quantity: oi.quantity || 0,
+                unit_price: oi.unit_price || 0,
+                ...(oi.addons?.length > 0 ? {
+                  addons: oi.addons.map(a => ({
+                    addon_group_id: a.addon_group_id,
+                    addon_item_id: a.addon_item_id,
+                    catalog_name: a.catalog_name || '',
+                    unit_price: a.unit_price || 0,
+                    quantity: a.quantity || 1,
+                  }))
+                } : {}),
+                ...(oi.is_custom ? { is_custom: true } : {}),
+              })),
             })),
             memberships: (session.memberships || []).map(m => ({
               sync_id: m.sync_id || m.card_id,
@@ -389,8 +410,40 @@ export const syncNow = async () => {
   await syncPendingSessions();
 };
 
-export const retryFailedItem = async () => {
-  // Backward compat — no-op in Phase 1
+export const retryFailedItem = async (itemId) => {
+  if (!storeRef || !itemId) return false;
+  const userId = getCurrentUserId();
+  if (!userId) return false;
+
+  const sessions = await getAllSessions(userId);
+
+  // Cari di orders
+  for (const s of sessions) {
+    if ((s.orders || []).some(o => o.sync_id === itemId)) {
+      await setSyncStatus(s.sync_id, 'pending', { userId });
+      syncPendingSessions();
+      return true;
+    }
+  }
+
+  // Cari di topups/memberships
+  const found = sessions.find(s =>
+    (s.topups || []).some(t => t.sync_id === itemId) ||
+    (s.memberships || []).some(m => m.sync_id === itemId)
+  );
+  if (found) {
+    await setSyncStatus(found.sync_id, 'pending', { userId });
+    syncPendingSessions();
+    return true;
+  }
+
+  // Maybe session-level ID
+  if (sessions.find(s => s.sync_id === itemId)) {
+    await setSyncStatus(itemId, 'pending', { userId });
+    syncPendingSessions();
+    return true;
+  }
+
   return false;
 };
 
@@ -405,7 +458,37 @@ export const removeFailedItem = async (itemId) => {
     for (const s of sessions) {
       const orderIdx = (s.orders || []).findIndex(o => o.sync_id === itemId);
       if (orderIdx !== -1) {
-        s.orders.splice(orderIdx, 1);
+        const orders = [...(s.orders || [])];
+        orders.splice(orderIdx, 1);
+        s.orders = orders;
+        const db = await ensureDB(userId);
+        await db.put(STORES.offlineSessions, s);
+        const fresh = await getAllSessions(userId);
+        storeRef.dispatch(setSessions(fresh));
+        storeRef.dispatch(setPendingCount(await getOfflinePendingCount(userId)));
+        storeRef.dispatch(setFailedCount(fresh.filter(x => x.syncStatus === 'failed').length));
+        return true;
+      }
+
+      const topupIdx = (s.topups || []).findIndex(t => t.sync_id === itemId);
+      if (topupIdx !== -1) {
+        const topups = [...(s.topups || [])];
+        topups.splice(topupIdx, 1);
+        s.topups = topups;
+        const db = await ensureDB(userId);
+        await db.put(STORES.offlineSessions, s);
+        const fresh = await getAllSessions(userId);
+        storeRef.dispatch(setSessions(fresh));
+        storeRef.dispatch(setPendingCount(await getOfflinePendingCount(userId)));
+        storeRef.dispatch(setFailedCount(fresh.filter(x => x.syncStatus === 'failed').length));
+        return true;
+      }
+
+      const memIdx = (s.memberships || []).findIndex(m => m.sync_id === itemId);
+      if (memIdx !== -1) {
+        const mems = [...(s.memberships || [])];
+        mems.splice(memIdx, 1);
+        s.memberships = mems;
         const db = await ensureDB(userId);
         await db.put(STORES.offlineSessions, s);
         const fresh = await getAllSessions(userId);

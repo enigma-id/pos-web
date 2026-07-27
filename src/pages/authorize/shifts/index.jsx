@@ -23,8 +23,10 @@ import useModal from '../../../components/ui/modal/hook';
 import useOrder from '../../../services/sales/order/hook';
 import useSession from '../../../services/sales/session/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
+import { getCache, setCache } from '../../../utils/cache';
 import useDrawer from '../../../utils/drawer';
 import { usePrintWindow } from '../../../utils/print';
+import { computeOfflineSummary } from '../../../services/sales/session/hook';
 
 const ShiftScreen = () => {
   const [detail, setDetail] = React.useState(null);
@@ -46,6 +48,8 @@ const ShiftScreen = () => {
   const offlineSessions = useSelector(state => state.Offline.sessions);
   const isOnline = useSelector(state => state?.Offline?.isOnline !== false);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable !== false);
+  const lastSyncTime = useSelector(state => state?.Offline?.lastSyncTime);
+  const offlinePendingCount = useSelector(state => state?.Offline?.pendingCount);
   const authUser = useSelector(state => state?.Auth?.user);
 
   const isOffline = !isOnline || !apiReachable;
@@ -87,6 +91,18 @@ const ShiftScreen = () => {
     );
   };
 
+  // Fetch on mount & after sync (mirror history/bills pattern)
+  React.useEffect(() => {
+    if (isOffline) return;
+    session({ search, limit: itemsPerPage, page: 1 });
+  }, [lastSyncTime]);
+
+  // Re-read cache when offline pending count changes (mirror history)
+  React.useEffect(() => {
+    if (isOnline && apiReachable !== false) return;
+    session();
+  }, [offlinePendingCount]);
+
   React.useEffect(() => {
     setCurrentPage(1);
   }, [search]);
@@ -113,10 +129,17 @@ const ShiftScreen = () => {
 
   React.useEffect(() => {
     if (isOffline) return;
-    if (sessionResult?.isSuccess) {
-      show(sessionResult?.data?.data?.[selectedIndex]?.id);
+    if (sessionResult?.isSuccess && data[0]) {
+      show(data[0]?.id);
     }
-  }, [sessionResult, selectedIndex, isOffline]);
+  }, [sessionResult, isOffline, data]);
+
+  React.useEffect(() => {
+    if (isOffline) return;
+    if (sessionResult?.isSuccess && data[selectedIndex] && selectedIndex > 0) {
+      show(data[selectedIndex]?.id);
+    }
+  }, [selectedIndex, data]);
 
   React.useEffect(() => {
     if (showResult?.isSuccess) {
@@ -130,82 +153,19 @@ const ShiftScreen = () => {
     }
   }, [showOrderResult]);
 
-  // Offline: set detail dari offlineSessions saat selectedIndex berubah
-  React.useEffect(() => {
-    if (!isOffline) return;
-    const filtered = offlineSessions
-      .filter(s => s.session.close_at)
-      .map(s => ({
-        id: s.sync_id,
-        cashier: { name: authUser?.name || '-' },
-        started_at: s.session.open_at,
-        finished_at: s.session.close_at,
-        cash_started: s.session.cash_started,
-        cash_finished: s.session.cash_finished,
-        transaction_date: s.session.open_at,
-        summary: {
-          sales: {
-            total_sales: s.orders?.reduce((sum, o) => sum + (o.totalPayment || 0), 0) || 0,
-            grand_total: 0,
-            total_discount: 0,
-            total_after_discount: 0,
-            total_service: 0,
-            outstanding_bill: 0,
-            outstanding_bill_payment: 0,
-          },
-          cash: { expected_cash: s.session.cash_started, topup_cash: 0 },
-          payment_methods: [],
-          category_solds: [],
-          topups: [],
-        },
-        orders: s.orders || [],
-      }));
+  // Data source: offline vs API (useMemo biar hoisted before Effects)
+  const data = React.useMemo(() => {
+    if (isOffline) {
+      const cached = getCache('cache_shifts') || [];
+      const offlineRefIds = new Set((offlineSessions || []).map(s => s.referenceId).filter(Boolean));
 
-    if (filtered[selectedIndex]) {
-      setDetail(filtered[selectedIndex]);
-    }
-  }, [selectedIndex, isOffline]);
-
-  // Offline: set detail saat session list loaded
-  React.useEffect(() => {
-    if (!isOffline || !offlineSessions?.length) return;
-    const filtered = offlineSessions
-      .filter(s => s.session.close_at)
-      .map(s => ({
-        id: s.sync_id,
-        cashier: { name: authUser?.name || '-' },
-        started_at: s.session.open_at,
-        finished_at: s.session.close_at,
-        cash_started: s.session.cash_started,
-        cash_finished: s.session.cash_finished,
-        transaction_date: s.session.open_at,
-        summary: {
-          sales: {
-            total_sales: s.orders?.reduce((sum, o) => sum + (o.totalPayment || 0), 0) || 0,
-            grand_total: 0,
-            total_discount: 0,
-            total_after_discount: 0,
-            total_service: 0,
-            outstanding_bill: 0,
-            outstanding_bill_payment: 0,
-          },
-          cash: { expected_cash: s.session.cash_started, topup_cash: 0 },
-          payment_methods: [],
-          category_solds: [],
-          topups: [],
-        },
-        orders: s.orders || [],
-      }));
-
-    if (filtered[0] && !detail) {
-      setDetail(filtered[0]);
-    }
-  }, [offlineSessions, isOffline]);
-
-  // Data source: offline vs API
-  const data = isOffline
-    ? offlineSessions
-        .filter(s => s.session.close_at)   // hanya yg udah di-close
+      const offlineEntries = (offlineSessions || [])
+        .filter(s => {
+          // Prioritaskan blob yg punya data (orders/topups/close)
+          if (s.session.close_at || s.orders?.length > 0 || s.topups?.length > 0) return true;
+          // Skip blob yg cuma reference & gak punya data
+          return false;
+        })
         .map(s => ({
           id: s.sync_id,
           cashier: { name: authUser?.name || '-' },
@@ -213,8 +173,40 @@ const ShiftScreen = () => {
           finished_at: s.session.close_at,
           status: 'closed',
           transaction_date: s.session.open_at,
-        }))
-    : sessionResult?.data?.data || [];
+          _offline: true,
+        }));
+
+      // Skip cache entries yg referenceId-nya udah terwakili oleh offlineEntries
+      const filteredCache = cached.filter(c => !offlineRefIds.has(String(c.id)));
+      return [...filteredCache, ...offlineEntries];
+    }
+    return sessionResult?.data?.data || [];
+  }, [isOffline, offlineSessions, sessionResult, authUser]);
+
+  // Offline: set detail from merged data
+  React.useEffect(() => {
+    if (!isOffline || !data.length) return;
+    const selected = data[selectedIndex];
+    if (!selected) return;
+    const session = offlineSessions.find(s => s.sync_id === selected.id);
+    if (session) {
+      const summarySessionId = session.referenceId || session.sync_id;
+      console.log('[SHIFT DETAIL] session:', { selectedId: selected.id, sync_id: session.sync_id, referenceId: session.referenceId, summarySessionId, orders: session.orders?.length, open_at: session.session?.open_at, cash_started: session.session?.cash_started });
+      const summary = computeOfflineSummary(session, summarySessionId, authUser);
+      console.log('[SHIFT DETAIL] summary sales:', summary?.summary?.sales);
+      setDetail(summary);
+    } else {
+      setDetail(selected);
+    }
+  }, [selectedIndex, isOffline, data]);
+
+  // Cache server data pas online
+  React.useEffect(() => {
+    if (sessionResult?.isSuccess && !isOffline) {
+      const serverData = sessionResult?.data?.data || [];
+      if (!search) setCache('cache_shifts', serverData);
+    }
+  }, [sessionResult]);
 
   const meta = sessionResult?.data?.meta || {};
   const total = meta?.total || 0;
@@ -230,10 +222,9 @@ const ShiftScreen = () => {
               <div className="absolute left-4">
                 <SearchIcon />
               </div>
-
               <input
                 name="search"
-                placeholder="Search session..."
+                placeholder="Search..."
                 value={search}
                 onChange={e => {
                   setSearch(e.target.value);
@@ -255,7 +246,15 @@ const ShiftScreen = () => {
                 </div>
               </div>
             )}
-            {data.map((item, index) => (
+            {data.filter(item => {
+              if (!search) return true;
+              const q = search.toLowerCase();
+              return (
+                (item?.cashier?.name || '').toLowerCase().includes(q) ||
+                (item?.started_at || '').toLowerCase().includes(q) ||
+                (item?.finished_at || '').toLowerCase().includes(q)
+              );
+            }).map((item, index) => (
               <div
                 key={item.id}
                 onClick={() => setSelectedIndex(index)}

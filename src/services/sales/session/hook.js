@@ -1,11 +1,9 @@
 // services/sales/session/hook.js
-import { useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
 import {
   useStartMutation,
   useEndMutation,
-  useUpdateDeviceMutation,
   useLazySummaryQuery,
   useLazySessionQuery,
   useLazyShowSessionQuery,
@@ -40,16 +38,40 @@ import { syncPendingSessions } from '../../offline/syncManager';
 
 // ========== OFFLINE SUMMARY HELPER ==========
 
-const computeOfflineSummary = (session, authUser) => {
+const computeOrderItemTotal = (items = []) => {
+  return items.reduce((sum, i) => {
+    const itemTotal = (Number(i.unit_price) || 0) * (Number(i.quantity) || 0);
+    const addonsTotal = (i.addons || []).reduce((asum, a) =>
+      asum + (Number(a.unit_price) || 0) * (Number(a.quantity) || 0), 0
+    );
+    return sum + itemTotal + addonsTotal;
+  }, 0);
+};
+
+export const computeOfflineSummary = (session, currentSessionSyncId, authUser) => {
   const orders = session.orders || [];
   const topups = session.topups || [];
 
-  const completedOrders = orders.filter(o => o.status === 'completed');
-  const pendingOrders = orders.filter(o => o.status === 'pending');
+  const completedOrders = orders.filter(o =>
+    o.status === 'completed' && o.paidSessionSyncId === currentSessionSyncId
+  );
+  const pendingOrders = orders.filter(o =>
+    o.status === 'pending' && o.originSessionSyncId === currentSessionSyncId && o.isShow !== false
+  );
+  const crossSessionOrders = orders.filter(o =>
+    o.status === 'completed' && o.originSessionSyncId && o.paidSessionSyncId &&
+    o.originSessionSyncId !== o.paidSessionSyncId
+  );
+
   const totalSales = completedOrders.reduce((sum, o) => sum + (o.totalPayment || 0), 0);
   const totalDiscount = completedOrders.reduce((sum, o) => sum + (o.discountValue || 0), 0);
+  const totalService = completedOrders.reduce((sum, o) => sum + (o.serviceChargeValue || 0), 0);
   const totalAfterDiscount = totalSales - totalDiscount;
-  const outstandingBill = pendingOrders.reduce((sum, o) => sum + (o.totalPayment || 0), 0);
+  const grandTotal = totalAfterDiscount + totalService;
+  const outstandingBill = pendingOrders.reduce((sum, o) => {
+    return sum + (o.totalPayment || computeOrderItemTotal(o.items));
+  }, 0);
+  const outstandingBillPayment = crossSessionOrders.reduce((sum, o) => sum + (o.totalPayment || 0), 0);
 
   // Payment methods breakdown
   const pmMap = {};
@@ -61,7 +83,6 @@ const computeOfflineSummary = (session, authUser) => {
   });
 
   // Topup summary
-  const totalTopup = topups.reduce((sum, t) => sum + (t.nominal || 0), 0);
   const topupCash = topups.filter(t => t.payment_type === 'cash').reduce((sum, t) => sum + (t.nominal || 0), 0);
 
   return {
@@ -75,10 +96,10 @@ const computeOfflineSummary = (session, authUser) => {
         total_sales: totalSales,
         total_discount: totalDiscount,
         total_after_discount: totalAfterDiscount,
-        total_service: 0,
-        grand_total: totalAfterDiscount,
+        total_service: totalService,
+        grand_total: grandTotal,
         outstanding_bill: outstandingBill,
-        outstanding_bill_payment: outstandingBill,
+        outstanding_bill_payment: outstandingBillPayment,
       },
       cash: {
         expected_cash: (session.session.cash_started || 0) + totalSales + topupCash,
@@ -124,16 +145,6 @@ const getDeviceInfo = async () => {
   return info;
 };
 
-// Module-level ref so external modules can stop tracking (e.g. on logout)
-export const trackingRef = { current: null };
-
-export const stopDeviceTrackingGlobal = () => {
-  if (trackingRef.current) {
-    clearInterval(trackingRef.current);
-    trackingRef.current = null;
-  }
-};
-
 const useSession = () => {
   const dispatch = useDispatch();
   const isOnline = useSelector(state => state?.Offline?.isOnline !== false);
@@ -146,26 +157,12 @@ const useSession = () => {
 
   const [startMutation, startResult] = useStartMutation();
   const [endMutation, endResult] = useEndMutation();
-  const [updateDeviceMutation, updateDeviceResult] = useUpdateDeviceMutation();
 
   const [triggerSummary, summaryResult] = useLazySummaryQuery();
   const [triggerSession, sessionResult] = useLazySessionQuery();
   const [triggerShow, showResult] = useLazyShowSessionQuery();
 
   const { refreshCatalog } = useCatalog();
-
-  const sendDeviceData = useCallback(async () => {
-    const deviceInfo = await getDeviceInfo();
-    if (deviceInfo.latitude != null || deviceInfo.battery_level != null) {
-      try {
-        await updateDeviceMutation(deviceInfo).unwrap();
-      } catch (err) {
-        if (import.meta.env.DEV) {
-          console.error('Device update error:', err);
-        }
-      }
-    }
-  }, [updateDeviceMutation]);
 
   const start = async data => {
     const deviceInfo = await getDeviceInfo();
@@ -221,25 +218,7 @@ const useSession = () => {
     }
   };
 
-  const startDeviceTracking = useCallback(
-    (intervalMs = 300000) => {
-      stopDeviceTracking();
-      trackingRef.current = setInterval(() => {
-        sendDeviceData();
-      }, intervalMs);
-    },
-    [sendDeviceData]
-  );
-
-  const stopDeviceTracking = useCallback(() => {
-    if (trackingRef.current) {
-      clearInterval(trackingRef.current);
-      trackingRef.current = null;
-    }
-  }, []);
-
   const end = async data => {
-    stopDeviceTracking();
 
     if (!networkOk) {
       // ===== OFFLINE END =====
@@ -337,7 +316,9 @@ const useSession = () => {
         const updated = allSessions.find(s => s.sync_id === activeId.id);
 
         if (updated) {
-          computedSummary = computeOfflineSummary(updated, authUser);
+          const summarySessionId = updated.referenceId || updated.sync_id;
+          console.log('[OFFLINE END SESSION] session:', updated.sync_id, 'summarySessionId:', summarySessionId, 'orders:', updated.orders?.length);
+          computedSummary = computeOfflineSummary(updated, summarySessionId, authUser);
         }
       }
 
@@ -374,8 +355,33 @@ const useSession = () => {
   };
 
   const summary = async () => {
+    // Skip API call kalo offline — langsung compute dari IndexedDB
+    if (!networkOk) {
+      console.log('[FETCH SUMMARY] offline — skip API, compute from cache');
+      const activeId = await getActiveSessionId(authSession, userId);
+      if (activeId) {
+        const allSessions = await getAllSessions(userId);
+        let sessionData = allSessions.find(s => s.sync_id === activeId.id);
+        if (!sessionData) {
+          sessionData = allSessions.find(s => s.referenceId === activeId.id);
+        }
+        if (sessionData) {
+          const currentSyncId = sessionData.referenceId || sessionData.sync_id;
+          console.log('[SUMMARY OFFLINE] sessionData:', { sync_id: sessionData.sync_id, referenceId: sessionData.referenceId, currentSyncId, orders: sessionData.orders?.length });
+          const computedSummary = computeOfflineSummary(sessionData, currentSyncId, authSession?.user || authUser);
+          console.log('[SUMMARY OFFLINE] computedSummary:', computedSummary?.summary?.sales);
+          dispatch(setOfflineSummary(computedSummary));
+          return;
+        }
+      }
+      dispatch(invalidateSession());
+      return;
+    }
+
+    console.log('[FETCH SUMMARY] calling /sales/session/summary');
     try {
       const res = await triggerSummary().unwrap();
+      console.log('[FETCH SUMMARY] response data:', JSON.stringify(res?.data, null, 2));
       if (res?.data) {
         // Cache ke offlineSummary (dipakai render, fallback offline, & print)
         dispatch(setOfflineSummary(res.data));
@@ -394,7 +400,10 @@ const useSession = () => {
           sessionData = allSessions.find(s => s.referenceId === activeId.id);
         }
         if (sessionData) {
-          const computedSummary = computeOfflineSummary(sessionData, authSession?.user || authUser);
+          const currentSyncId = sessionData.referenceId || sessionData.sync_id || activeId.id;
+          console.log('[SUMMARY CATCH] sessionData:', { sync_id: sessionData.sync_id, referenceId: sessionData.referenceId, currentSyncId, open_at: sessionData.session?.open_at, cash_started: sessionData.session?.cash_started, orders: sessionData.orders?.length });
+          const computedSummary = computeOfflineSummary(sessionData, currentSyncId, authSession?.user || authUser);
+          console.log('[SUMMARY CATCH] computedSummary:', computedSummary?.summary?.sales);
 
           dispatch(setOfflineSummary(computedSummary));
           return;
@@ -438,10 +447,6 @@ const useSession = () => {
     sessionResult,
     show,
     showResult,
-    sendDeviceData,
-    startDeviceTracking,
-    stopDeviceTracking,
-    updateDeviceResult,
   };
 };
 

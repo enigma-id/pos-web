@@ -260,9 +260,11 @@ function calculateAdditionalsPerItem(additionals = []) {
 }
 
 function recalculateGrandTotalWithServiceCharge(state) {
+  const baseGrandTotal = Math.max(0, state.meta.subtotal - state.discount.cart.amount);
+
   if (state.meta.service_charge_percentage > 0) {
     state.meta.service_charge_value = Math.ceil(
-      (state.meta.subtotal - state.discount.cart.amount) *
+      baseGrandTotal *
         (state.meta.service_charge_percentage / 100)
     );
   } else {
@@ -273,7 +275,7 @@ function recalculateGrandTotalWithServiceCharge(state) {
     }
   }
 
-  state.meta.grand_total += state.meta.service_charge_value;
+  state.meta.grand_total = baseGrandTotal + state.meta.service_charge_value;
 }
 
 // Convert offline queue item (open-bill) to cart item format
@@ -627,6 +629,13 @@ const cartSlice = createSlice({
           preview?.membership || (body?.membership_id ? { id: body.membership_id } : null),
         from_offline_queue: true,
         queue_id: order?.sync_id || order?.id,
+        // BARU: untuk deteksi cross-session & hitung sisa split
+        originSyncId: order.originSessionSyncId || body?.originSessionSyncId || order._sessionData?.sync_id || null,
+        originalItems: order.originalItems || body?.originalItems || null,
+        itemSnapshot: (order.items || body?.items || preview?.items || []).map(i => ({
+          catalog_id: i.catalog_id || i.catalog?.id,
+          quantity: i.quantity || 0,
+        })),
       };
 
       // Reset cart items

@@ -8,7 +8,8 @@ import { PaypassIcon } from '../../../components/ui/icon';
 import TopupReceipt from '../../../components/ui/topup-receipt';
 import useMembership from '../../../services/membership/hook';
 import { appendTopupToSession, getAllSessions, getOfflinePendingCount, getOrCreateOfflineSession } from '../../../services/offline/queue';
-import { setSessions, setPendingCount, setWarning } from '../../../services/offline/slice';
+import { setSessions, setPendingCount, setOfflineSummary, setWarning } from '../../../services/offline/slice';
+import { computeOfflineSummary } from '../../../services/sales/session/hook';
 import { updateMemberCacheSaldo, getCache, setCache } from '../../../utils/cache';
 import { currencyFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
@@ -90,11 +91,16 @@ const CardContent = ({ data, onClose }) => {
           />
         );
 
-        // Refresh Redux sessions
+        // Refresh Redux sessions & recompute summary
         const fresh = await getAllSessions(userId);
         dispatch(setSessions(fresh));
         const c = await getOfflinePendingCount(userId);
         dispatch(setPendingCount(c));
+        const activeSession = fresh.find(s => s.sync_id === syncId);
+        if (activeSession) {
+          const s = computeOfflineSummary(activeSession, syncId, authUser || authSession?.user);
+          dispatch(setOfflineSummary(s));
+        }
 
         topupSubmitted.current = false;
         onClose?.();

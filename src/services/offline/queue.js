@@ -152,12 +152,13 @@ export const getOrCreateOfflineSession = async (userId, authSession) => {
     // Buat baru
     const sync_id = uuidv4();
     const now = getISO();
+    const serverSession = authSession?.sales_session || {};
     const doc = {
       sync_id,
       referenceId: serverId,
       session: {
-        open_at: now,
-        cash_started: 0,
+        open_at: serverSession.start_at || serverSession.started_at || now,
+        cash_started: serverSession.cash_started || 0,
         close_at: null,
         cash_finished: null,
       },

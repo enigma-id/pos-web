@@ -51,13 +51,6 @@ export const salesSessionApi = createApi({
         method: 'GET',
       }),
     }),
-    updateDevice: builder.mutation({
-      query: payload => ({
-        url: '/sales/session/device',
-        method: 'PUT',
-        body: payload,
-      }),
-    }),
   }),
 });
 
@@ -65,7 +58,6 @@ export const {
   useStartMutation,
   useEndMutation,
   useSyncMutation,
-  useUpdateDeviceMutation,
   useLazySummaryQuery,
   useLazySessionQuery,
   useLazyShowSessionQuery,

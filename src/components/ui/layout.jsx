@@ -165,7 +165,7 @@ const Navbar = () => {
   const User = useSelector(state => state?.Auth?.session?.user);
   const SalesSession = useSelector(state => state?.SalesSession);
 
-  const { summary, startDeviceTracking, stopDeviceTracking } = useSession();
+  const { summary } = useSession();
   const { showSummary } = useSidebar();
 
   const location = useLocation();
@@ -193,15 +193,6 @@ const Navbar = () => {
     summary();
   }, []);
 
-  // Start/stop device tracking based on active session
-  useEffect(() => {
-    if (SalesSession?.hasSession) {
-      startDeviceTracking();
-    } else {
-      stopDeviceTracking();
-    }
-  }, [SalesSession?.hasSession, startDeviceTracking, stopDeviceTracking]);
-
   return (
     <div
       className={`nav-container flex flex-1 flex-col shadow transition-all duration-200 ease-in-out`}
@@ -226,7 +217,7 @@ const Navbar = () => {
           <small>Member</small>
         </div>
 
-        {User?.role === "manager" && (
+        {User?.role === 'manager' && (
           <div
             className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'shifts')}`}
             onClick={() => navigate('/shifts')}
@@ -251,7 +242,6 @@ const Navbar = () => {
           <ReceiptIcon />
           <small>Saved Bills</small>
         </div>
-
       </div>
 
       <div className="mb-5">

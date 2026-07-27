@@ -57,7 +57,10 @@ const HistoryScreen = () => {
 
   // Search online → panggil endpoint; kosong → baca cache
   React.useEffect(() => {
-    history(search ? { search } : {});
+    const t = setTimeout(() => {
+      history(search ? { search } : {});
+    }, search ? 1000 : 0);
+    return () => clearTimeout(t);
   }, [search]);
 
   // Re-read cache when offline pending count changes

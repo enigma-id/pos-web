@@ -13,7 +13,8 @@ import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
 import { buildOfflineTransactionPayload, setWarning } from '../../../services/offline';
 import { appendOrderToSession, getAllSessions, getOrCreateOfflineSession, getOfflinePendingCount, updateOrderBillName, updateOrderInSession } from '../../../services/offline/queue';
-import { setSessions, setPendingCount } from '../../../services/offline/slice';
+import { setSessions, setPendingCount, setOfflineSummary } from '../../../services/offline/slice';
+import { computeOfflineSummary } from '../../../services/sales/session/hook';
 import { resetCart, selectedBill } from '../../../services/cart/slice';
 import { v4 as uuidv4 } from 'uuid';
 import { store } from '../../../services/store';
@@ -132,7 +133,7 @@ const Cart = ({ onUpdate }) => {
             }));
 
             const discountCats = CartState?.discount?.category?.filter(
-              (cat) => cat && (cat.discount_value > 0)
+              (cat) => cat && (cat.discount_value > 0) && ['percentage', 'nominal'].includes(cat?.discount_type)
             )?.map((cat) => ({
               category_id: cat.id,
               ...(cat.discount_type === 'nominal'
@@ -143,10 +144,17 @@ const Cart = ({ onUpdate }) => {
             const now = new Date();
             const code = `${now.toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
 
+            const oldOriginId = oldSession.referenceId || oldSession.sync_id;
+
+            console.log('[CART SAVE BILL] update:', JSON.stringify({ syncId: oldSession.sync_id, orderId: oldSyncId, billName: ticket, items: orderItems.length, originSessionSyncId: oldOriginId, paidSessionSyncId: null, isShow: true, orderItems }, null, 2));
+
             await updateOrderInSession(oldSession.sync_id, oldSyncId, {
               code,
               billName: ticket,
               items: orderItems,
+              originalItems: orderItems,
+              paidSessionSyncId: null,
+              isShow: true,
               categoryDiscounts: discountCats || [],
               discountPercentage: CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
               discountValue: CartState?.discount?.cart?.type === 'nominal' ? CartState?.discount?.cart?.value : 0,
@@ -161,6 +169,10 @@ const Cart = ({ onUpdate }) => {
             const fresh = await getAllSessions(userId);
             dispatch(setSessions(fresh));
             dispatch(setPendingCount(await getOfflinePendingCount(userId)));
+            const activeSession = fresh.find(s => s.sync_id === oldSession.sync_id);
+            if (activeSession) {
+              dispatch(setOfflineSummary(computeOfflineSummary(activeSession, oldSession.referenceId || oldSession.sync_id, session?.user)));
+            }
 
             const itemsTotal = orderItems.reduce((s, i) => {
               const itemTotal = (i.unit_price || 0) * (i.quantity || 0);
@@ -208,6 +220,8 @@ const Cart = ({ onUpdate }) => {
         dispatch(setWarning('No active session. Please start a session first.'));
         return;
       }
+      // Session ID untuk originSessionSyncId — pake referenceId kalo start online
+      const originId = active.referenceId || syncId;
 
       const allItems = [...(CartState?.items?.list || []), ...(CartState?.items?.bill || [])];
       const orderItems = allItems.map(item => ({
@@ -225,13 +239,16 @@ const Cart = ({ onUpdate }) => {
         ...(item.is_custom ? { is_custom: true } : {}),
       }));
 
-      const orderSyncId = uuidv4();
+      const orderId = uuidv4();
       const now = new Date();
       const code = `${now.toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
       const order = {
-        sync_id: orderSyncId,
+        sync_id: orderId,
         code,
-        sessionSyncId: syncId,
+        originSessionSyncId: originId,
+        paidSessionSyncId: null,
+        isShow: true,
+        originalItems: orderItems,
         salesChannelId: Channel?.selectedChannel?.id,
         salesChannelName: Channel?.selectedChannel?.name,
         paymentMethodId: null,
@@ -252,6 +269,8 @@ const Cart = ({ onUpdate }) => {
         refSyncId: '',
       };
 
+      console.log('[CART SAVE BILL] create:', JSON.stringify({ syncId, originId, orderId, billName: ticket, items: orderItems.length, originSessionSyncId: originId, paidSessionSyncId: null, isShow: true, originalItems: order.originalItems, orderItems }, null, 2));
+
       try {
         await appendOrderToSession(syncId, order, userId);
       } catch (err) {
@@ -263,6 +282,10 @@ const Cart = ({ onUpdate }) => {
         const fresh = await getAllSessions(userId);
         dispatch(setSessions(fresh));
         dispatch(setPendingCount(await getOfflinePendingCount(userId)));
+        const activeSession = fresh.find(s => s.sync_id === syncId);
+        if (activeSession) {
+          dispatch(setOfflineSummary(computeOfflineSummary(activeSession, active.referenceId || syncId, session?.user)));
+        }
       } catch {}
 
       dispatch(setWarning('Bill saved offline.'));
@@ -317,7 +340,7 @@ const Cart = ({ onUpdate }) => {
     const discount_categories = CartState?.discount?.category?.filter(
       (cat) =>
         cat &&
-        (cat.discount_value > 0)
+        (cat.discount_value > 0) && ['percentage', 'nominal'].includes(cat?.discount_type)
       )?.map((cat) => ({
         category_id: cat.id,
         ...(cat.discount_type === 'nominal'
@@ -539,6 +562,7 @@ const Cart = ({ onUpdate }) => {
         data={data}
         isLoading={billResult?.isLoading}
         onSubmit={v => onBillCreate(v)}
+        onClose={() => { setUpdateTicket(false); updateTicketRef.current = false; }}
       />,
       'w-md'
     );

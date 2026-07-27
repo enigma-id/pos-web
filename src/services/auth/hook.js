@@ -13,7 +13,6 @@ import { $failure } from '../form/action';
 import { getOfflinePendingCount, deleteUserDB } from '../offline/queue';
 import { syncPendingSessions } from '../offline/syncManager';
 import { clearSelectedChannel } from '../sales/channel/slice';
-import { stopDeviceTrackingGlobal } from '../sales/session/hook';
 import { invalidateSession } from '../sales/session/slice';
 import { $reset } from '../table/action';
 
@@ -73,7 +72,7 @@ const useAuth = () => {
     // Capture userId before dispatch(logout) clears state
     const userId = stateUser;
 
-    stopDeviceTrackingGlobal();
+    // Device tracking removed — no-op
     clearCatalogCache();
     clearSalesCache();
     dispatch(resetCart());

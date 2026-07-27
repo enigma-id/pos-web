@@ -45,6 +45,7 @@ const CloseSection = () => {
 
   const doEndSession = () => {
     const payload = { cash_finished: Number(cash) };
+    console.log('[CLOSE SESSION] end payload:', payload, 'offlineSummary:', offlineSummary);
     end(payload);
   };
 

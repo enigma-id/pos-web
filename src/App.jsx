@@ -5,12 +5,14 @@ import AuthorizeRouter from './pages/authorize/router.jsx';
 import UnauthorizeRouter from './pages/unauthorize/router.jsx';
 import useAuth from './services/auth/hook.js';
 import { useLazyHistoryQuery } from './services/sales/order/action';
+import { useLazySessionQuery } from './services/sales/session/action';
 import { useLazyGetMethodQuery } from './services/cart/action';
 import { setPaymentMethodsCache } from './utils/cache';
 import { getCache, setCache } from './utils/cache';
 import { checkAppVersion } from './utils/checkVersion.jsx';
 
 const HISTORY_CACHE_KEY = 'cache_order_history';
+const SHIFTS_CACHE_KEY = 'cache_shifts';
 
 checkAppVersion();
 
@@ -18,6 +20,7 @@ const App = () => {
   const isAuthenticated = useSelector(state => state.Auth?.isAuthenticated);
   const channelId = useSelector(state => state?.SalesChannel?.selectedChannel?.id);
   const [triggerHistory] = useLazyHistoryQuery();
+  const [triggerSession] = useLazySessionQuery();
   const [triggerPaymentMethod] = useLazyGetMethodQuery();
 
   const { getUser } = useAuth();
@@ -40,6 +43,17 @@ const App = () => {
         const data = res?.data || [];
         if (data.length > 0) {
           setCache(HISTORY_CACHE_KEY, data);
+        }
+      } catch {
+        // Silently fail
+      }
+
+      // Pre-fetch shifts (sessions)
+      try {
+        const res = await triggerSession({ limit: 25 }).unwrap();
+        const data = res?.data || [];
+        if (data.length > 0) {
+          setCache(SHIFTS_CACHE_KEY, data);
         }
       } catch {
         // Silently fail

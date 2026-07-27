@@ -60,7 +60,10 @@ const BillScreen = () => {
 
   // Search online → fetch; kosong → baca cache (online/offline sama)
   React.useEffect(() => {
-    bill(search);
+    const t = setTimeout(() => {
+      bill(search);
+    }, search ? 1000 : 0);
+    return () => clearTimeout(t);
   }, [search]);
 
   // Reset to first item on new data
