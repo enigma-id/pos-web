@@ -17,7 +17,7 @@ import { usePrintWindow } from '../../../utils/print';
 
 const HistoryScreen = () => {
   const [detail, setDetail] = React.useState(null);
-  // const [search, setSearch] = React.useState('');
+  const [search, setSearch] = React.useState('');
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [data, setData] = React.useState([]);
   const isOnline = useSelector(state => state?.Offline?.isOnline);
@@ -54,6 +54,11 @@ const HistoryScreen = () => {
   React.useEffect(() => {
     history();
   }, [lastSyncTime]);
+
+  // Search online → panggil endpoint; kosong → baca cache
+  React.useEffect(() => {
+    history(search ? { search } : {});
+  }, [search]);
 
   // Re-read cache when offline pending count changes
   const offlinePendingCount = useSelector(state => state?.Offline?.pendingCount);
@@ -100,7 +105,7 @@ const HistoryScreen = () => {
     <div className="flex h-screen">
       {/* Sidebar */}
       <div className="border-base-200 flex w-100 flex-col overflow-y-auto border-r border-l bg-white">
-        {/* <div className="h-16">
+        <div className="h-16">
           <div className="border-base-200 relative flex h-full w-full items-center border-b border-l">
             <div className="absolute left-4">
               <SearchIcon />
@@ -114,10 +119,20 @@ const HistoryScreen = () => {
               className="h-full w-full pl-15 focus-visible:outline-none!"
             />
           </div>
-        </div> */}
+        </div>
 
         <div className="flex-1 overflow-y-auto">
-          {data?.map((item, index) => (
+          {data?.filter(item => {
+            if (!search) return true;
+            const q = search.toLowerCase();
+            return (
+              (item?.bill_name || '').toLowerCase().includes(q) ||
+              (item?.code || '').toLowerCase().includes(q) ||
+              (item?.note || '').toLowerCase().includes(q) ||
+              (item?.membership?.name || '').toLowerCase().includes(q) ||
+              (item?.customer_name || '').toLowerCase().includes(q)
+            );
+          }).map((item, index) => (
             <div
               key={item.id}
               onClick={() => setSelectedIndex(index)}

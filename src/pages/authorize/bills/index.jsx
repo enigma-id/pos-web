@@ -21,6 +21,7 @@ import { usePrintWindow } from '../../../utils/print';
 const BillScreen = () => {
   const [detail, setDetail] = React.useState(null);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
+  const [search, setSearch] = React.useState('');
   const isOnline = useSelector(state => state?.Offline?.isOnline);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
   const lastSyncTime = useSelector(state => state?.Offline?.lastSyncTime);
@@ -54,8 +55,13 @@ const BillScreen = () => {
   };
 
   React.useEffect(() => {
-    bill()
+    bill(search)
   }, [lastSyncTime]);
+
+  // Search online → fetch; kosong → baca cache (online/offline sama)
+  React.useEffect(() => {
+    bill(search);
+  }, [search]);
 
   // Reset to first item on new data
   React.useEffect(() => {
@@ -90,15 +96,43 @@ const BillScreen = () => {
     }
   }, [showResult]);
 
-  const data = billData || billResult?.data?.data || [];
+  const data = (billData || billResult?.data?.data || []).filter(item => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      (item?.bill_name || item?.ticket || '').toLowerCase().includes(q) ||
+      (item?.code || '').toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
       <div className="border-base-200 flex w-100 flex-col overflow-y-auto border-r border-l bg-white">
+        <div className="h-16">
+          <div className="border-base-200 relative flex h-full w-full items-center border-b border-l">
+            <div className="absolute left-4">
+              <SearchIcon />
+            </div>
+            <input
+              name="search"
+              placeholder="Search..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="h-full w-full pl-15 focus-visible:outline-none!"
+            />
+          </div>
+        </div>
 
         <div className="flex-1 overflow-y-auto">
-          {data?.map((item, index) => (
+          {data?.filter(item => {
+            if (!search) return true;
+            const q = search.toLowerCase();
+            return (
+              (item?.bill_name || item?.ticket || '').toLowerCase().includes(q) ||
+              (item?.code || '').toLowerCase().includes(q)
+            );
+          })?.map((item, index) => (
             <div
               key={item.id}
               onClick={() => setSelectedIndex(index)}

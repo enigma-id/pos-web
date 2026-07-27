@@ -67,9 +67,7 @@ const OrderDetails = ({ data }) => {
                   <div className="text-xs font-thin">
                     <span>
                       + {addon?.catalog_name}{' '}
-                      {addon?.addon?.type === 'options'
-                        ? ''
-                        : `${addon?.quantity > 0 ? `(${addon?.quantity} x ${currencyFormat(addon?.unit_nett)})` : ""}`}
+                      {addon?.quantity > 0 ? `(${addon?.quantity} x ${currencyFormat(addon?.unit_nett || 0)})` : ""}
                     </span>
                   </div>
                   <div className="text-xs font-thin">

@@ -27,27 +27,33 @@ const useOrder = id => {
   };
 
   const history = async (params = {}) => {
+    console.log('[history] called params:', JSON.stringify(params), 'online:', navigator.onLine, 'apiReachable:', apiReachable);
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     const apiDead = apiReachable === false;
+    const searchCacheKey = `${HISTORY_CACHE_KEY}_search`;
 
     if (!isOffline && !apiDead) {
       try {
         const res = await triggerHistory(params).unwrap();
         const serverData = res?.data || [];
+        console.log('[history] online response length:', serverData.length);
 
-        // After sync, server already has all data — no need to merge offline entries
-        setCache(HISTORY_CACHE_KEY, serverData);
+        // Online search → simpan di cache search; online no-search → simpan di cache utama
+        if (params?.search) {
+          setCache(searchCacheKey, serverData);
+        } else {
+          setCache(HISTORY_CACHE_KEY, serverData);
+        }
         setMergedHistoryData(serverData);
         return;
       } catch (error) {
-        if (import.meta.env.DEV) {
-          console.error('[useOrder.history] fetch error', error);
-        }
+        console.log('[history] online error');
       }
     }
 
-    // Offline or dead API — read cache
+    // Offline — selalu baca cache utama, filter client
     const cached = getCache(HISTORY_CACHE_KEY) || [];
+    console.log('[history] offline cache (main) length:', cached.length);
     setMergedHistoryData(cached);
   };
 
