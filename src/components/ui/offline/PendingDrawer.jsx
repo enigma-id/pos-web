@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useSelector } from 'react-redux';
 
+import { syncPendingSessions } from '../../../services/offline';
+import { FiRefreshCw } from 'react-icons/fi';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 
 const getApiCategory = (item) => {
@@ -129,6 +131,8 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
     return result;
   }, [sessions]);
 
+  const hasPendingOrFailed = sessions.some(s => s.syncStatus === 'pending' || s.syncStatus === 'failed');
+
   // Merge 'other' into none — we don't show it as a tab
   const filteredItems = categorized[activeTab] || [];
 
@@ -206,9 +210,9 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
             <h3 className="text-sm font-black text-base-content uppercase tracking-widest">
               Queue Manager
             </h3>
-            {onRefresh && (
-              <button className="btn btn-ghost btn-xs btn-circle" onClick={onRefresh}>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            {hasPendingOrFailed && (
+              <button className="btn btn-ghost btn-xs btn-circle" onClick={() => syncPendingSessions()}>
+                <FiRefreshCw className="h-4 w-4" />
               </button>
             )}
             {Object.values(categorized.failedCount).reduce((a, b) => a + b, 0) > 0 && (
@@ -568,13 +572,13 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                           const addonName = add.catalog_name || add.catalog?.name || add.name || '';
                           const addonUnitPrice = Number(add.unit_price || add.unit_nett || 0);
                           const addonQty = Number(add.quantity || 1);
-                          const suffix = add?.addon?.type === 'quantity' || add?.addon?.type === 'checkbox' ? `(${product?.quantity} x ${addonQty}) x ${currencyFormat(addonUnitPrice)}` : '';
+                          const suffix = `(${addonQty} x ${currencyFormat(addonUnitPrice)})`;
                                 return (
                                     <div key={aIdx} className="flex justify-between text-[11px] text-base-content/40 italic">
                                     <span>+ {addonName} {suffix}</span>
                                         {addonUnitPrice > 0 && (
                                       <span>
-                                        {currencyFormat(product?.quantity * addonQty * addonUnitPrice)}
+                                        {currencyFormat(addonQty * addonUnitPrice)}
                                        </span>
                                         )}
                                     </div>

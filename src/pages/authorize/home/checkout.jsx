@@ -324,7 +324,7 @@ const CheckoutScreen = () => {
       const historyEntry = {
         id: orderSyncId,
         code: order.code,
-        total_charges: order.totalPayment || histItemsTotal,
+        total_charges: order.totalPayment || (histItemsTotal + (CartState?.meta?.service_charge_value || 0)),
         bill_name: order.billName,
         created_at: now,
         status: 'completed',
@@ -364,7 +364,7 @@ const CheckoutScreen = () => {
       // Build receipt-ready shape
       const paySuccessData = {
         ...order,
-        total_charges: order.totalPayment || histItemsTotal,
+        total_charges: order.totalPayment || (histItemsTotal + (CartState?.meta?.service_charge_value || 0)),
         total_payment: order.totalPayment,
         code: order.code,
         paid_at: now,
@@ -580,7 +580,7 @@ const CheckoutScreen = () => {
       }, 0);
       const successData = {
         ...order,
-        total_charges: order.totalPayment || itemsTotalReceipt,
+        total_charges: order.totalPayment || (itemsTotalReceipt + (CartState?.meta?.service_charge_value || 0)),
         total_payment: order.totalPayment || 0,
         code: order.code,
         paid_at: order.paidAt || new Date().toISOString(),
