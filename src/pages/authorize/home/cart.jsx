@@ -14,7 +14,7 @@ import useCart from '../../../services/cart/hook';
 import { buildOfflineTransactionPayload, setWarning } from '../../../services/offline';
 import { appendOrderToSession, getAllSessions, getOrCreateOfflineSession, getOfflinePendingCount, updateOrderBillName } from '../../../services/offline/queue';
 import { setSessions, setPendingCount } from '../../../services/offline/slice';
-import { resetCart } from '../../../services/cart/slice';
+import { resetCart, selectedBill } from '../../../services/cart/slice';
 import { v4 as uuidv4 } from 'uuid';
 import { store } from '../../../services/store';
 import { $failure } from '../../../services/form/action';
@@ -98,9 +98,24 @@ const Cart = ({ onUpdate }) => {
           dispatch($failure(err));
           return;
         }
-        dispatch(resetCart());
+
+        // Reload bill dari blob dengan nama baru — slide panel tetap stay
+        try {
+          const sessions = await getAllSessions(userId);
+          for (const s of sessions) {
+            const found = (s.orders || []).find(o => o.sync_id === CartState.bill.queue_id);
+            if (found) {
+              dispatch(loadOfflineBill({ ...found, billName: ticket }));
+              break;
+            }
+          }
+        } catch {}
+
+        // Force update bill_name di Redux biar slide panel langsung re-render
+        console.log('[updateBill] dispatching selectedBill with bill_name:', ticket);
+        dispatch(selectedBill({ ...CartState?.bill, bill_name: ticket }));
+
         closeModal();
-        bill();
         return;
       }
 
