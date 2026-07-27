@@ -261,26 +261,22 @@ const useCart = catalog_id => {
       try {
         const res = await triggerBill().unwrap();
         serverData = res?.data || [];
-        console.log('[bill] server response:', serverData.length, 'items');
 
         // Cache server bills for offline access
         setCache(BILLS_CACHE_KEY, serverData);
       } catch (error) {
-        console.log('[bill] server fetch error, reading cache');
         serverData = getCache(BILLS_CACHE_KEY) || [];
         if (import.meta.env.DEV) {
-          console.error('[useCart.bill] server fetch error', error);
+          // server fetch error
         }
       }
     } else {
       // Read cached bills when offline
       serverData = getCache(BILLS_CACHE_KEY) || [];
-      console.log('[bill] offline — cache data:', serverData.length, 'items');
     }
 
     // Merge offline pending save-bills from queue
     const merged = await mergeOfflineBills(serverData);
-    console.log('[bill] merged total:', merged.length, 'items');
 
     if (merged.length > 0 || serverData.length > 0) {
       setMergedBillData(merged);

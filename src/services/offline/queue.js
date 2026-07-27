@@ -399,6 +399,48 @@ export const appendOrderToSession = async (syncId, order, userId) => {
 };
 
 /**
+ * Hapus order dari session blob berdasarkan orderSyncId.
+ * Dipake sebelum re-create order pas confirm save bill offline.
+ */
+export const removeOrderFromSession = async (syncId, orderSyncId, userId) => {
+  const db = await ensureDB(userId);
+  const existing = await db.get(STORES.offlineSessions, syncId);
+  if (!existing) throw new Error(`Session not found: ${syncId}`);
+
+  existing.orders = (existing.orders || []).filter(o => o.sync_id !== orderSyncId);
+
+  if (existing.syncStatus === 'synced') {
+    existing.syncStatus = 'pending';
+  }
+
+  await db.put(STORES.offlineSessions, existing);
+  return existing;
+};
+
+/**
+ * Update semua field order existing di session blob.
+ * Dipake pas confirm save bill offline — update items, discounts, dll tanpa ganti sync_id.
+ */
+export const updateOrderInSession = async (syncId, orderSyncId, orderData, userId) => {
+  const db = await ensureDB(userId);
+  const existing = await db.get(STORES.offlineSessions, syncId);
+  if (!existing) throw new Error(`Session not found: ${syncId}`);
+
+  const idx = (existing.orders || []).findIndex(o => o.sync_id === orderSyncId);
+  if (idx === -1) throw new Error(`Order not found in session: ${orderSyncId}`);
+
+  // Retain sync_id, ganti sisanya
+  existing.orders[idx] = { ...existing.orders[idx], ...orderData, sync_id: orderSyncId };
+
+  if (existing.syncStatus === 'synced') {
+    existing.syncStatus = 'pending';
+  }
+
+  await db.put(STORES.offlineSessions, existing);
+  return existing;
+};
+
+/**
  * Update billName dari order yang sudah ada di session blob.
  * Dipake offline update bill name (sebelum sync).
  */

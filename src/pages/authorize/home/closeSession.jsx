@@ -40,7 +40,6 @@ const CloseSection = () => {
   const [diff, setDiff] = React.useState(0);
 
   const handleOpenPrintSummary = v => {
-    console.log('=============data summry print - pending========================', v);
     open(<Summary data={v} />);
   };
 
@@ -166,8 +165,6 @@ const CloseSection = () => {
 
   // Trigger print untuk offline end
   React.useEffect(() => {
-    console.log('================Trigger print untuk offline end===================', offlineEnded);
-    console.log('================Trigger print data===================', offlineSummary);
     if (offlineEnded && offlineSummary) {
       handleOpenPrintSummary(offlineSummary);
       dispatch(clearOfflineSessionEnded());
@@ -176,11 +173,6 @@ const CloseSection = () => {
 
   // Trigger print untuk online end
   React.useEffect(() => {
-    console.log(
-      '================Trigger print untuk online end===================',
-      endResult?.isSuccess && endResult?.data?.data
-    );
-
     if (endResult?.isSuccess && endResult?.data?.data) {
       handleOpenPrintSummary(endResult.data.data);
     }
