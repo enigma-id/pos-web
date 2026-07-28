@@ -7,8 +7,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { Input } from '../../../components/ui';
 import { BackIcon, PlusIcon } from '../../../components/ui/icon';
 import useMembership from '../../../services/membership/hook';
-import { appendMembershipToSession, getAllSessions, getOfflinePendingCount, getOrCreateOfflineSession } from '../../../services/offline/queue';
-import { setSessions, setPendingCount, setWarning } from '../../../services/offline/slice';
+import { createMembership } from '../../../services/offline/queue';
+import { setPendingCount, setWarning } from '../../../services/offline/slice';
+import { store } from '../../../services/store';
 import { getCache, setCache, setMemberCache } from '../../../utils/cache';
 
 const CreateManual = () => {
@@ -39,15 +40,6 @@ const CreateManual = () => {
     // ===== OFFLINE PATH =====
     if (isOffline) {
       const handleOffline = async () => {
-        const sessionDoc = await getOrCreateOfflineSession(userId, authSession);
-        const syncId = sessionDoc?.sync_id;
-        if (!syncId) {
-          dispatch(setWarning('No active session. Please start a session first.'));
-          return;
-        }
-
-        dispatch(setSessions([sessionDoc]));
-
         const membershipItem = {
           sync_id: uuidv4(),
           card_id: cardId.trim(),
@@ -55,7 +47,7 @@ const CreateManual = () => {
           reff_code: phone,
         };
 
-        await appendMembershipToSession(syncId, membershipItem, userId);
+        await createMembership(membershipItem, userId);
 
         // Cache immediately
         setMemberCache(cardId.trim(), {
@@ -74,18 +66,14 @@ const CreateManual = () => {
           data: [{ card_id: cardId.trim(), name, reff_code: phone, saldo: 0 }, ...tableData],
         });
 
-        // Refresh Redux
-        const fresh = await getAllSessions(userId);
-        dispatch(setSessions(fresh));
-        const c = await getOfflinePendingCount(userId);
-        dispatch(setPendingCount(c));
+        dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
 
         dispatch(setWarning('Member created offline. Will sync when online.'));
         navigate('/membership');
       };
 
       handleOffline();
-      return; // ⛔️ skip mutation API
+      return; // skip mutation API
     }
 
     // ===== ONLINE PATH =====

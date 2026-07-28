@@ -7,8 +7,9 @@ import { Input, NFCField } from '../../../components/ui';
 import { PlusIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useMembership from '../../../services/membership/hook';
-import { appendMembershipToSession, getAllSessions, getOfflinePendingCount, getOrCreateOfflineSession } from '../../../services/offline/queue';
-import { setSessions, setPendingCount, setWarning } from '../../../services/offline/slice';
+import { createMembership } from '../../../services/offline/queue';
+import { setPendingCount, setWarning } from '../../../services/offline/slice';
+import { store } from '../../../services/store';
 import { setMemberCache, getCache, setCache } from '../../../utils/cache';
 
 const CreateSection = ({ onClose }) => {
@@ -35,16 +36,6 @@ const CreateSection = ({ onClose }) => {
     // ===== OFFLINE PATH =====
     if (isOffline) {
       const handleOffline = async () => {
-        const sessionDoc = await getOrCreateOfflineSession(userId, authSession);
-        const syncId = sessionDoc?.sync_id;
-        if (!syncId) {
-          dispatch(setWarning('No active session. Please start a session first.'));
-          closeModal();
-          return;
-        }
-
-        dispatch(setSessions([sessionDoc]));
-
         const membershipItem = {
           sync_id: uuidv4(),
           card_id: uid,
@@ -52,7 +43,7 @@ const CreateSection = ({ onClose }) => {
           reff_code: phone,
         };
 
-        await appendMembershipToSession(syncId, membershipItem, userId);
+        await createMembership(membershipItem, userId);
         setMemberCache(uid, { card_id: uid, name, reff_code: phone, saldo: 0 });
 
         // Update table cache untuk offline fallback
@@ -64,17 +55,14 @@ const CreateSection = ({ onClose }) => {
           data: [{ card_id: uid, name, reff_code: phone, saldo: 0 }, ...tableData],
         });
 
-        const fresh = await getAllSessions(userId);
-        dispatch(setSessions(fresh));
-        const c = await getOfflinePendingCount(userId);
-        dispatch(setPendingCount(c));
+        dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
 
         closeModal();
         onClose();
       };
 
       handleOffline();
-      return; // ⛔️ skip mutation API
+      return; // skip mutation API
     }
 
     // ===== ONLINE PATH =====

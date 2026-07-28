@@ -1,10 +1,14 @@
 import { openDB, deleteDB } from 'idb';
 import { v4 as uuidv4 } from 'uuid';
 
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 export const STORES = {
-  offlineSessions: 'offlineSessions',
+  sessions: 'sessions',
+  orderBills: 'order_bills',
+  orderPayments: 'order_payments',
+  topups: 'topups',
+  memberships: 'memberships',
   metadata: 'metadata',
 };
 
@@ -21,15 +25,43 @@ export const ensureDB = async userId => {
 
   const open = async () => {
     const db = await openDB(getDBName(userId), DB_VERSION, {
-      upgrade(db, oldVersion) {
+      upgrade(db, oldVersion, newVersion) {
+        // Hapus semua store lama dari v3
+        if (db.objectStoreNames.contains('offlineSessions')) {
+          db.deleteObjectStore('offlineSessions');
+        }
         if (db.objectStoreNames.contains('pendingRequests')) {
           db.deleteObjectStore('pendingRequests');
         }
+        if (db.objectStoreNames.contains('offlineRequests')) {
+          db.deleteObjectStore('offlineRequests');
+        }
 
-        if (!db.objectStoreNames.contains(STORES.offlineSessions)) {
-          const store = db.createObjectStore(STORES.offlineSessions, { keyPath: 'sync_id' });
+        // Bikin store baru
+        if (!db.objectStoreNames.contains(STORES.sessions)) {
+          const store = db.createObjectStore(STORES.sessions, { keyPath: 'sync_id' });
           store.createIndex('syncStatus', 'syncStatus', { unique: false });
           store.createIndex('createdAt', 'createdAt', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains(STORES.orderBills)) {
+          const store = db.createObjectStore(STORES.orderBills, { keyPath: 'sync_id' });
+          store.createIndex('origin_session_id', 'origin_session_id', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains(STORES.orderPayments)) {
+          const store = db.createObjectStore(STORES.orderPayments, { keyPath: 'sync_id' });
+          store.createIndex('origin_session_id', 'origin_session_id', { unique: false });
+          store.createIndex('paid_session_id', 'paid_session_id', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains(STORES.topups)) {
+          const store = db.createObjectStore(STORES.topups, { keyPath: 'sync_id' });
+          store.createIndex('session_sync_id', 'session_sync_id', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains(STORES.memberships)) {
+          db.createObjectStore(STORES.memberships, { keyPath: 'sync_id' });
         }
 
         if (!db.objectStoreNames.contains(STORES.metadata)) {
@@ -46,14 +78,11 @@ export const ensureDB = async userId => {
 
   try {
     const db = await dbInstances.get(key);
-    // Verify db is still open — closing connection gives undefined name
     if (db.name) return db;
   } catch {
-    // Connection was closed (StrictMode remount race), reopen
     dbInstances.delete(key);
   }
 
-  // Retry once
   const reopened = open();
   dbInstances.set(key, reopened);
   return reopened;
@@ -83,12 +112,8 @@ export const initQueueDB = async userId => {
   return true;
 };
 
-// ========== CREATE ==========
+// ========== SESSIONS ==========
 
-/**
- * Buat session offline baru.
- * Sync status: "pending"
- */
 export const createOfflineSession = async ({ cash_started, latitude, longitude, battery_health }, userId) => {
   const db = await ensureDB(userId);
   const sync_id = uuidv4();
@@ -96,216 +121,225 @@ export const createOfflineSession = async ({ cash_started, latitude, longitude, 
 
   const doc = {
     sync_id,
-    referenceId: null,
-    session: {
-      open_at: now,
-      cash_started,
-      close_at: null,
-      cash_finished: null,
-      latitude: latitude ?? null,
-      longitude: longitude ?? null,
-      battery_health: battery_health ?? null,
-    },
-    orders: [],
-    topups: [],
-    memberships: [],
+    id: null,
+    open_at: now,
+    close_at: null,
+    cash_started: cash_started ?? 0,
+    cash_finished: null,
+    latitude: latitude ?? null,
+    longitude: longitude ?? null,
+    battery_health: battery_health ?? null,
     syncStatus: 'pending',
     error: null,
     createdAt: now,
   };
 
-  await db.add(STORES.offlineSessions, doc);
+  await db.add(STORES.sessions, doc);
   return doc;
 };
 
-// ========== READ ==========
-
-/**
- * Ambil session yg masih aktif (syncStatus = "pending" DAN session.close_at == null).
- */
-export const getActiveSession = async userId => {
+export const closeSession = async (syncId, { cash_finished, latitude, longitude }, userId) => {
   const db = await ensureDB(userId);
-  const all = await db.getAll(STORES.offlineSessions);
-  return all.find(s => s.syncStatus === 'pending' && !s.session.close_at) || null;
-};
-
-/**
- * Dapetin session buat operasi offline.
- * - Kalo ada offline session aktif → pake itu.
- * - Kalo ada server session ID (authSession.sales_session.id) → auto-create offline session dgn referenceId.
- * - Kalo gak ada → return null.
- */
-export const getOrCreateOfflineSession = async (userId, authSession) => {
-  // 1. Cari offline session aktif
-  const active = await getActiveSession(userId);
-  if (active) return active;
-
-  // 2. Cek server session ID — start online, sekarang offline
-  const serverId = authSession?.sales_session?.id;
-  if (serverId) {
-    // Cek apa udah ada offline session dgn referenceId ini
-    const db = await ensureDB(userId);
-    const all = await db.getAll(STORES.offlineSessions);
-    const existing = all.find(s => s.referenceId === serverId && !s.session.close_at);
-    if (existing) return existing;
-
-    // Buat baru
-    const sync_id = uuidv4();
-    const now = getISO();
-    const serverSession = authSession?.sales_session || {};
-    const doc = {
-      sync_id,
-      referenceId: serverId,
-      session: {
-        open_at: serverSession.start_at || serverSession.started_at || now,
-        cash_started: serverSession.cash_started || 0,
-        close_at: null,
-        cash_finished: null,
-      },
-      orders: [],
-      topups: [],
-      memberships: [],
-      syncStatus: 'synced', // referenced to server session — no need to sync
-      error: null,
-      createdAt: now,
-    };
-
-    await db.add(STORES.offlineSessions, doc);
-    return doc;
-  }
-
-  return null;
-};
-
-/**
- * Ambil semua session yg belum di-sync (pending, syncing, failed).
- */
-export const getPendingSessions = async userId => {
-  const db = await ensureDB(userId);
-  const all = await db.getAll(STORES.offlineSessions);
-  return all.filter(s => s.syncStatus !== 'synced');
-};
-
-/**
- * Ambil semua session.
- * Sorted by createdAt DESC.
- */
-export const getAllSessions = async userId => {
-  const db = await ensureDB(userId);
-  const all = await db.getAll(STORES.offlineSessions);
-  return all.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-};
-
-/**
- * Resolve active session ID dari berbagai source.
- * Flow:
- *   1. Cek authSession?.sales_session?.id          → server ID (online)
- *   2. Cek offline_sessions.referenceId            → server ID (udah sync)
- *   3. Cek offline_sessions.sync_id (yg masih open) → client UUID
- */
-export const getActiveSessionId = async (authSession, userId) => {
-  // Cari offline session yg masih open dulu (lebih fresh)
-  if (userId) {
-    const all = await getAllSessions(userId);
-    const offlineActive = all.find(s => s.syncStatus === 'pending' && !s.session.close_at);
-    if (offlineActive) {
-      return { id: offlineActive.sync_id, source: 'sync_id' };
-    }
-  }
-
-  // 1. Server session ID dari auth (pas online) — fallback
-  const serverId = authSession?.sales_session?.id;
-  if (serverId) {
-    return { id: serverId, source: 'server' };
-  }
-
-  if (!userId) return null;
-
-  const allS = await getAllSessions(userId);
-
-  // 2. Cari yg punya referenceId (udah pernah sync, masih open)
-  const byReference = allS.find(s => s.referenceId && s.syncStatus === 'synced' && !s.session.close_at);
-  if (byReference) {
-    return { id: byReference.referenceId, source: 'reference' };
-  }
-
-  return null;
-};
-
-// ========== UPDATE ==========
-
-/**
- * Update session close info.
- */
-export const updateSessionClose = async (syncId, { cash_finished, latitude, longitude, battery_health }, userId) => {
-  const db = await ensureDB(userId);
-  const existing = await db.get(STORES.offlineSessions, syncId);
+  const existing = await db.get(STORES.sessions, syncId);
   if (!existing) throw new Error(`Session not found: ${syncId}`);
 
-  existing.session.close_at = getISO();
-  existing.session.cash_finished = cash_finished ?? null;
-  if (latitude != null) existing.session.latitude = latitude;
-  if (longitude != null) existing.session.longitude = longitude;
-  if (battery_health != null) existing.session.battery_health = battery_health;
+  existing.close_at = getISO();
+  existing.cash_finished = cash_finished ?? null;
+  if (latitude != null) existing.latitude = latitude;
+  if (longitude != null) existing.longitude = longitude;
+  existing.syncStatus = 'pending';
 
-  await db.put(STORES.offlineSessions, existing);
+  await db.put(STORES.sessions, existing);
   return existing;
 };
 
-/**
- * Set sync status + error.
- */
-export const setSyncStatus = async (syncId, status, { error, userId } = {}) => {
-  const db = await ensureDB(userId);
-  const existing = await db.get(STORES.offlineSessions, syncId);
-  if (!existing) throw new Error(`Session not found: ${syncId}`);
-
-  existing.syncStatus = status;
-  if (error) existing.error = error;
-  else existing.error = null;
-
-  await db.put(STORES.offlineSessions, existing);
-  return existing;
-};
-
-/**
- * Simpan hasil sync sukses.
- * referenceId = server session.id
- * orderMap = { localSyncId: serverOrderId, ... }
- */
-export const updateSyncResult = async (syncId, { referenceId, orderMap }, userId) => {
-  const db = await ensureDB(userId);
-  const existing = await db.get(STORES.offlineSessions, syncId);
-  if (!existing) throw new Error(`Session not found: ${syncId}`);
-
-  existing.referenceId = referenceId ?? existing.referenceId;
-  existing.syncStatus = 'synced';
-
-  // Map order sync_ids ke server IDs
-  if (orderMap) {
-    existing.orders = (existing.orders || []).map(o => ({
-      ...o,
-      serverId: orderMap[o.sync_id] || o.serverId || null,
-    }));
-  }
-
-  await db.put(STORES.offlineSessions, existing);
-  return existing;
-};
-
-// ========== DELETE ==========
-
-/**
- * Hapus session dari IndexedDB.
- * Dipake pas sync sukses full.
- */
 export const deleteOfflineSession = async (syncId, userId) => {
   const db = await ensureDB(userId);
-  await db.delete(STORES.offlineSessions, syncId);
+
+  // Cascade: hapus order_bills, order_payments, topups yg terkait
+  let bills = await db.getAllFromIndex(STORES.orderBills, 'origin_session_id', syncId);
+  for (const b of bills) await db.delete(STORES.orderBills, b.sync_id);
+
+  let payments = await db.getAllFromIndex(STORES.orderPayments, 'paid_session_id', syncId);
+  for (const p of payments) await db.delete(STORES.orderPayments, p.sync_id);
+
+  let topups = await db.getAllFromIndex(STORES.topups, 'session_sync_id', syncId);
+  for (const t of topups) await db.delete(STORES.topups, t.sync_id);
+
+  await db.delete(STORES.sessions, syncId);
   return true;
 };
 
-// ========== METADATA (Retain) ==========
+// ========== ORDER BILLS ==========
+
+export const createOrderBill = async (data, userId) => {
+  const db = await ensureDB(userId);
+  const sync_id = data.sync_id || uuidv4();
+  const now = getISO();
+
+  const doc = {
+    sync_id,
+    origin_session_id: data.origin_session_id || null,
+    sales_channel_id: data.sales_channel_id || null,
+    sales_channel_name: data.sales_channel_name || null,
+    payment_method_id: data.payment_method_id || null,
+    membership_id: data.membership_id || null,
+    payment_ref: data.payment_ref || '',
+    bill_name: data.bill_name || data.billName || '',
+    cashier_name: data.cashier_name || data.cashierName || '',
+    service_charge_value: data.service_charge_value || data.serviceChargeValue || 0,
+    service_charge_percentage: data.service_charge_percentage || data.serviceChargePercentage || 0,
+    discount_percentage: data.discount_percentage || data.discountPercentage || 0,
+    discount_value: data.discount_value || data.discountValue || 0,
+    category_discounts: data.category_discounts || data.categoryDiscounts || [],
+    items: data.items || [],
+    code: data.code || '',
+    status: data.status || 'pending',
+    total_payment: data.total_payment || data.totalPayment || 0,
+    paid_at: data.paid_at || data.paidAt || null,
+    is_offline_mode: true,
+    ref_sync_id: data.ref_sync_id || data.refSyncId || '',
+    origin_session_sync_id: data.origin_session_sync_id || data.originSessionSyncId || '',
+    paid_session_sync_id: data.paid_session_sync_id || data.paidSessionSyncId || null,
+    is_show: data.is_show !== false,
+    original_items: data.original_items || data.originalItems || [],
+    createdAt: now,
+  };
+
+  await db.add(STORES.orderBills, doc);
+  return doc;
+};
+
+export const updateOrderBill = async (syncId, data, userId) => {
+  const db = await ensureDB(userId);
+  const existing = await db.get(STORES.orderBills, syncId);
+  if (!existing) throw new Error(`OrderBill not found: ${syncId}`);
+
+  // Merge update — biarin field yg gak di-set pake existing
+  const updated = { ...existing, ...data, sync_id: syncId };
+  await db.put(STORES.orderBills, updated);
+  return updated;
+};
+
+export const deleteOrderBill = async (syncId, userId) => {
+  const db = await ensureDB(userId);
+  await db.delete(STORES.orderBills, syncId);
+  return true;
+};
+
+// ========== ORDER PAYMENTS ==========
+
+export const createOrderPayment = async (data, userId) => {
+  const db = await ensureDB(userId);
+  const sync_id = data.sync_id || uuidv4();
+  const now = getISO();
+
+  const doc = {
+    sync_id,
+    origin_session_id: data.origin_session_id || data.originSessionId || null,
+    paid_session_id: data.paid_session_id || data.paidSessionId || null,
+    sales_channel_id: data.sales_channel_id || null,
+    sales_channel_name: data.sales_channel_name || data.salesChannelName || null,
+    payment_method_id: data.payment_method_id || data.paymentMethodId || null,
+    payment_method_name: data.payment_method_name || data.paymentMethodName || null,
+    membership_id: data.membership_id || data.membershipId || null,
+    payment_ref: data.payment_ref || data.paymentRef || '',
+    bill_name: data.bill_name || data.billName || '',
+    cashier_name: data.cashier_name || data.cashierName || '',
+    service_charge_value: data.service_charge_value || data.serviceChargeValue || 0,
+    service_charge_percentage: data.service_charge_percentage || data.serviceChargePercentage || 0,
+    discount_percentage: data.discount_percentage || data.discountPercentage || 0,
+    discount_value: data.discount_value || data.discountValue || 0,
+    category_discounts: data.category_discounts || data.categoryDiscounts || [],
+    items: data.items || [],
+    code: data.code || '',
+    status: 'completed',
+    total_payment: data.total_payment || data.totalPayment || 0,
+    paid_at: data.paid_at || data.paidAt || now,
+    is_offline_mode: true,
+    ref_sync_id: data.ref_sync_id || data.refSyncId || '',
+    origin_session_sync_id: data.origin_session_sync_id || data.originSessionSyncId || '',
+    paid_session_sync_id: data.paid_session_sync_id || data.paidSessionSyncId || '',
+    is_show: data.is_show !== false,
+    original_items: data.original_items || data.originalItems || [],
+    createdAt: now,
+  };
+
+  await db.add(STORES.orderPayments, doc);
+  return doc;
+};
+
+export const updateOrderPayment = async (syncId, data, userId) => {
+  const db = await ensureDB(userId);
+  const existing = await db.get(STORES.orderPayments, syncId);
+  if (!existing) throw new Error(`OrderPayment not found: ${syncId}`);
+
+  const updated = { ...existing, ...data, sync_id: syncId };
+  await db.put(STORES.orderPayments, updated);
+  return updated;
+};
+
+export const deleteOrderPayment = async (syncId, userId) => {
+  const db = await ensureDB(userId);
+  await db.delete(STORES.orderPayments, syncId);
+  return true;
+};
+
+// ========== TOPUPS ==========
+
+export const createTopup = async (data, userId) => {
+  const db = await ensureDB(userId);
+  const sync_id = data.sync_id || uuidv4();
+  const now = getISO();
+
+  const doc = {
+    sync_id,
+    session_sync_id: data.session_sync_id || data.sessionSyncId || null,
+    membership_id: data.membership_id || data.membershipId || null,
+    membership_sync_id: data.membership_sync_id || data.membershipSyncId || null,
+    nominal: data.nominal || 0,
+    payment_type: data.payment_type || data.paymentType || 'cash',
+    card_id: data.card_id || data.cardId || '',
+    member_name: data.member_name || data.memberName || '',
+    member_code: data.member_code || data.memberCode || '',
+    created_at: data.created_at || data.createdAt || now,
+  };
+
+  await db.add(STORES.topups, doc);
+  return doc;
+};
+
+// ========== MEMBERSHIPS ==========
+
+export const createMembership = async (data, userId) => {
+  const db = await ensureDB(userId);
+  const sync_id = data.sync_id || uuidv4();
+
+  const doc = {
+    sync_id,
+    card_id: data.card_id || data.cardId || '',
+    name: data.name || '',
+    reff_code: data.reff_code || data.reffCode || '',
+  };
+
+  await db.add(STORES.memberships, doc);
+  return doc;
+};
+
+export const updateMembership = async (cardId, data, userId) => {
+  const db = await ensureDB(userId);
+
+  // Cari by card_id
+  const all = await db.getAll(STORES.memberships);
+  const existing = all.find(m => m.card_id === cardId);
+  if (!existing) throw new Error(`Membership not found for card: ${cardId}`);
+
+  const updated = { ...existing, ...data, card_id: cardId };
+  await db.put(STORES.memberships, updated);
+  return updated;
+};
+
+// ========== METADATA ==========
 
 const METADATA_KEYS = {
   lastSyncTime: 'lastSyncTime',
@@ -352,213 +386,4 @@ export const resetMetadata = async userId => {
 export const getAllMetadata = async userId => {
   const db = await ensureDB(userId);
   return db.getAll(STORES.metadata);
-};
-
-// ========== ORDER OPERATIONS ==========
-
-/**
- * Append order ke session.orders[].
- * Otomatis set session syncStatus ke 'pending' kalo sebelumnya 'synced'.
- * Order shape:
- * {
- *   sync_id: "uuid",
- *   sessionSyncId: "sync_id",
- *   salesChannelId: "...",
- *   paymentMethodId: 0,
- *   membershipId: null,
- *   paymentRef: "",
- *   billName: "",
- *   discountPercentage: 0,
- *   discountValue: 0,
- *   categoryDiscounts: [],
- *   items: [{ catalog_id, catalog_name, quantity, unit_price, addons }],
- *   status: "pending" | "completed",
- *   totalPayment: 0,
- *   paidAt: "ISO",
- *   isOfflineMode: true,
- *   refSyncId: ""
- * }
- */
-export const appendOrderToSession = async (syncId, order, userId) => {
-  const db = await ensureDB(userId);
-  const existing = await db.get(STORES.offlineSessions, syncId);
-  if (!existing) throw new Error(`Session not found: ${syncId}`);
-
-  if (!Array.isArray(existing.orders)) {
-    existing.orders = [];
-  }
-
-  existing.orders.push(order);
-
-  // Consistent rule: session yg ada pending data → syncStatus = 'pending'
-  if (existing.syncStatus === 'synced') {
-    existing.syncStatus = 'pending';
-  }
-
-  await db.put(STORES.offlineSessions, existing);
-  return existing;
-};
-
-/**
- * Hapus order dari session blob berdasarkan orderSyncId.
- * Dipake sebelum re-create order pas confirm save bill offline.
- */
-export const removeOrderFromSession = async (syncId, orderSyncId, userId) => {
-  const db = await ensureDB(userId);
-  const existing = await db.get(STORES.offlineSessions, syncId);
-  if (!existing) throw new Error(`Session not found: ${syncId}`);
-
-  existing.orders = (existing.orders || []).filter(o => o.sync_id !== orderSyncId);
-
-  if (existing.syncStatus === 'synced') {
-    existing.syncStatus = 'pending';
-  }
-
-  await db.put(STORES.offlineSessions, existing);
-  return existing;
-};
-
-/**
- * Update semua field order existing di session blob.
- * Dipake pas confirm save bill offline — update items, discounts, dll tanpa ganti sync_id.
- */
-export const updateOrderInSession = async (syncId, orderSyncId, orderData, userId) => {
-  const db = await ensureDB(userId);
-  const existing = await db.get(STORES.offlineSessions, syncId);
-  if (!existing) throw new Error(`Session not found: ${syncId}`);
-
-  const idx = (existing.orders || []).findIndex(o => o.sync_id === orderSyncId);
-  if (idx === -1) throw new Error(`Order not found in session: ${orderSyncId}`);
-
-  // Retain sync_id, ganti sisanya
-  existing.orders[idx] = { ...existing.orders[idx], ...orderData, sync_id: orderSyncId };
-
-  if (existing.syncStatus === 'synced') {
-    existing.syncStatus = 'pending';
-  }
-
-  await db.put(STORES.offlineSessions, existing);
-  return existing;
-};
-
-/**
- * Update billName dari order yang sudah ada di session blob.
- * Dipake offline update bill name (sebelum sync).
- */
-export const updateOrderBillName = async (syncId, orderSyncId, billName, userId) => {
-  const db = await ensureDB(userId);
-  const existing = await db.get(STORES.offlineSessions, syncId);
-  if (!existing) throw new Error(`Session not found: ${syncId}`);
-
-  const order = (existing.orders || []).find(o => o.sync_id === orderSyncId);
-  if (!order) throw new Error(`Order not found in session: ${orderSyncId}`);
-
-  order.billName = billName;
-
-  if (existing.syncStatus === 'synced') {
-    existing.syncStatus = 'pending';
-  }
-
-  await db.put(STORES.offlineSessions, existing);
-  return existing;
-};
-
-// ========== TOPUP OPERATIONS ==========
-
-/**
- * Append topup ke session.topups[].
- * Otomatis set session syncStatus ke 'pending' kalo sebelumnya 'synced'.
- */
-export const appendTopupToSession = async (syncId, topup, userId) => {
-  const db = await ensureDB(userId);
-  const existing = await db.get(STORES.offlineSessions, syncId);
-  if (!existing) throw new Error(`Session not found: ${syncId}`);
-
-  if (!Array.isArray(existing.topups)) {
-    existing.topups = [];
-  }
-
-  existing.topups.push(topup);
-
-  if (existing.syncStatus === 'synced') {
-    existing.syncStatus = 'pending';
-  }
-
-  await db.put(STORES.offlineSessions, existing);
-  return existing;
-};
-
-// ========== MEMBERSHIP OPERATIONS ==========
-
-/**
- * Append membership ke session.memberships[].
- * Otomatis set session syncStatus ke 'pending' kalo sebelumnya 'synced'.
- */
-export const appendMembershipToSession = async (syncId, membership, userId) => {
-  const db = await ensureDB(userId);
-  const existing = await db.get(STORES.offlineSessions, syncId);
-  if (!existing) throw new Error(`Session not found: ${syncId}`);
-
-  if (!Array.isArray(existing.memberships)) {
-    existing.memberships = [];
-  }
-
-  existing.memberships.push(membership);
-
-  if (existing.syncStatus === 'synced') {
-    existing.syncStatus = 'pending';
-  }
-
-  await db.put(STORES.offlineSessions, existing);
-  return existing;
-};
-
-/**
- * Update membership in-place di session.memberships[].
- * Cari oleh card_id, kalo ketemu merge data baru.
- * Kalo ga ketemu, append aja.
- * Otomatis set session syncStatus ke 'pending' kalo sebelumnya 'synced'.
- */
-export const updateMembershipInSession = async (syncId, cardId, updates, userId) => {
-  const db = await ensureDB(userId);
-  const existing = await db.get(STORES.offlineSessions, syncId);
-  if (!existing) throw new Error(`Session not found: ${syncId}`);
-
-  if (!Array.isArray(existing.memberships)) {
-    existing.memberships = [];
-    existing.memberships.push({ card_id: cardId, ...updates });
-  } else {
-    const idx = existing.memberships.findIndex(m => m.card_id === cardId);
-    if (idx >= 0) {
-      existing.memberships[idx] = { ...existing.memberships[idx], ...updates };
-    } else {
-      existing.memberships.push({ card_id: cardId, ...updates });
-    }
-  }
-
-  if (existing.syncStatus === 'synced') {
-    existing.syncStatus = 'pending';
-  }
-
-  await db.put(STORES.offlineSessions, existing);
-  return existing;
-};
-
-// ========== PENDING COUNT HELPER ==========
-
-/**
- * Hitung total item yg perlu sync/action:
- * - semua orders (pending/completed) — semua perlu sync ke server
- * - topups
- * - session itu sendiri (open/close) kalo status pending/syncing/failed & gak punya item
- */
-export const getOfflinePendingCount = async userId => {
-  const sessions = await getAllSessions(userId);
-  return sessions.reduce((sum, s) => {
-    if (s.syncStatus === 'synced') return sum;
-    const itemCount = (s.orders || []).length // semua offline orders perlu sync
-      + (s.topups || []).length
-      + (s.memberships || []).length;
-    return sum + (itemCount > 0 ? itemCount : 1);
-  }, 0);
 };

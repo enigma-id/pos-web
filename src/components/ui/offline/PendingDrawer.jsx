@@ -1,32 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 
 import { syncPendingSessions } from '../../../services/offline';
+import { ensureDB, STORES } from '../../../services/offline/queue';
 import { FiRefreshCw } from 'react-icons/fi';
 import { currencyFormat, dateFormat } from '../../../utils/common';
-
-const getApiCategory = (item) => {
-  if (item._type === 'topup') return 'member';
-  if (item._type === 'membership') return 'member';
-  if (item._type === 'session') return 'shifts';
-  if (item.status === 'pending') return 'bills';
-  if (item.status === 'completed') return 'order';
-  return 'other';
-};
-
-const getApiType = (item) => {
-  if (item._type === 'topup') return 'topup';
-  if (item._type === 'membership') return 'create member';
-  if (item._type === 'session') {
-    const hasStart = item.body?.cash_started != null;
-    const hasEnd = item.body?.cash_finished != null;
-    if (hasStart && hasEnd) return 'both';
-    return hasEnd ? 'close' : 'start';
-  }
-  if (item.status === 'pending') return 'save bill';
-  if (item.status === 'completed') return 'checkout';
-  return 'order';
-};
 
 const statusConfig = {
   failed: { badge: 'badge-error', icon: '✕' },
@@ -35,117 +13,167 @@ const statusConfig = {
 };
 
 const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh }) => {
-  const sessions = useSelector(state => state?.Offline?.sessions || []);
+  const userId = useSelector(state => state?.Auth?.session?.user?.id);
   const [activeTab, setActiveTab] = useState('order');
+  const [data, setData] = useState({
+    orders: [],
+    bills: [],
+    topups: [],
+    memberships: [],
+    sessions: [],
+  });
 
-  const categorized = React.useMemo(() => {
-    const result = { order: [], bills: [], shifts: [], member: [], other: [], failedCount: {} };
+  // Fetch data from IndexedDB directly when drawer opens
+  useEffect(() => {
+    if (!open || !userId) return;
 
-    for (const s of sessions) {
-      if (s.syncStatus === 'synced') continue;
+    const fetchData = async () => {
+      try {
+        const db = await ensureDB(userId);
 
-      // Session-level items (shifts tab)
-      // Skip session yg start online & belum close — itu cuma mirror server session
-      const isClosed = !!s.session?.close_at;
-      const isOfflineSession = !s.referenceId;
+        const sessions = await db.getAll(STORES.sessions);
+        const bills = await db.getAll(STORES.orderBills);
+        const payments = await db.getAll(STORES.orderPayments);
+        const topups = await db.getAll(STORES.topups);
+        const memberships = await db.getAll(STORES.memberships);
+
+        setData({
+          orders: payments.filter(p => p.status === 'completed'),
+          bills: bills.filter(b => b.status === 'pending' && b.is_show !== false),
+          topups,
+          memberships,
+          sessions: sessions.filter(s => s.syncStatus !== 'synced'),
+        });
+      } catch (err) {
+        console.error('[PendingDrawer] fetch error:', err);
+      }
+    };
+
+    fetchData();
+  }, [open, userId]);
+
+  const hasPendingOrFailed = useMemo(() => {
+    return data.sessions.some(s => s.syncStatus === 'pending' || s.syncStatus === 'failed');
+  }, [data]);
+
+  // Flatten sessions for shifts tab
+  const shiftItems = useMemo(() => {
+    return data.sessions.map(s => {
+      const isClosed = !!s.close_at;
+      const isOfflineSession = !s.id;
       const skipShift = !isOfflineSession && !isClosed;
-      const shiftItem = {
+      return {
         id: s.sync_id,
         sync_id: s.sync_id,
         _type: 'session',
         status: s.syncStatus || 'pending',
         lastError: s.error || null,
-        createdAt: isClosed ? s.session?.close_at : (s.createdAt || s.session?.open_at),
+        createdAt: isClosed ? s.close_at : (s.createdAt || s.open_at),
         body: {
-          cash: isClosed ? (s.session?.cash_finished || s.session?.cash_started) : s.session?.cash_started,
-          cash_started: s.session?.cash_started,
-          cash_finished: s.session?.cash_finished,
-          open_at: s.session?.open_at,
-          close_at: s.session?.close_at,
-          orderCount: s.orders?.length || 0,
+          cash: isClosed ? (s.cash_finished || s.cash_started) : s.cash_started,
+          cash_started: s.cash_started,
+          cash_finished: s.cash_finished,
+          open_at: s.open_at,
+          close_at: s.close_at,
+          orderCount: data.bills.filter(b => b.origin_session_id === s.sync_id).length + data.orders.filter(o => o.paid_session_id === s.sync_id).length,
         },
-        session: s.session || {},
         transaction_preview: {
           code: `SES-${(s.sync_id || '').slice(0, 8)}`,
-          cashier: { name: s.cashier_name || '-' },
-          session: { cashier: { name: s.cashier_name || '-' } },
-          created_at: isClosed ? s.session?.close_at : (s.createdAt || s.session?.open_at),
+          cashier: { name: '-' },
+          session: { cashier: { name: '-' } },
+          created_at: isClosed ? s.close_at : (s.createdAt || s.open_at),
         },
       };
-      if (!skipShift) {
-        result.shifts.push(shiftItem);
-        if (s.syncStatus === 'failed') {
-          result.failedCount.shifts = (result.failedCount.shifts || 0) + 1;
-        }
-      }
+    }).filter(s => !s.skipShift);
+  }, [data.sessions, data.bills, data.orders]);
 
-      // Flatten orders dari session
-      for (const o of s.orders || []) {
-        const item = {
-          ...o,
-          id: o.sync_id,
-          _sessionSyncId: s.sync_id,
-          _sessionStatus: s.syncStatus,
-          _sessionError: s.error,
-          _sessionCreatedAt: s.createdAt,
-        };
+  // Build categorized items
+  const categorized = useMemo(() => {
+    const result = { order: [], bills: [], shifts: [], member: [], failedCount: {} };
 
-        const cat = getApiCategory(item);
-        result[cat]?.push(item);
-        if (item.status === 'failed') {
-          result.failedCount[cat] = (result.failedCount[cat] || 0) + 1;
-        }
-      }
+    // Tab Bills
+    result.bills = data.bills.map(b => ({
+      ...b,
+      id: b.sync_id,
+      _type: 'bill',
+      status: b.status || 'pending',
+      lastError: null,
+      transaction_preview: {
+        code: b.code || `OFF-${(b.sync_id || '').slice(0, 8)}`,
+        bill_name: b.bill_name,
+        channel: { name: b.sales_channel_name || '-' },
+        payment_method: { name: b.payment_method_id ? `#${b.payment_method_id}` : 'Cash' },
+        cashier: { name: b.cashier_name || '-' },
+        item_count: (b.items || []).length,
+        total_charges: b.total_payment || 0,
+        items: b.items || [],
+        created_at: b.createdAt,
+      },
+    }));
 
-      // Topups dari session
-      for (const t of s.topups || []) {
-        const item = {
-          ...t,
-          _type: 'topup',
-          status: s.syncStatus,
-          _sessionSyncId: s.sync_id,
-          _sessionStatus: s.syncStatus,
-        };
-        result.member.push(item);
-        if (s.syncStatus === 'failed') {
-          result.failedCount.member = (result.failedCount.member || 0) + 1;
-        }
-      }
+    // Tab Order
+    result.order = data.orders.map(p => ({
+      ...p,
+      id: p.sync_id,
+      _type: 'payment',
+      status: p.status || 'completed',
+      lastError: null,
+      transaction_preview: {
+        code: p.code || `OFF-${(p.sync_id || '').slice(0, 8)}`,
+        bill_name: p.bill_name,
+        channel: { name: p.sales_channel_name || '-' },
+        payment_method: { name: p.payment_method_id ? `#${p.payment_method_id}` : 'Cash' },
+        cashier: { name: p.cashier_name || '-' },
+        item_count: (p.items || []).length,
+        total_charges: p.total_payment || 0,
+        items: p.items || [],
+        created_at: p.paid_at || p.createdAt,
+      },
+    }));
 
-      // Memberships dari session
-      for (const m of s.memberships || []) {
-        const item = {
-          ...m,
-          id: m.sync_id,
-          _type: 'membership',
-          status: s.syncStatus,
-          _sessionSyncId: s.sync_id,
-          _sessionStatus: s.syncStatus,
-          transaction_preview: {
-            code: `MEM-${(m.sync_id || '').slice(0, 8)}`,
-            member_name: m.name,
-            member_code: m.reff_code,
-            created_at: m.created_at,
-          },
-        };
-        result.member.push(item);
-        if (s.syncStatus === 'failed') {
-          result.failedCount.member = (result.failedCount.member || 0) + 1;
-        }
-      }
-    }
+    // Tab Shifts
+    result.shifts = shiftItems;
+
+    // Tab Member — topups
+    data.topups.forEach(t => {
+      result.member.push({
+        ...t,
+        _type: 'topup',
+        id: t.sync_id,
+        status: 'pending',
+        lastError: null,
+        transaction_preview: {
+          code: `TOP-${(t.sync_id || '').slice(0, 8)}`,
+          nominal: t.nominal,
+          payment_type: t.payment_type,
+          member_name: t.member_name,
+          member_code: t.member_code,
+          created_at: t.created_at,
+        },
+      });
+    });
+
+    // Tab Member — memberships
+    data.memberships.forEach(m => {
+      result.member.push({
+        ...m,
+        _type: 'membership',
+        id: m.sync_id,
+        status: 'pending',
+        lastError: null,
+        transaction_preview: {
+          code: `MEM-${(m.sync_id || '').slice(0, 8)}`,
+          member_name: m.name,
+          member_code: m.reff_code,
+          created_at: m.created_at,
+        },
+      });
+    });
 
     return result;
-  }, [sessions]);
+  }, [data, shiftItems]);
 
-  const hasPendingOrFailed = sessions.some(s => s.syncStatus === 'pending' || s.syncStatus === 'failed');
-
-  // Merge 'other' into none — we don't show it as a tab
-  // Bills tab: filter isShow !== false (hide paid/cross-session pending)
-  const filteredItems = (categorized[activeTab] || []).filter(item => {
-    if (activeTab === 'bills') return item.isShow !== false;
-    return true;
-  });
+  const filteredItems = categorized[activeTab] || [];
 
   if (!open) return null;
 
@@ -160,8 +188,6 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
 
   const Tab = ({ id, label, icon, isActive }) => {
     const count = categorized[id]?.length || 0;
-    const failed = categorized.failedCount[id] || 0;
-
     return (
       <button
         className={`relative z-10 flex-1 h-10 flex items-center justify-center transition-colors duration-300 gap-1.5 ${
@@ -172,34 +198,21 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
         <span className={`text-lg transition-transform ${isActive ? 'scale-110' : 'scale-90'}`}>
           {icon}
         </span>
-
         {isActive && (
           <span className="capitalize text-[11px] font-bold tracking-tight animate-in fade-in duration-300">
             {label}
           </span>
         )}
-
         {count > 0 && (
-          <div className="flex gap-0.5 items-center">
-            {failed > 0 && (
-              <span
-                className={`badge ${
-                  isActive ? 'bg-error text-error-content border-none' : 'badge-error'
-                } badge-xs w-3 h-3 p-0 flex items-center justify-center text-[7px] font-black animate-pulse`}
-              >
-                !
-              </span>
-            )}
-            <span
-              className={`badge badge-xs min-w-4 h-3.5 ${
-                isActive
-                  ? 'bg-primary-content text-primary border-none'
-                  : 'badge-neutral text-white border-none'
-              } tabular-nums text-[8px]`}
-            >
-              {count}
-            </span>
-          </div>
+          <span
+            className={`badge badge-xs min-w-4 h-3.5 ${
+              isActive
+                ? 'bg-primary-content text-primary border-none'
+                : 'badge-neutral text-white border-none'
+            } tabular-nums text-[8px]`}
+          >
+            {count}
+          </span>
         )}
       </button>
     );
@@ -226,12 +239,6 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                 <FiRefreshCw className="h-4 w-4" />
               </button>
             )}
-            {Object.values(categorized.failedCount).reduce((a, b) => a + b, 0) > 0 && (
-              <span className="badge badge-error badge-sm gap-1.5 font-bold px-2 py-2.5">
-                <span className="animate-bounce">✕</span>
-                {Object.values(categorized.failedCount).reduce((a, b) => a + b, 0)} Issues
-              </span>
-            )}
           </div>
           <button className="btn btn-ghost btn-sm btn-circle" onClick={onClose}>
             ✕
@@ -241,7 +248,6 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
         {/* Sliding Pill Tabs */}
         <div className="mx-4 mt-3 mb-1">
           <div className="bg-base-200/60 p-1 rounded-xl flex relative border border-base-300/30 h-12">
-            {/* The Shifter / Slider background */}
             <div
               className="absolute h-[calc(100%-8px)] top-1 bg-primary rounded-lg transition-all duration-300 ease-in-out shadow-md"
               style={{
@@ -249,7 +255,6 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                 left: `calc(${activeIndex * 25}% + 2px)`,
               }}
             />
-
             {tabs.map(tab => (
               <Tab key={tab.id} {...tab} isActive={activeTab === tab.id} />
             ))}
@@ -269,27 +274,27 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
 
           {filteredItems.map(item => {
             const preview = item?.transaction_preview || {};
-            const apiType = getApiType(item);
             const code = preview?.code || item?.code || `OFF-${item?.sync_id?.slice(0, 8) || item?.id}`;
-            const channelName = preview?.channel?.name || item?.salesChannelName || item?.salesChannelId || '-';
-            const paymentName = preview?.payment_method?.name || (item?.paymentMethodId ? `Payment #${item.paymentMethodId}` : 'Cash');
+            const channelName = preview?.channel?.name || item?.sales_channel_name || item?.sales_channel_id || '-';
+            const paymentName = preview?.payment_method?.name || (item?.payment_method_id ? `#${item.payment_method_id}` : 'Cash');
             const cashierName = preview?.cashier?.name || preview?.session?.cashier?.name || '-';
             const itemCount = Number(preview?.item_count) || preview?.items?.length || item?.items?.length || 0;
-            const totalCharges = Number(preview?.total_charges || preview?.total_bill) || item?.totalPayment || 0;
-            // Fallback: calculate from items when totalPayment is 0 (pending save-bill)
+            const totalCharges = Number(preview?.total_charges || preview?.total_bill) || item?.total_payment || 0;
             const itemsTotal = (item?.items || []).reduce((sum, p) =>
               sum + (Number(p.unit_nett || p.unit_price || 0) * Number(p.quantity || 0))
                 + (p.addons || []).reduce((asum, a) => asum + (Number(a.unit_nett || a.unit_price || 0) * Number(a.quantity || 0)), 0),
             0);
-            const displayTotal = totalCharges || itemsTotal + (Number(item?.serviceChargeValue) || 0);
-            const createdAt = preview?.created_at || item?.paidAt || item?.createdAt || item?._sessionCreatedAt;
+            const displayTotal = totalCharges || itemsTotal + (Number(item?.service_charge_value) || 0);
+            const createdAt = preview?.created_at || item?.paid_at || item?.createdAt;
             const status = statusConfig[item.status] || statusConfig.pending;
             const itemsList = preview?.items || item?.items || [];
 
+            const apiType = item._type === 'topup' ? 'topup'
+              : item._type === 'membership' ? 'create member'
+              : item._type === 'session' ? (item.body?.cash_started != null && item.body?.cash_finished != null ? 'both' : item.body?.cash_finished ? 'close' : 'start')
+              : item.status === 'pending' ? 'save bill' : 'checkout';
+
             const isSession = apiType === 'start' || apiType === 'close' || apiType === 'both';
-            // Specialized rendering for Member (topup + create member)
-            const isTopup = apiType === 'topup';
-            const isCreateMember = apiType === 'create member';
 
             if (isSession) {
               const sessionLabel = apiType === 'both' ? 'Open & Close Session' : (apiType === 'start' ? 'Open Session' : 'Close Session');
@@ -298,10 +303,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
               const cashAmount = item?.body?.cash || 0;
 
               return (
-                <div
-                  key={item.id}
-                  className={`rounded-lg border border-base-200 bg-base-100 transition-colors hover:border-base-300 overflow-hidden`}
-                >
+                <div key={item.id} className="rounded-lg border border-base-200 bg-base-100 transition-colors hover:border-base-300 overflow-hidden">
                   <div className={`h-1 w-full ${apiType === 'start' ? 'bg-success' : 'bg-warning'}`} />
                   <div className="p-2.5">
                     <div className="flex items-center gap-2 mb-1.5">
@@ -324,7 +326,6 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                         <span>Close: {dateFormat(item?.body?.close_at || createdAt)}</span>
                       </div>
                     )}
-
                     <div className="flex justify-between items-center bg-base-200/30 rounded p-2">
                       <div className="flex flex-col gap-1">
                         <span className="text-[9px] uppercase text-base-content/40 font-bold">
@@ -336,9 +337,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                         {apiType === 'both' && (
                           <>
                             <span className="text-[9px] uppercase text-base-content/40 font-bold">Ending Cash</span>
-                            <span className="text-sm font-black text-base-content">
-                              {currencyFormat(item?.body?.cash || 0)}
-                            </span>
+                            <span className="text-sm font-black text-base-content">{currencyFormat(item?.body?.cash || 0)}</span>
                           </>
                         )}
                       </div>
@@ -347,196 +346,102 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                         <span className="text-[10px] font-bold">{item?.body?.orderCount || 0}</span>
                       </div>
                     </div>
-
-                    {/* Error message */}
                     {item.lastError && (
-                      <div className="mt-2 text-[10px] text-error bg-error/10 rounded px-2 py-1 leading-tight">
-                        {item.lastError}
-                      </div>
+                      <div className="mt-2 text-[10px] text-error bg-error/10 rounded px-2 py-1 leading-tight">{item.lastError}</div>
                     )}
-
-                    {/* Action buttons — session ga perlu retry, auto lewat heartbeat */}
-                    <div className="mt-2 flex gap-1">
-                      {(item.status === 'pending' && !isSession) && (
-                        <button
-                          className="btn btn-ghost btn-xs text-base-content/50"
-                          onClick={() => onRemove?.(item.id)}
-                        >
-                          🗑️ Remove
-                        </button>
-                      )}
-                      {(item.status === 'failed' && !isSession) && (
-                        <button
-                          className="btn btn-error btn-xs flex-1 gap-1"
-                          onClick={() => onRetry?.(item.id)}
-                        >
-                          ↻ Retry Sync
-                        </button>
-                      )}
-                    </div>
                   </div>
                 </div>
               );
             }
 
-            if (isTopup) {
+            if (apiType === 'topup') {
               const nominal = Number(preview?.nominal || item?.nominal || 0);
               const memberName = preview?.member_name || item?.member_name || '-';
-              const topupPayment = item?.payment_type || preview?.payment_type || '-';
 
               return (
-                <div
-                  key={item.id}
-                  className="rounded-lg border border-base-200 bg-base-100 transition-colors hover:border-base-300 overflow-hidden"
-                >
+                <div key={item.id} className="rounded-lg border border-base-200 bg-base-100 transition-colors hover:border-base-300 overflow-hidden">
                   <div className="h-1 w-full bg-info" />
                   <div className="p-2.5">
                     <div className="flex items-center gap-2 mb-1.5">
-                      <span className="badge badge-xs badge-info uppercase font-bold tracking-wider">
-                        💰 Topup
-                      </span>
+                      <span className="badge badge-xs badge-info uppercase font-bold tracking-wider">💰 Topup</span>
                       <span className="flex-1" />
                       <span className={`badge badge-xs ${status.badge} gap-0.5`}>
                         <span className="text-[9px]">{status.icon}</span>
                         {item.status}
                       </span>
                     </div>
-
                     <div className="flex items-center gap-1 text-[10px] text-base-content/50 flex-wrap mb-2">
                       <span className="truncate">{memberName}</span>
                       <span>·</span>
                       <span className="whitespace-nowrap">{dateFormat(createdAt)}</span>
                     </div>
-
                     <div className="bg-base-200/30 rounded p-2">
                       <div className="flex justify-between text-[9px] uppercase text-base-content/40 font-bold">
                         <span>Payment</span>
                         <span>Amount</span>
                       </div>
                       <div className="flex justify-between items-center mt-0.5">
-                        <span className="text-[13px] font-bold capitalize">{topupPayment}</span>
+                        <span className="text-[13px] font-bold capitalize">{item?.payment_type || '-'}</span>
                         <span className="text-sm font-black text-success">{currencyFormat(nominal)}</span>
                       </div>
                     </div>
-
-                    {item.lastError && (
-                      <div className="mt-2 text-[10px] text-error bg-error/10 rounded px-2 py-1 leading-tight">
-                        {item.lastError}
-                      </div>
-                    )}
-
                     <div className="mt-2 flex gap-1">
-                      {item.status === 'pending' && (
-                        <button
-                          className="btn btn-ghost btn-xs text-base-content/50"
-                          onClick={() => onRemove?.(item.id)}
-                        >
-                          🗑️ Remove
-                        </button>
-                      )}
-                      {item.status === 'failed' && (
-                        <button
-                          className="btn btn-error btn-xs flex-1 gap-1"
-                          onClick={() => onRetry?.(item.id)}
-                        >
-                          ↻ Retry Sync
-                        </button>
-                      )}
+                      <button className="btn btn-ghost btn-xs text-base-content/50" onClick={() => onRemove?.(item.id)}>
+                        🗑️ Remove
+                      </button>
                     </div>
                   </div>
                 </div>
               );
             }
 
-            if (isCreateMember) {
-              const memberName = item.name || preview?.member_name || '-';
-              const memberCode = item.reff_code || preview?.member_code || '';
-              const displayName = memberCode ? `${memberName} (${memberCode})` : memberName;
-
+            if (apiType === 'create member') {
               return (
-                <div
-                  key={item.id}
-                  className="rounded-lg border border-base-200 bg-base-100 transition-colors hover:border-base-300 overflow-hidden"
-                >
+                <div key={item.id} className="rounded-lg border border-base-200 bg-base-100 transition-colors hover:border-base-300 overflow-hidden">
                   <div className="h-1 w-full bg-success" />
                   <div className="p-2.5">
                     <div className="flex items-center gap-2 mb-1.5">
-                      <span className="badge badge-xs badge-success uppercase font-bold tracking-wider">
-                        👤 Create Member
-                      </span>
+                      <span className="badge badge-xs badge-success uppercase font-bold tracking-wider">👤 Create Member</span>
                       <span className="flex-1" />
                       <span className={`badge badge-xs ${status.badge} gap-0.5`}>
                         <span className="text-[9px]">{status.icon}</span>
                         {item.status}
                       </span>
                     </div>
-
-                    <div className="flex items-center gap-1 text-[10px] text-base-content/50 flex-wrap mb-2">
-                      <span className="whitespace-nowrap">{dateFormat(createdAt)}</span>
-                    </div>
-
                     <div className="flex justify-between items-center bg-base-200/30 rounded p-2">
                       <div className="flex flex-col">
                         <span className="text-[9px] uppercase text-base-content/40 font-bold">Member</span>
-                        <span className="text-[13px] font-bold">{displayName}</span>
+                        <span className="text-[13px] font-bold">{item.name || '-'} {item.reff_code ? `(${item.reff_code})` : ''}</span>
                       </div>
                       <div className="text-right">
                         <span className="text-[9px] uppercase text-base-content/40 font-bold block">Card ID</span>
                         <span className="text-sm font-black text-base-content">{item.card_id || '-'}</span>
                       </div>
                     </div>
-
-                    {item.lastError && (
-                      <div className="mt-2 text-[10px] text-error bg-error/10 rounded px-2 py-1 leading-tight">
-                        {item.lastError}
-                      </div>
-                    )}
-
                     <div className="mt-2 flex gap-1">
-                      {item.status === 'pending' && (
-                        <button
-                          className="btn btn-ghost btn-xs text-base-content/50"
-                          onClick={() => onRemove?.(item.id)}
-                        >
-                          🗑️ Remove
-                        </button>
-                      )}
-                      {item.status === 'failed' && (
-                        <button
-                          className="btn btn-error btn-xs flex-1 gap-1"
-                          onClick={() => onRetry?.(item.id)}
-                        >
-                          ↻ Retry Sync
-                        </button>
-                      )}
+                      <button className="btn btn-ghost btn-xs text-base-content/50" onClick={() => onRemove?.(item.id)}>
+                        🗑️ Remove
+                      </button>
                     </div>
                   </div>
                 </div>
               );
             }
 
+            // Default render for bills & orders
             return (
-              <div
-                key={item.id}
-                className="rounded-lg border border-base-200 bg-base-100 transition-colors hover:border-base-300 overflow-hidden"
-              >
-                {/* Header Info */}
+              <div key={item.id} className="rounded-lg border border-base-200 bg-base-100 transition-colors hover:border-base-300 overflow-hidden">
                 <div className="p-2.5 pb-1.5">
-                  {/* Row 1: Type badge + Code + Status */}
                   <div className="flex items-center gap-2 mb-1.5">
-                    <span className="badge badge-xs badge-primary badge-outline uppercase font-bold tracking-wider">
-                      {apiType}
-                    </span>
+                    <span className="badge badge-xs badge-primary badge-outline uppercase font-bold tracking-wider">{apiType}</span>
                     <span className="text-xs font-bold text-base-content truncate flex-1">{code}</span>
                     <span className={`badge badge-xs ${status.badge} gap-0.5`}>
                       <span className="text-[9px]">{status.icon}</span>
                       {item.status}
                     </span>
                   </div>
-
-                  {/* Row 2: Metadata - single compact line */}
                   <div className="flex items-center gap-1 text-[10px] text-base-content/50 flex-wrap">
-                    <span className="truncate max-w-24">{preview?.bill_name || item?.billName || item?.bill_name || cashierName}</span>
+                    <span className="truncate max-w-24">{preview?.bill_name || item?.bill_name || cashierName}</span>
                     <span>·</span>
                     <span className="truncate">{channelName}</span>
                     <span>·</span>
@@ -546,7 +451,6 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                   </div>
                 </div>
 
-                {/* Collapsible Items Section */}
                 {itemsList.length > 0 ? (
                   <div className="collapse collapse-arrow rounded-none border-t border-base-200">
                     <input type="checkbox" className="min-h-0" />
@@ -554,9 +458,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                       <span className="text-[12px] font-bold text-base-content/70">
                         {itemCount} item{itemCount !== 1 ? 's' : ''}
                       </span>
-                      <span className="text-[12px] font-extrabold text-base-content mr-6">
-                        {currencyFormat(displayTotal)}
-                      </span>
+                      <span className="text-[12px] font-extrabold text-base-content mr-6">{currencyFormat(displayTotal)}</span>
                     </div>
                     <div className="collapse-content px-2.5 pb-2 bg-base-200/30">
                       <div className="space-y-2 pt-2">
@@ -564,9 +466,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                           <div key={idx} className="flex flex-col gap-0.5">
                             <div className="flex justify-between items-start gap-2">
                               <div className="flex gap-1.5 items-start flex-1 min-w-0">
-                                <span className="bg-base-content/80 rounded px-1.5 py-0.5 text-[13px] text-white font-bold leading-none mt-0.5">
-                                  {product.quantity}
-                                </span>
+                                <span className="bg-base-content/80 rounded px-1.5 py-0.5 text-[13px] text-white font-bold leading-none mt-0.5">{product.quantity}</span>
                                 <span className="text-[13px] font-bold uppercase truncate leading-tight">
                                   {product.catalog?.name || product.catalog_name || product.description || 'Unknown Item'}
                                 </span>
@@ -575,25 +475,19 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                                 {currencyFormat(Number(product.unit_nett || product.unit_price || 0) * Number(product.quantity || 0))}
                               </span>
                             </div>
-
-                            {/* Additionals for queued items */}
                             {product.addons?.length > 0 && (
                               <div className="ml-5 border-l border-base-content/10 pl-2 flex flex-col gap-0.5">
                                 {product.addons?.map((add, aIdx) => {
-                          const addonName = add.catalog_name || add.catalog?.name || add.name || '';
-                          const addonUnitPrice = Number(add.unit_price || add.unit_nett || 0);
-                          const addonQty = Number(add.quantity || 1);
-                          const suffix = `(${addonQty} x ${currencyFormat(addonUnitPrice)})`;
-                                return (
+                                  const addonName = add.catalog_name || add.catalog?.name || add.name || '';
+                                  const addonPrice = Number(add.unit_price || add.unit_nett || 0);
+                                  const addonQty = Number(add.quantity || 1);
+                                  return (
                                     <div key={aIdx} className="flex justify-between text-[11px] text-base-content/40 italic">
-                                    <span>+ {addonName} {suffix}</span>
-                                        {addonUnitPrice > 0 && (
-                                      <span>
-                                        {currencyFormat(addonQty * addonUnitPrice)}
-                                       </span>
-                                        )}
+                                      <span>+ {addonName} ({addonQty} x {currencyFormat(addonPrice)})</span>
+                                      {addonPrice > 0 && <span>{currencyFormat(addonQty * addonPrice)}</span>}
                                     </div>
-                                  )})}
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
@@ -604,50 +498,27 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                 ) : (
                   <div className="px-2.5 py-2 border-t border-base-200 flex justify-between items-center bg-base-200/10">
                     <span className="text-[10px] text-base-content/50">No items</span>
-                    <span className="text-xs font-extrabold text-base-content">
-                      {currencyFormat(displayTotal)}
-                    </span>
+                    <span className="text-xs font-extrabold text-base-content">{currencyFormat(displayTotal)}</span>
                   </div>
                 )}
 
-                {/* Error message */}
                 {item.lastError && (
-                  <div className="mx-2.5 mb-1.5 text-[10px] text-error bg-error/10 rounded px-2 py-1 leading-tight">
-                    {item.lastError}
-                  </div>
+                  <div className="mx-2.5 mb-1.5 text-[10px] text-error bg-error/10 rounded px-2 py-1 leading-tight">{item.lastError}</div>
                 )}
 
-                {/* Action buttons */}
                 <div className="p-2.5 pt-0 flex gap-1">
-                  {/* Open Bill button - only for save-bill type and pending status */}
                   {apiType === 'save bill' && item.status === 'pending' && (
-                    <button
-                      className="btn btn-primary btn-xs flex-1 gap-1"
-                      onClick={() => {
-                        onOpenBill?.(item);
-                        onClose();
-                      }}
-                    >
+                    <button className="btn btn-primary btn-xs flex-1 gap-1" onClick={() => { onOpenBill?.(item); onClose(); }}>
                       📋 Open Bill
                     </button>
                   )}
-
-                  {/* Remove button for pending items */}
                   {item.status === 'pending' && (
-                    <button
-                      className="btn btn-error btn-ghost btn-xs text-base-content/50"
-                      onClick={() => onRemove?.(item.id)}
-                    >
+                    <button className="btn btn-error btn-ghost btn-xs text-base-content/50" onClick={() => onRemove?.(item.id)}>
                       &#10006; Remove
                     </button>
                   )}
-
-                  {/* Retry button for failed items */}
                   {item.status === 'failed' && (
-                    <button
-                      className="btn btn-error btn-xs flex-1 gap-1"
-                      onClick={() => onRetry?.(item.id)}
-                    >
+                    <button className="btn btn-error btn-xs flex-1 gap-1" onClick={() => onRetry?.(item.id)}>
                       ↻ Retry Sync
                     </button>
                   )}

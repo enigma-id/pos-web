@@ -11,138 +11,137 @@ import {
 import {
   checkSession,
   invalidateSession,
-  setActiveSyncId,
-  clearActiveSyncId,
   setOfflineStartResult,
   clearOfflineStartResult,
 } from './slice';
 import {
-  setOfflineSummary,
-  clearOfflineSummary,
+  setSessionSummary,
+  clearSessionSummary,
   setOfflineSessionEnded,
   clearOfflineSessionEnded,
   setPendingCount,
-  setSessions,
 } from '../../offline/slice';
 import { resetCart } from '../../cart/slice';
+import { store } from '../../store';
 import useCatalog from '../../catalog/hooks';
 import { $failure } from '../../form/action';
 import {
   createOfflineSession,
-  getActiveSession,
-  getAllSessions,
-  getActiveSessionId,
-  updateSessionClose,
+  closeSession,
 } from '../../offline/queue';
 import { syncPendingSessions } from '../../offline/syncManager';
+import { getCache, setCache } from '../../../utils/cache';
 
-// ========== OFFLINE SUMMARY HELPER ==========
+// ========== UPDATE SESSION SUMMARY (incremental) ==========
 
-const computeOrderItemTotal = (items = []) => {
-  return items.reduce((sum, i) => {
-    const itemTotal = (Number(i.unit_price) || 0) * (Number(i.quantity) || 0);
-    const addonsTotal = (i.addons || []).reduce((asum, a) =>
-      asum + (Number(a.unit_price) || 0) * (Number(a.quantity) || 0), 0
-    );
-    return sum + itemTotal + addonsTotal;
-  }, 0);
-};
+/**
+ * Update sessionSummary di Redux secara incremental.
+ * Panggil abis save bill, pay, topup — gausah query IndexedDB.
+ */
+export const updateSessionSummary = (newData) => {
+  const state = store.getState();
+  const existing = state?.Offline?.sessionSummary || {};
 
-export const computeOfflineSummary = (session, currentSessionSyncId, authUser) => {
-  const orders = session.orders || [];
-  const topups = session.topups || [];
-
-  const completedOrders = orders.filter(o =>
-    o.status === 'completed' && o.paidSessionSyncId === currentSessionSyncId
-  );
-  const pendingOrders = orders.filter(o =>
-    o.status === 'pending' && o.originSessionSyncId === currentSessionSyncId && o.isShow !== false
-  );
-  const crossSessionOrders = orders.filter(o =>
-    o.status === 'completed' && o.originSessionSyncId && o.paidSessionSyncId &&
-    o.originSessionSyncId !== o.paidSessionSyncId
-  );
-
-  const totalSales = completedOrders.reduce((sum, o) => sum + (o.totalPayment || 0), 0);
-  const totalDiscount = completedOrders.reduce((sum, o) => sum + (o.discountValue || 0), 0);
-  const totalService = completedOrders.reduce((sum, o) => sum + (o.serviceChargeValue || 0), 0);
-  const totalAfterDiscount = totalSales - totalDiscount;
-  const grandTotal = totalAfterDiscount + totalService;
-  const outstandingBill = pendingOrders.reduce((sum, o) => {
-    return sum + (o.totalPayment || computeOrderItemTotal(o.items));
-  }, 0);
-  const outstandingBillPayment = crossSessionOrders.reduce((sum, o) => sum + (o.totalPayment || 0), 0);
-
-  // Payment methods breakdown
-  const pmMap = {};
-  completedOrders.forEach(o => {
-    const id = o.paymentMethodId || 0;
-    if (!pmMap[id]) pmMap[id] = { payment_method_id: id, total_paid: 0, count: 0, name: o.paymentMethodId === 0 ? 'Cash' : '-' };
-    pmMap[id].total_paid += o.totalPayment || 0;
-    pmMap[id].count += 1;
-  });
-
-  // Topup summary
-  const topupCash = topups.filter(t => t.payment_type === 'cash').reduce((sum, t) => sum + (t.nominal || 0), 0);
-
-  return {
-    started_at: session.session.open_at,
-    finished_at: session.session.close_at || new Date().toISOString(),
-    cash_started: session.session.cash_started,
-    cash_finished: session.session.cash_finished,
-    cashier: { name: authUser?.name || '-' },
+  // Deep clone biar mutable (Redux state immutable)
+  const summary = {
+    ...existing,
     summary: {
-      sales: {
-        total_sales: totalSales,
-        total_discount: totalDiscount,
-        total_after_discount: totalAfterDiscount,
-        total_service: totalService,
-        grand_total: grandTotal,
-        outstanding_bill: outstandingBill,
-        outstanding_bill_payment: outstandingBillPayment,
-      },
-      cash: {
-        expected_cash: (session.session.cash_started || 0) + totalSales + topupCash,
-        topup_cash: topupCash,
-      },
-      payment_methods: Object.values(pmMap),
-      category_solds: [],
-      topups: topups.map(t => ({
-        type: t.payment_type || 'cash',
-        total_nominal: t.nominal || 0,
-      })),
+      ...(existing.summary || {}),
+      sales: { ...(existing.summary?.sales || {}) },
+      cash: { ...(existing.summary?.cash || {}) },
+      payment_methods: [...(existing.summary?.payment_methods || [])],
+      topups: [...(existing.summary?.topups || [])],
     },
-    orders: orders,
+    orders: [...(existing.orders || [])],
   };
-};
 
-const getDeviceInfo = async () => {
-  const info = {};
+  const itemsTotal = (newData.items || []).reduce((s, i) => {
+    const itemTotal = Number(i.unit_price || 0) * Number(i.quantity || 0);
+    const addonsTotal = (i.addons || []).reduce((asum, a) =>
+      asum + Number(a.unit_price || 0) * Number(a.quantity || 0), 0);
+    return s + itemTotal + addonsTotal;
+  }, 0);
 
-  try {
-    const pos = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 5000,
-        maximumAge: 300000,
-      });
+  if (newData.type === 'bill') {
+    const serviceCharge = newData.serviceChargeValue || newData.service_charge_value || 0;
+    const totalBill = itemsTotal + serviceCharge;
+    summary.summary.sales.outstanding_bill = (summary.summary.sales.outstanding_bill || 0) + totalBill;
+    summary.orders.push({
+      sync_id: newData.sync_id,
+      status: 'pending',
+      items: newData.items,
+      bill_name: newData.billName || newData.bill_name,
+      totalPayment: 0,
     });
-    info.latitude = pos.coords.latitude;
-    info.longitude = pos.coords.longitude;
-  } catch (e) {
-    // Geolocation unavailable or permission denied
-    console.log(e);
+  } else if (newData.type === 'payment') {
+    const totalPayment = newData.totalPayment || newData.total_payment || 0;
+    summary.summary.sales.total_sales = (summary.summary.sales.total_sales || 0) + totalPayment;
+    summary.summary.sales.total_discount = (summary.summary.sales.total_discount || 0) + (newData.discountValue || newData.discount_value || 0);
+    summary.summary.sales.total_service = (summary.summary.sales.total_service || 0) + (newData.serviceChargeValue || newData.service_charge_value || 0);
+    summary.summary.sales.grand_total = (summary.summary.sales.grand_total || 0) + totalPayment;
+    summary.summary.sales.total_after_discount = (summary.summary.sales.total_after_discount || 0) + totalPayment;
+    summary.summary.cash.expected_cash = (summary.summary.cash.expected_cash || 0) + totalPayment;
+
+    const pmId = newData.paymentMethodId || newData.payment_method_id || 0;
+    const existingPm = summary.summary.payment_methods.find(p => p.payment_method_id === pmId);
+    if (existingPm) {
+      existingPm.total_paid = (existingPm.total_paid || 0) + totalPayment;
+      existingPm.count = (existingPm.count || 0) + 1;
+    } else {
+      summary.summary.payment_methods.push({
+        payment_method_id: pmId,
+        total_paid: totalPayment,
+        count: 1,
+        name: pmId === 0 ? 'Cash' : `#${pmId}`,
+      });
+    }
+
+    summary.orders.push({
+      sync_id: newData.sync_id,
+      status: 'completed',
+      items: newData.items,
+      bill_name: newData.billName || newData.bill_name,
+      totalPayment,
+    });
+  } else if (newData.type === 'topup') {
+    const nominal = newData.nominal || 0;
+    summary.summary.cash.topup_cash = (summary.summary.cash.topup_cash || 0) + nominal;
+    summary.summary.cash.expected_cash = (summary.summary.cash.expected_cash || 0) + nominal;
+    summary.summary.topups.push({
+      type: newData.payment_type || 'cash',
+      total_nominal: nominal,
+    });
   }
 
+  store.dispatch(setSessionSummary(summary));
+
+  // Sync ke cache_shifts biar shifts page offline dapet data detail
   try {
-    const battery = await navigator.getBattery();
-    info.battery_level = `${Math.round(battery.level * 100)}`;
-  } catch (e) {
-    // Battery API unavailable
-    console.log(e);
-  }
+    const SHIFTS_CACHE_KEY = 'cache_shifts';
+    const id = summary.id || store.getState()?.Offline?.sessionSummary?.id;
+    if (id) {
+      const existingShifts = getCache(SHIFTS_CACHE_KEY) || [];
+      // Cari index shift yg sama, update atau push baru
+      const idx = existingShifts.findIndex(s => s.id === id);
+      const shiftEntry = {
+        id,
+        cashier: summary.cashier || { name: '' },
+        started_at: summary.started_at,
+        finished_at: summary.finished_at,
+        status: summary.finished_at ? 'closed' : 'open',
+        _offline: true,
+        ...summary,  // full sessionSummary data termasuk summary.sales, orders, dll
+      };
+      if (idx >= 0) {
+        existingShifts[idx] = shiftEntry;
+      } else {
+        existingShifts.unshift(shiftEntry);
+      }
+      setCache(SHIFTS_CACHE_KEY, existingShifts);
+    }
+  } catch {}
 
-  return info;
+  return summary;
 };
 
 const useSession = () => {
@@ -165,43 +164,65 @@ const useSession = () => {
   const { refreshCatalog } = useCatalog();
 
   const start = async data => {
-    const deviceInfo = await getDeviceInfo();
-
     if (!networkOk) {
       // ===== OFFLINE START =====
       const doc = await createOfflineSession(
         {
           cash_started: data?.cash_started || 0,
-          latitude: deviceInfo.latitude,
-          longitude: deviceInfo.longitude,
-          battery_health: deviceInfo.battery_level,
         },
         userId
       );
 
-      dispatch(clearOfflineSummary());
       dispatch(checkSession());
-      dispatch(setActiveSyncId(doc.sync_id));
       dispatch(
         setOfflineStartResult({
           sync_id: doc.sync_id,
           is_offline_session: true,
           created_at: doc.createdAt,
-          cash_started: doc.session.cash_started,
+          cash_started: doc.cash_started,
         })
       );
       dispatch(resetCart());
 
-      // Sync ke Redux biar PendingDrawer — Tab Shift kebaca
-      const allSess = await getAllSessions(userId);
-      dispatch(setSessions(allSess));
-      dispatch(setPendingCount(allSess.filter(s => s.syncStatus !== 'synced').length));
+      // Set sessionSummary biar bisa dipake close session nanti
+      dispatch(setSessionSummary({
+        id: doc.sync_id,
+        started_at: doc.open_at || doc.createdAt,
+        cash_started: doc.cash_started,
+        cashier: { name: authUser?.name || '-' },
+        summary: {
+          sales: { total_sales: 0, total_discount: 0, total_service: 0, grand_total: 0, outstanding_bill: 0, outstanding_bill_payment: 0 },
+          cash: { expected_cash: doc.cash_started || 0, topup_cash: 0 },
+          payment_methods: [],
+          topups: [],
+        },
+        orders: [],
+      }));
+
+      // Set pendingCount incremental
+      dispatch(setPendingCount(1));
+
+      // Push ke shifts cache biar muncul di list offline
+      try {
+        const SHIFTS_CACHE_KEY = 'cache_shifts';
+        const existingShifts = getCache(SHIFTS_CACHE_KEY) || [];
+        existingShifts.unshift({
+          id: doc.sync_id,
+          cashier: { name: authUser?.name || '-' },
+          started_at: doc.open_at || doc.createdAt,
+          finished_at: null,
+          status: 'open',
+          _offline: true,
+        });
+        setCache(SHIFTS_CACHE_KEY, existingShifts);
+      } catch {}
+
       return;
     }
 
     // ===== ONLINE START =====
     try {
-      const res = await startMutation({ ...data, ...deviceInfo }).unwrap();
+      const res = await startMutation(data).unwrap();
       if (res?.message === 'success') {
         dispatch(clearOfflineStartResult());
         refreshCatalog();
@@ -222,125 +243,64 @@ const useSession = () => {
 
     if (!networkOk) {
       // ===== OFFLINE END =====
-      const activeId = await getActiveSessionId(authSession, userId);
+      const sessionId = store.getState()?.Offline?.sessionSummary?.id || null;
 
-      if (!activeId) {
-        // No active session found — just dispatch cleanup
+      if (!sessionId) {
         dispatch(invalidateSession());
-        dispatch(clearActiveSyncId());
         return;
       }
 
-      let computedSummary = {};
+      // Buat session di IndexedDB untuk tracking sync + set close data
+      const { ensureDB, STORES } = await import('../../offline/queue');
+      const db = await ensureDB(userId);
+      const doc = await createOfflineSession(
+        {
+          cash_started: 0,
+        },
+        userId
+      );
 
-      if (activeId.source === 'server') {
-        // Start online → close offline (BE Case 1): create offlineSession with referenceId
-        // syncManager sends POST /sales/sync { session.id: server-uuid, close_at, cash_finished }
-        const deviceInfo = await getDeviceInfo();
-        const { createOfflineSession } = await import('../../offline/queue');
-
-        // Use REAL API data from summaryResult if available (start was online)
-        const apiData = summaryResult?.data?.data;
-
-        // Buat offline session untuk tracking close, tapi summary pake data real dari API
-        const doc = await createOfflineSession(
-          {
-            cash_started: apiData?.cash_started || 0,
-            latitude: deviceInfo.latitude,
-            longitude: deviceInfo.longitude,
-            battery_health: deviceInfo.battery_level,
-          },
-          userId
-        );
-
-        // Set referenceId = server UUID + close data, keep syncStatus = pending
-        // syncManager akan kirim { session.id: referenceId, close_at, cash_finished }
-        const { setSyncStatus } = await import('../../offline/queue');
-        const { updateSyncResult } = await import('../../offline/queue');
-        await updateSyncResult(doc.sync_id, { referenceId: activeId.id }, userId);
-        await updateSessionClose(
-          doc.sync_id,
-          {
-            cash_finished: data?.cash_finished || 0,
-            latitude: deviceInfo.latitude,
-            longitude: deviceInfo.longitude,
-            battery_health: deviceInfo.battery_level,
-          },
-          userId
-        );
-        // Reset syncStatus to pending so syncManager picks it up
-        await setSyncStatus(doc.sync_id, 'pending', { userId });
-
-        const closedAt = new Date().toISOString();
-        computedSummary = {
-          id: apiData?.id,
-          started_at: apiData?.started_at || doc.session.open_at,
-          finished_at: closedAt,
-          cash_started: apiData?.cash_started || doc.session.cash_started,
-          cash_finished: data?.cash_finished || 0,
-          cashier: apiData?.cashier || { name: authUser?.name || '-' },
-          outlet: apiData?.outlet,
-          summary: apiData?.summary || {
-            sales: {
-              total_sales: 0,
-              total_discount: 0,
-              total_after_discount: 0,
-              total_service: 0,
-              grand_total: 0,
-              outstanding_bill: 0,
-              outstanding_bill_payment: 0,
-            },
-            cash: { expected_cash: doc.session.cash_started, topup_cash: 0 },
-            payment_methods: [],
-            category_solds: [],
-            topups: [],
-          },
-          orders: apiData?.orders || [],
-        };
-      } else {
-        // Start was offline → update existing session close
-        const deviceInfo = await getDeviceInfo();
-        await updateSessionClose(
-          activeId.id,
-          {
-            cash_finished: data?.cash_finished || 0,
-            latitude: deviceInfo.latitude,
-            longitude: deviceInfo.longitude,
-            battery_health: deviceInfo.battery_level,
-          },
-          userId
-        );
-
-        // Read updated session for summary
-        const allSessions = await getAllSessions(userId);
-        const updated = allSessions.find(s => s.sync_id === activeId.id);
-
-        if (updated) {
-          const summarySessionId = updated.referenceId || updated.sync_id;
-          console.log('[OFFLINE END SESSION] session:', updated.sync_id, 'summarySessionId:', summarySessionId, 'orders:', updated.orders?.length);
-          computedSummary = computeOfflineSummary(updated, summarySessionId, authUser);
-        }
+      // Update session dengan close data
+      const existing = await db.get(STORES.sessions, doc.sync_id);
+      if (existing) {
+        existing.close_at = new Date().toISOString();
+        existing.cash_finished = data?.cash_finished || 0;
+        existing.syncStatus = 'pending';
+        await db.put(STORES.sessions, existing);
       }
 
-      dispatch(setOfflineSummary(computedSummary));
+      // Ambil summary dari Redux cache (udah diupdate incremental)
+      const currentSummary = store.getState()?.Offline?.sessionSummary || {};
+      currentSummary.finished_at = new Date().toISOString();
+      currentSummary.cash_finished = data?.cash_finished || 0;
+
+      dispatch(setSessionSummary(currentSummary));
       dispatch(setOfflineSessionEnded(true));
       dispatch(invalidateSession());
-      dispatch(clearActiveSyncId());
       refreshCatalog();
       dispatch(resetCart());
+      dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
 
-      // Update Redux pending count + sessions biar Sync Indicator kebaca
-      const updatedAll = await getAllSessions(userId);
-      dispatch(setSessions(updatedAll));
-      dispatch(
-        setPendingCount(updatedAll.filter(s => s.syncStatus !== 'synced').length)
-      );
+      // Push ke shifts cache
+      try {
+        const SHIFTS_CACHE_KEY = 'cache_shifts';
+        const existingShifts = getCache(SHIFTS_CACHE_KEY) || [];
+        existingShifts.unshift({
+          id: sessionId,
+          cashier: { name: authUser?.name || '-' },
+          started_at: currentSummary?.started_at || new Date().toISOString(),
+          finished_at: currentSummary?.finished_at || new Date().toISOString(),
+          status: 'closed',
+          _offline: true,
+        });
+        setCache(SHIFTS_CACHE_KEY, existingShifts);
+      } catch {}
+
       return;
     }
 
     // ===== ONLINE END =====
     try {
-      // Sync any pending sessions first
       await syncPendingSessions();
 
       const res = await endMutation(data).unwrap();
@@ -355,61 +315,21 @@ const useSession = () => {
   };
 
   const summary = async () => {
-    // Skip API call kalo offline — langsung compute dari IndexedDB
     if (!networkOk) {
-      console.log('[FETCH SUMMARY] offline — skip API, compute from cache');
-      const activeId = await getActiveSessionId(authSession, userId);
-      if (activeId) {
-        const allSessions = await getAllSessions(userId);
-        let sessionData = allSessions.find(s => s.sync_id === activeId.id);
-        if (!sessionData) {
-          sessionData = allSessions.find(s => s.referenceId === activeId.id);
-        }
-        if (sessionData) {
-          const currentSyncId = sessionData.referenceId || sessionData.sync_id;
-          console.log('[SUMMARY OFFLINE] sessionData:', { sync_id: sessionData.sync_id, referenceId: sessionData.referenceId, currentSyncId, orders: sessionData.orders?.length });
-          const computedSummary = computeOfflineSummary(sessionData, currentSyncId, authSession?.user || authUser);
-          console.log('[SUMMARY OFFLINE] computedSummary:', computedSummary?.summary?.sales);
-          dispatch(setOfflineSummary(computedSummary));
-          return;
-        }
-      }
-      dispatch(invalidateSession());
       return;
     }
 
     console.log('[FETCH SUMMARY] calling /sales/session/summary');
     try {
       const res = await triggerSummary().unwrap();
-      console.log('[FETCH SUMMARY] response data:', JSON.stringify(res?.data, null, 2));
       if (res?.data) {
-        // Cache ke offlineSummary (dipakai render, fallback offline, & print)
-        dispatch(setOfflineSummary(res.data));
+        dispatch(setSessionSummary(res.data));
         dispatch(checkSession());
         return;
       } else {
         dispatch(invalidateSession());
       }
     } catch (err) {
-      // API gagal — coba offline cache
-      const activeId = await getActiveSessionId(authSession, userId);
-      if (activeId) {
-        const allSessions = await getAllSessions(userId);
-        let sessionData = allSessions.find(s => s.sync_id === activeId.id);
-        if (!sessionData && activeId.source === 'reference') {
-          sessionData = allSessions.find(s => s.referenceId === activeId.id);
-        }
-        if (sessionData) {
-          const currentSyncId = sessionData.referenceId || sessionData.sync_id || activeId.id;
-          console.log('[SUMMARY CATCH] sessionData:', { sync_id: sessionData.sync_id, referenceId: sessionData.referenceId, currentSyncId, open_at: sessionData.session?.open_at, cash_started: sessionData.session?.cash_started, orders: sessionData.orders?.length });
-          const computedSummary = computeOfflineSummary(sessionData, currentSyncId, authSession?.user || authUser);
-          console.log('[SUMMARY CATCH] computedSummary:', computedSummary?.summary?.sales);
-
-          dispatch(setOfflineSummary(computedSummary));
-          return;
-        }
-      }
-
       if (import.meta.env.DEV) {
         console.error('[SESSION HOOK] summary error:', err);
       }

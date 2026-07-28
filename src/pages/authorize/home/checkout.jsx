@@ -23,12 +23,13 @@ import useModal from '../../../components/ui/modal/hook';
 import useCart from '../../../services/cart/hook';
 import useMembership from '../../../services/membership/hook';
 import { buildOfflineTransactionPayload, setWarning } from '../../../services/offline';
-import { appendOrderToSession, getAllSessions, getOrCreateOfflineSession, getOfflinePendingCount, updateOrderInSession } from '../../../services/offline/queue';
-import { setSessions, setPendingCount, setOfflineSummary } from '../../../services/offline/slice';
-import { computeOfflineSummary } from '../../../services/sales/session/hook';
+import { createOrderBill, createOrderPayment, updateOrderBill, updateOrderPayment, ensureDB, STORES } from '../../../services/offline/queue';
+import { setPendingCount } from '../../../services/offline/slice';
+import { updateSessionSummary } from '../../../services/sales/session/hook';
 import { resetCart } from '../../../services/cart/slice';
 import { $failure } from '../../../services/form/action';
 import { v4 as uuidv4 } from 'uuid';
+import { store } from '../../../services/store';
 import { getCache, setCache } from '../../../utils/cache';
 // import useOutlet from '../../../services/outlet/hooks';
 import useOrder from '../../../services/sales/order/hook';
@@ -254,14 +255,12 @@ const CheckoutScreen = () => {
 
     // ===== OFFLINE PATH =====
     if (isOffline) {
-      const sessionDoc = await getOrCreateOfflineSession(session?.user?.id, session);
-      const syncId = sessionDoc?.sync_id;
+      const syncId = store.getState()?.Offline?.sessionSummary?.id || '';
       if (!syncId) {
         dispatch(setWarning('No active session. Please start a session first.'));
         return;
       }
-      const checkoutOriginId = sessionDoc.referenceId || syncId;
-      dispatch(setSessions([sessionDoc]));
+      const checkoutOriginId = syncId;
 
       const orderId = uuidv4();
       const now = new Date().toISOString();
@@ -283,7 +282,7 @@ const CheckoutScreen = () => {
       }));
 
       // Determine origin session (from bill or current)
-      const originSyncId = CartState?.bill?.originSyncId || syncId;
+      const originSyncId = CartState?.bill?.origin_session_sync_id || syncId;
       const pendingSyncId = CartState?.bill?.sync_id || CartState?.bill?.id;
 
       // Compute remaining items for split detection
@@ -340,7 +339,7 @@ const CheckoutScreen = () => {
       };
 
       try {
-        await appendOrderToSession(syncId, completedOrder, session?.user?.id);
+        await createOrderPayment(completedOrder, session?.user?.id);
       } catch (err) {
         dispatch($failure(err));
         return;
@@ -352,27 +351,11 @@ const CheckoutScreen = () => {
         const originSessionId = originSyncId;
         try {
           if (isFullPayment) {
-            await updateOrderInSession(originSessionId, pendingSyncId, { isShow: false }, session?.user?.id);
+            await updateOrderBill(pendingSyncId, { is_show: false }, session?.user?.id);
           } else {
-            await updateOrderInSession(originSessionId, pendingSyncId, { items: remainingItems }, session?.user?.id);
+            await updateOrderBill(pendingSyncId, { items: remainingItems }, session?.user?.id);
           }
-        } catch (err) {
-          // Origin pending might be in different session — try cross-session
-          try {
-            const allSess = await getAllSessions(session?.user?.id);
-            for (const s of allSess) {
-              const found = (s.orders || []).find(o => o.sync_id === pendingSyncId);
-              if (found) {
-                if (isFullPayment) {
-                  await updateOrderInSession(s.sync_id, pendingSyncId, { isShow: false }, session?.user?.id);
-                } else {
-                  await updateOrderInSession(s.sync_id, pendingSyncId, { items: remainingItems }, session?.user?.id);
-                }
-                break;
-              }
-            }
-          } catch {}
-        }
+        } catch {}
       }
 
       // Inject history cache
@@ -411,22 +394,26 @@ const CheckoutScreen = () => {
         subtotal_nett: completedOrder.totalPayment,
         session: { cashier: { name: session?.user?.name || '' } },
         from_queue: true,
-        offline_queued: true,
+        is_offline_mode: true,
+        needs_sync: true,
         offline_meta: { order_sync_id: orderId },
       };
       setCache(HISTORY_CACHE_KEY, [historyEntry, ...existing]);
 
-      // Refresh Redux sessions & recompute summary
-      try {
-        const fresh = await getAllSessions(session?.user?.id);
-        dispatch(setSessions(fresh));
-        dispatch(setPendingCount(await getOfflinePendingCount(session?.user?.id)));
-        const activeSession = fresh.find(s => s.sync_id === syncId);
-        if (activeSession) {
-          const s = computeOfflineSummary(activeSession, sessionDoc.referenceId || syncId, session?.user);
-          dispatch(setOfflineSummary(s));
-        }
-      } catch {}
+      dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
+
+      // 🔁 Update sessionSummary incremental
+      updateSessionSummary({
+        type: 'payment',
+        sync_id: orderId,
+        items: orderItems,
+        billName: completedOrder.billName || billName,
+        totalPayment: completedOrder.totalPayment,
+        discountValue: completedOrder.discountValue,
+        serviceChargeValue: completedOrder.serviceChargeValue,
+        paymentMethodId: selectedMethod?.id,
+      });
+      console.log('[PAYMENT] sessionSummary updated');
 
       // Build receipt-ready shape
       const paySuccessData = {
@@ -437,6 +424,7 @@ const CheckoutScreen = () => {
         paid_at: now,
         bill_name: completedOrder.billName,
         sales_channel: Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null,
+          payment_ref: '',
         payment_method: selectedMethod ? { id: selectedMethod.id, name: selectedMethod.name } : null,
         payment_ref: selectedMethod?.provider === 'cash' ? '' : paymentRef,
         session: { cashier: { name: session?.user?.name || '' } },
@@ -574,15 +562,12 @@ const CheckoutScreen = () => {
     // ===== OFFLINE PATH =====
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     if (isOffline) {
-      const sessionDoc = await getOrCreateOfflineSession(session?.user?.id, session);
-      const syncId = sessionDoc?.sync_id;
+      const syncId = store.getState()?.Offline?.sessionSummary?.id || '';
       if (!syncId) {
         dispatch(setWarning('No active session. Please start a session first.'));
         return;
       }
-      dispatch(setSessions([sessionDoc]));
-
-      const saveBillOriginId = sessionDoc.referenceId || syncId;
+      const saveBillOriginId = syncId;
 
       const orderItems = (allItems || []).map(item => ({
         catalog_id: item.catalog_id,
@@ -631,17 +616,17 @@ const CheckoutScreen = () => {
         totalPayment: 0,
         paidAt: null,
         isOfflineMode: true,
-        offline_queued: true,
+        is_offline_mode: true,
         refSyncId: '',
       };
 
       try {
         if (isResave) {
           const originSessionId = CartState.bill.originSyncId || syncId;
-          await updateOrderInSession(originSessionId, orderId, orderData, session?.user?.id);
+          await updateOrderBill(originSessionId, orderId, orderData, session?.user?.id);
           console.log('[OFFLINE SAVE BILL] updated existing pending order');
         } else {
-          await appendOrderToSession(syncId, { ...orderData, sync_id: orderId, code: orderCode }, session?.user?.id);
+          await createOrderBill({ ...orderData, sync_id: orderId, code: orderCode }, session?.user?.id);
           console.log('[OFFLINE SAVE BILL] appended new pending order');
         }
       } catch (err) {
@@ -649,16 +634,41 @@ const CheckoutScreen = () => {
         return;
       }
 
-      // Refresh Redux sessions & recompute summary
+      dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
+
+      // Push ke bills cache
       try {
-        const fresh = await getAllSessions(session?.user?.id);
-        dispatch(setSessions(fresh));
-        dispatch(setPendingCount(await getOfflinePendingCount(session?.user?.id)));
-        const activeSession = fresh.find(s => s.sync_id === syncId);
-        if (activeSession) {
-          const s = computeOfflineSummary(activeSession, sessionDoc.referenceId || syncId, session?.user);
-          dispatch(setOfflineSummary(s));
-        }
+        const BILLS_CACHE_KEY = 'cache_openbills';
+        const existing = getCache(BILLS_CACHE_KEY) || [];
+        const itemsTotalCache = orderItems.reduce((s, i) => {
+          const itemTotal = (i.unit_price || 0) * (i.quantity || 0);
+          const addonsTotal = (i.addons || []).reduce((asum, a) => asum + (a.unit_price || 0) * (a.quantity || 0), 0);
+          return s + itemTotal + addonsTotal;
+        }, 0);
+        existing.unshift({
+          id: orderId,
+          bill_name: ticket,
+          code: orderCode,
+          total_charges: itemsTotalCache + (Number(CartState?.meta?.service_charge_value) || 0),
+          items: orderItems.map(i => ({
+            catalog: { name: i.catalog_name || '' },
+            catalog_name: i.catalog_name || '',
+            quantity: i.quantity || 0,
+            unit_nett: i.unit_price || 0,
+            discount_value: 0,
+            addons: (i.addons || []).map(a => ({
+              catalog_name: a.catalog_name || '',
+              unit_nett: a.unit_price || 0,
+              quantity: a.quantity || 1,
+            })),
+          })),
+          sales_channel: Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null,
+          payment_ref: '',
+          session: { cashier: { name: session?.user?.name || '' } },
+          is_offline_mode: true,
+          needs_sync: true,
+        });
+        setCache(BILLS_CACHE_KEY, existing);
       } catch {}
 
       dispatch(setWarning('Bill saved offline.'));
@@ -681,6 +691,7 @@ const CheckoutScreen = () => {
         paid_at: orderData.paidAt || new Date().toISOString(),
         bill_name: orderData.billName,
         sales_channel: Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null,
+          payment_ref: '',
         payment_method: null,
         payment_ref: '',
         session: { cashier: { name: session?.user?.name || '' } },

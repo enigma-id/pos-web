@@ -25,6 +25,7 @@ const BillScreen = () => {
   const isOnline = useSelector(state => state?.Offline?.isOnline);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
   const lastSyncTime = useSelector(state => state?.Offline?.lastSyncTime);
+  const offlinePendingCount = useSelector(state => state?.Offline?.pendingCount);
 
   const { show, showResult } = useOrder();
   const { bill, billResult, billData } = useCart();
@@ -57,6 +58,13 @@ const BillScreen = () => {
   React.useEffect(() => {
     bill(search)
   }, [lastSyncTime]);
+
+  // Re-read cache when offline pending count changes
+  React.useEffect(() => {
+    if (isOnline && apiReachable !== false) return;
+    console.log('[BILLS PAGE] offlinePendingCount changed, calling bill()');
+    bill();
+  }, [offlinePendingCount]);
 
   // Search online → fetch; kosong → baca cache (online/offline sama)
   React.useEffect(() => {
@@ -157,7 +165,7 @@ const BillScreen = () => {
                 </div>
                 <div className="flex flex-col place-content-between">
                   <div className="text-base-300 text-end text-sm">
-                    {item?.from_queue && (
+                    {item?.needs_sync && (
                       <span className="badge badge-warning badge-xs me-1">pending sync</span>
                     )}
                     {item?.code}

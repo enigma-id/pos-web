@@ -9,10 +9,8 @@ const initialState = {
   warning: null,
   error: null,
   lastSyncTime: null,
-  sessions: [],
-  activeSyncId: null,
   apiReachable: true,
-  offlineSummary: null,
+  sessionSummary: null,
   offlineSessionEnded: false,
 };
 
@@ -51,25 +49,16 @@ const offlineSlice = createSlice({
     setLastSyncTime: (state, action) => {
       state.lastSyncTime = action.payload || null;
     },
-    setSessions: (state, action) => {
-      state.sessions = Array.isArray(action.payload) ? action.payload : [];
-    },
-    setActiveSyncId: (state, action) => {
-      state.activeSyncId = action.payload || null;
-    },
-    clearActiveSyncId: state => {
-      state.activeSyncId = null;
-    },
     setApiReachable: (state, action) => {
       state.apiReachable = !!action.payload;
     },
-    setOfflineSummary: (state, action) => {
-      state.offlineSummary = action.payload || null;
+    setSessionSummary: (state, action) => {
+      state.sessionSummary = action.payload || null;
     },
-    clearOfflineSummary: state => {
-      state.offlineSummary = null;
+    clearSessionSummary: state => {
+      state.sessionSummary = null;
     },
-    setOfflineSessionEnded: (state, action) => {
+setOfflineSessionEnded: (state, action) => {
       state.offlineSessionEnded = !!action.payload;
     },
     clearOfflineSessionEnded: state => {
@@ -89,12 +78,9 @@ export const {
   setOfflineError,
   clearOfflineError,
   setLastSyncTime,
-  setSessions,
-  setActiveSyncId,
-  clearActiveSyncId,
   setApiReachable,
-  setOfflineSummary,
-  clearOfflineSummary,
+  setSessionSummary,
+  clearSessionSummary,
   setOfflineSessionEnded,
   clearOfflineSessionEnded,
   resetOfflineState,

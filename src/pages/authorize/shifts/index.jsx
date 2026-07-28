@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
 import { useSelector } from 'react-redux';
+import { getCache, setCache } from '../../../utils/cache';
 
 import {
   Drawer,
@@ -23,10 +24,8 @@ import useModal from '../../../components/ui/modal/hook';
 import useOrder from '../../../services/sales/order/hook';
 import useSession from '../../../services/sales/session/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
-import { getCache, setCache } from '../../../utils/cache';
 import useDrawer from '../../../utils/drawer';
 import { usePrintWindow } from '../../../utils/print';
-import { computeOfflineSummary } from '../../../services/sales/session/hook';
 
 const ShiftScreen = () => {
   const [detail, setDetail] = React.useState(null);
@@ -45,7 +44,6 @@ const ShiftScreen = () => {
 
   const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
 
-  const offlineSessions = useSelector(state => state.Offline.sessions);
   const isOnline = useSelector(state => state?.Offline?.isOnline !== false);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable !== false);
   const lastSyncTime = useSelector(state => state?.Offline?.lastSyncTime);
@@ -97,11 +95,13 @@ const ShiftScreen = () => {
     session({ search, limit: itemsPerPage, page: 1 });
   }, [lastSyncTime]);
 
-  // Re-read cache when offline pending count changes (mirror history)
-  React.useEffect(() => {
-    if (isOnline && apiReachable !== false) return;
-    session();
-  }, [offlinePendingCount]);
+  // Data source: offline baca localStorage cache (kayak history)
+  const data = React.useMemo(() => {
+    if (isOffline) {
+      return getCache('cache_shifts') || [];
+    }
+    return sessionResult?.data?.data || [];
+  }, [isOffline, sessionResult, offlinePendingCount]);
 
   React.useEffect(() => {
     setCurrentPage(1);
@@ -153,53 +153,6 @@ const ShiftScreen = () => {
     }
   }, [showOrderResult]);
 
-  // Data source: offline vs API (useMemo biar hoisted before Effects)
-  const data = React.useMemo(() => {
-    if (isOffline) {
-      const cached = getCache('cache_shifts') || [];
-      const offlineRefIds = new Set((offlineSessions || []).map(s => s.referenceId).filter(Boolean));
-
-      const offlineEntries = (offlineSessions || [])
-        .filter(s => {
-          // Prioritaskan blob yg punya data (orders/topups/close)
-          if (s.session.close_at || s.orders?.length > 0 || s.topups?.length > 0) return true;
-          // Skip blob yg cuma reference & gak punya data
-          return false;
-        })
-        .map(s => ({
-          id: s.sync_id,
-          cashier: { name: authUser?.name || '-' },
-          started_at: s.session.open_at,
-          finished_at: s.session.close_at,
-          status: 'closed',
-          transaction_date: s.session.open_at,
-          _offline: true,
-        }));
-
-      // Skip cache entries yg referenceId-nya udah terwakili oleh offlineEntries
-      const filteredCache = cached.filter(c => !offlineRefIds.has(String(c.id)));
-      return [...filteredCache, ...offlineEntries];
-    }
-    return sessionResult?.data?.data || [];
-  }, [isOffline, offlineSessions, sessionResult, authUser]);
-
-  // Offline: set detail from merged data
-  React.useEffect(() => {
-    if (!isOffline || !data.length) return;
-    const selected = data[selectedIndex];
-    if (!selected) return;
-    const session = offlineSessions.find(s => s.sync_id === selected.id);
-    if (session) {
-      const summarySessionId = session.referenceId || session.sync_id;
-      console.log('[SHIFT DETAIL] session:', { selectedId: selected.id, sync_id: session.sync_id, referenceId: session.referenceId, summarySessionId, orders: session.orders?.length, open_at: session.session?.open_at, cash_started: session.session?.cash_started });
-      const summary = computeOfflineSummary(session, summarySessionId, authUser);
-      console.log('[SHIFT DETAIL] summary sales:', summary?.summary?.sales);
-      setDetail(summary);
-    } else {
-      setDetail(selected);
-    }
-  }, [selectedIndex, isOffline, data]);
-
   // Cache server data pas online
   React.useEffect(() => {
     if (sessionResult?.isSuccess && !isOffline) {
@@ -207,6 +160,14 @@ const ShiftScreen = () => {
       if (!search) setCache('cache_shifts', serverData);
     }
   }, [sessionResult]);
+
+  // Offline: set detail from list data (kayak history page)
+  React.useEffect(() => {
+    if (!isOffline) return;
+    const selected = data[selectedIndex];
+    if (!selected) return;
+    setDetail(selected);
+  }, [selectedIndex, isOffline, data]);
 
   const meta = sessionResult?.data?.meta || {};
   const total = meta?.total || 0;
@@ -232,9 +193,6 @@ const ShiftScreen = () => {
                 className="h-full w-full pl-15 focus-visible:!outline-none"
                 disabled={isOffline}
               />
-              {isOffline && (
-                <div className="absolute right-4 text-xs text-gray-400">Offline</div>
-              )}
             </div>
           </div>
 
@@ -242,7 +200,7 @@ const ShiftScreen = () => {
             {data.length === 0 && (
               <div className="flex h-full place-content-center place-items-center">
                 <div className="text-base-300 text-sm">
-                  {isOffline ? 'No offline sessions available.' : 'No sessions found.'}
+                  No sessions found.
                 </div>
               </div>
             )}

@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import { store } from '../../../services/store';
 
 import { Input, Modal, Summary } from '../../../components/ui';
 import { BackIcon } from '../../../components/ui/icon';
@@ -9,7 +10,7 @@ import useSidebar from '../../../components/ui/sidebar/hook';
 import useAuth from '../../../services/auth/hook';
 import useSession from '../../../services/sales/session/hook';
 import { syncPendingSessions } from '../../../services/offline/syncManager';
-import { clearOfflineSessionEnded, clearOfflineSummary } from '../../../services/offline/slice';
+import { clearOfflineSessionEnded, clearSessionSummary } from '../../../services/offline/slice';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
 
@@ -19,7 +20,7 @@ const CloseSection = () => {
   const pendingCount = useSelector(state => state?.Offline?.pendingCount || 0);
   const isOnline = useSelector(state => state?.Offline?.isOnline !== false);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable !== false);
-  const offlineSummary = useSelector(state => state?.Offline?.offlineSummary);
+  const sessionSummary = useSelector(state => state?.Offline?.sessionSummary);
   const offlineEnded = useSelector(state => state?.Offline?.offlineSessionEnded);
   const userId = useSelector(state => state?.Auth?.session?.user?.id);
   const { onLogout } = useAuth();
@@ -45,7 +46,7 @@ const CloseSection = () => {
 
   const doEndSession = () => {
     const payload = { cash_finished: Number(cash) };
-    console.log('[CLOSE SESSION] end payload:', payload, 'offlineSummary:', offlineSummary);
+    console.log('[CLOSE SESSION] end payload:', payload, 'sessionSummary:', sessionSummary);
     end(payload);
   };
 
@@ -76,9 +77,7 @@ const CloseSection = () => {
                   setSyncing(false);
 
                   // Re-check pending count after sync attempt
-                  const { getOfflinePendingCount } =
-                    await import('../../../services/offline/queue');
-                  const remaining = await getOfflinePendingCount(userId);
+                  const remaining = store.getState()?.Offline?.pendingCount || 0;
                   if (remaining > 0) {
                     showFailoverModal(remaining);
                   } else {
@@ -122,8 +121,7 @@ const CloseSection = () => {
         }
         setSyncing(false);
 
-        const { getOfflinePendingCount } = await import('../../../services/offline/queue');
-        const remaining = await getOfflinePendingCount(userId);
+        const remaining = store.getState()?.Offline?.pendingCount || 0;
         if (remaining > 0) {
           showFailoverModal(remaining);
         } else {
@@ -166,11 +164,11 @@ const CloseSection = () => {
 
   // Trigger print untuk offline end
   React.useEffect(() => {
-    if (offlineEnded && offlineSummary) {
-      handleOpenPrintSummary(offlineSummary);
-      dispatch(clearOfflineSessionEnded());
+    if (offlineEnded && sessionSummary) {
+      handleOpenPrintSummary(sessionSummary);
+      dispatch(clearSessionSummary());
     }
-  }, [offlineEnded, offlineSummary]);
+  }, [offlineEnded, sessionSummary]);
 
   // Trigger print untuk online end
   React.useEffect(() => {
@@ -188,7 +186,8 @@ const CloseSection = () => {
     );
   };
 
-  const data = offlineSummary;
+  const data = sessionSummary;
+  console.log('[CLOSE SESSION] data:', data);
 
   return (
     <div className="border-base-200 bg-base-100 flex h-screen flex-col border-l">

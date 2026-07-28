@@ -311,9 +311,9 @@ export const buildOfflineTransactionPayload = ({
     ordered_at: now,
     paid_at: now,
     items: normalizedItems,
-    offline_queued: true,
+    is_offline_mode: true,
     offline_meta: {
-      queue_id: queueMeta?.id || null,
+      sync_id: queueMeta?.id || null,
       local_created_at: now,
       sync_status: 'pending',
     },

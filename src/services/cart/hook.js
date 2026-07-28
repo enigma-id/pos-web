@@ -34,7 +34,6 @@ import {
 import { useLazyGetCatalogDetailQuery } from '../catalog/action';
 import { $failure } from '../form/action';
 import { useLazyShowQuery } from '../sales/order/action';
-import { getAllSessions } from '../offline/queue';
 import { loadOfflineBill } from './slice';
 import { getCache, setCache } from '../../utils/cache';
 
@@ -273,99 +272,10 @@ const useCart = catalog_id => {
     } else {
       // Offline — selalu baca cache utama, filter client
       serverData = getCache(BILLS_CACHE_KEY) || [];
+      console.log('[BILL HOOK] offline, cache key:', BILLS_CACHE_KEY, 'data:', serverData.length);
     }
 
-    // Merge offline pending save-bills from queue
-    const merged = await mergeOfflineBills(serverData);
-
-    if (merged.length > 0 || serverData.length > 0) {
-      setMergedBillData(merged);
-    }
-
-    // Build lookup map for queue detail items
-    const queueMap = {};
-    merged.forEach(b => { if (b.from_queue) queueMap[b.queue_id] = b; });
-    queueItemsMapRef.current = queueMap;
-  };
-
-  const mergeOfflineBills = async (serverData) => {
-    if (!userId) return serverData;
-
-    let sessions = [];
-    try {
-      sessions = await getAllSessions(userId);
-    } catch {
-      return serverData;
-    }
-
-    // Flatten semua orders dari semua session, filter pending + punya bill_name
-    const offlineOrders = sessions
-      .flatMap(s => (s.orders || []).map(o => ({ ...o, _sessionSyncId: s.sync_id })))
-      .filter(o => o.status === 'pending' && o.billName);
-
-    if (offlineOrders.length === 0) return serverData;
-
-    // Collect server tickets for dedup
-    const serverTickets = new Set(
-      serverData.map(b => b?.ticket || b?.bill_name).filter(Boolean)
-    );
-
-    // Transform session orders → API response shape
-    const transformed = offlineOrders
-      .filter(order => {
-        const ticket = order.billName;
-        return ticket && !serverTickets.has(ticket);
-      })
-      .map(order => {
-        // Calculate total from items unit_price × quantity
-        const itemsTransformed = (order.items || []).map(item => ({
-          catalog: { name: item.catalog_name || '' },
-          catalog_name: item.catalog_name || '',
-          unit_nett: item.unit_price || 0,
-          quantity: item.quantity || 0,
-          addons: (item.addons || []).map(a => ({
-            catalog_name: a?.catalog_name || a?.name || '',
-            unit_nett: a?.unit_price || 0,
-            quantity: a?.quantity || 1,
-          })),
-        }));
-        const itemsTotal = itemsTransformed.reduce(
-          (sum, item) => sum + (item.unit_nett * item.quantity) +
-            item.addons.reduce((asum, a) => asum + (a.unit_nett * a.quantity), 0),
-          0
-        );
-        const totalCharges = order.totalPayment || (itemsTotal + (order.serviceChargeValue || 0));
-
-        return {
-          id: order.sync_id,
-          bill_name: order.billName || '',
-          ticket: order.billName || '',
-          total_charges: totalCharges,
-          code: order.code || `OFF-${order.sync_id?.slice(0, 8)}`,
-          ordered_at: order.paidAt || order.createdAt,
-          created_at: order.paidAt || order.createdAt,
-          items: itemsTransformed,
-          membership: order.membershipId ? { id: order.membershipId } : null,
-          sales_channel: order.salesChannelName ? { name: order.salesChannelName } : null,
-          session: {
-            cashier: { name: order.cashierName || '-' },
-          },
-          discount_value: order.discountValue || 0,
-          service_charge_value: order.serviceChargeValue || 0,
-          total_payment: order.totalPayment || 0,
-          payment_method: order.paymentMethodId ? { id: order.paymentMethodId } : null,
-          payment_ref: order.paymentRef || '',
-          subtotal_nett: totalCharges,
-          subtotal_gross: totalCharges,
-          note: '',
-          from_queue: true,
-          queue_id: order.sync_id,
-          offline_queued: true,
-        };
-      });
-
-    // Offline pending items di atas
-    return [...transformed, ...serverData];
+    setMergedBillData(serverData);
   };
 
   const update = async ({ id, payload }) => {
@@ -386,18 +296,15 @@ const useCart = catalog_id => {
 
     try {
       // Queue item → use local data, no server fetch
-      if (data?.from_queue) {
-        const orderId = data?.queue_id || data?.id;
+      if (data?.from_queue || data?.is_offline_mode) {
+        const orderId = data?.sync_id || data?.queue_id || data?.id;
         let orderItem = null;
         if (orderId) {
           try {
-            const sessions = await getAllSessions(userId);
-            for (const s of sessions) {
-              const found = (s.orders || []).find(o => o.sync_id === orderId);
-              if (found) {
-                orderItem = { ...found };
-                break;
-              }
+            const db = await ensureDB(userId);
+            orderItem = await db.get(STORES.orderBills, orderId);
+            if (!orderItem) {
+              orderItem = await db.get(STORES.orderPayments, orderId);
             }
           } catch {}
         }

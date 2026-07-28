@@ -339,7 +339,7 @@ function convertOfflineQueueItemToCartItem(item) {
     discount_amount: 0,
     discount_percentage: 0,
     from_bill: true,
-    from_offline_queue: true,
+    is_offline_mode: true,
   };
 }
 
@@ -589,19 +589,19 @@ const cartSlice = createSlice({
           const addonsTotal = (item.addons || []).reduce((asum, a) => asum + (Number(a.unit_price || 0) * Number(a.quantity || 0)), 0);
           return sum + itemTotal + addonsTotal;
         }, 0);
-        const totalCharges = order.totalPayment || (computedTotal + Number(order.serviceChargeValue || 0));
+        const totalCharges = order.total_payment || order.totalPayment || (computedTotal + Number(order.service_charge_value || order.serviceChargeValue || 0));
 
         // Build preview directly from order fields
         preview = {
           id: order.sync_id,
-          bill_name: order.billName || '',
+          bill_name: order.bill_name || order.billName || '',
           total_charges: totalCharges,
           total_bill: totalCharges,
-          discount_value: order.discountValue || 0,
-          is_discount_percentage: order.discountPercentage > 0,
+          discount_value: order.discount_value || order.discountValue || 0,
+          is_discount_percentage: (order.discount_percentage || order.discountPercentage || 0) > 0,
           items: (order.items || []).map(item => ({
             ...item,
-            catalog: { name: item.catalog_name, id: item.catalog_id },
+            catalog: { name: item.catalog_name || '', id: item.catalog_id },
             unit_nett: item.unit_price,
             discount_value: 0,
             // Wrap flat addons so convertApiOrderToCartItem groups them with type 'checkbox'
@@ -612,9 +612,9 @@ const cartSlice = createSlice({
               selected: true,
             })),
           })),
-          membership: order.membershipId ? { id: order.membershipId } : null,
+          membership: (order.membership_id || order.membershipId) ? { id: order.membership_id || order.membershipId } : null,
         };
-        body = { ...order, bill_name: order.billName };
+        body = { ...order, bill_name: order.bill_name || order.billName };
       } else {
         preview = order?.transaction_preview || {};
         body = order?.body || {};
@@ -627,11 +627,11 @@ const cartSlice = createSlice({
         total_bill: preview?.total_charges || preview?.total_bill || 0,
         membership:
           preview?.membership || (body?.membership_id ? { id: body.membership_id } : null),
-        from_offline_queue: true,
-        queue_id: order?.sync_id || order?.id,
+        is_offline_mode: true,
+        sync_id: order?.sync_id || order?.id,
         // BARU: untuk deteksi cross-session & hitung sisa split
-        originSyncId: order.originSessionSyncId || body?.originSessionSyncId || order._sessionData?.sync_id || null,
-        originalItems: order.originalItems || body?.originalItems || null,
+        origin_session_sync_id: order.origin_session_sync_id || order.originSessionSyncId || body?.origin_session_sync_id || body?.originSessionSyncId || order._sessionData?.sync_id || null,
+        originalItems: order.original_items || order.originalItems || body?.original_items || body?.originalItems || null,
         itemSnapshot: (order.items || body?.items || preview?.items || []).map(i => ({
           catalog_id: i.catalog_id || i.catalog?.id,
           quantity: i.quantity || 0,

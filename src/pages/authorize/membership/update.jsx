@@ -8,8 +8,9 @@ import { PaypassIcon } from '../../../components/ui/icon';
 import Input from '../../../components/ui/input';
 import useModal from '../../../components/ui/modal/hook';
 import useMembership from '../../../services/membership/hook';
-import { appendMembershipToSession, updateMembershipInSession, getAllSessions, getOfflinePendingCount, getOrCreateOfflineSession } from '../../../services/offline/queue';
-import { setSessions, setPendingCount, setWarning } from '../../../services/offline/slice';
+import { createMembership, updateMembership } from '../../../services/offline/queue';
+import { setPendingCount, setWarning } from '../../../services/offline/slice';
+import { store } from '../../../services/store';
 import { setMemberCache, getCache, setCache } from '../../../utils/cache';
 import { currencyFormat } from '../../../utils/common';
 
@@ -42,22 +43,13 @@ const UpdateSession = ({ id, onClose, isOpen, reboot, membership }) => {
     // ===== OFFLINE PATH =====
     if (isOffline) {
       const handleOffline = async () => {
-        const sessionDoc = await getOrCreateOfflineSession(userId, authSession);
-        const syncId = sessionDoc?.sync_id;
-        if (!syncId) {
-          dispatch(setWarning('No active session. Please start a session first.'));
-          closeModal();
-          return;
-        }
-        dispatch(setSessions([sessionDoc]));
-
         // Update in-place: replace card_id lama dengan yang baru
         const oldCardId = data?.card_id;
-        await updateMembershipInSession(syncId, oldCardId, { card_id: uid, name, reff_code: phone }, userId);
+        await updateMembership(oldCardId, { card_id: uid, name, reff_code: phone }, userId);
 
         // Cache baru + bersihin cache lama
         setMemberCache(uid, { card_id: uid, name, reff_code: phone, saldo: data?.saldo || 0 });
-        // Hapus entry lama dari cache_members (setMemberCache cuma merge, ga remove)
+        // Hapus entry lama dari cache_members
         const raw = localStorage.getItem('cache_members');
         if (raw && oldCardId && oldCardId !== uid) {
           try {
@@ -69,10 +61,7 @@ const UpdateSession = ({ id, onClose, isOpen, reboot, membership }) => {
           } catch {}
         }
 
-        const fresh = await getAllSessions(userId);
-        dispatch(setSessions(fresh));
-        const c = await getOfflinePendingCount(userId);
-        dispatch(setPendingCount(c));
+        dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
 
         dispatch(setWarning('Card changed offline. Will sync when online.'));
         closeModal();
@@ -81,7 +70,7 @@ const UpdateSession = ({ id, onClose, isOpen, reboot, membership }) => {
       };
 
       handleOffline();
-      return; // ⛔️ skip mutation API
+      return; // skip mutation API
     }
 
     // ===== ONLINE PATH =====
@@ -126,14 +115,9 @@ const UpdateSession = ({ id, onClose, isOpen, reboot, membership }) => {
         );
         setCache(TABLE_CACHE_KEY, { ...existing, data: updated });
 
-        // Update in-place di session biar masuk queue sync
-        const sessionDoc = await getOrCreateOfflineSession(userId, authSession);
-        if (sessionDoc) {
-          await updateMembershipInSession(sessionDoc.sync_id, data.card_id, { name, reff_code: phone }, userId);
-          const fresh = await getAllSessions(userId);
-          dispatch(setSessions(fresh));
-          getOfflinePendingCount(userId).then(c => dispatch(setPendingCount(c)));
-        }
+        // Update in-place di IndexedDB
+        await updateMembership(data.card_id, { name, reff_code: phone }, userId);
+        dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
       }
 
       dispatch(setWarning('Member updated offline.'));

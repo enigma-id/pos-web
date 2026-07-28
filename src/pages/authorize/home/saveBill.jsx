@@ -58,7 +58,7 @@ const BillModal = ({ mode, count, onBillCreate }) => {
                   <div>
                     <div className="font-semibold">
                       {bill?.bill_name || "-"}
-                      {bill?.from_queue && (
+                      {bill?.needs_sync && (
                         <span className="badge badge-warning badge-xs ms-1">pending sync</span>
                       )}
                     </div>

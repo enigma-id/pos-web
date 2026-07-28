@@ -1,13 +1,8 @@
 import { baseQuery } from '../baseQuery';
 import {
-  getPendingSessions,
-  getAllSessions,
-  getOfflinePendingCount,
-  setSyncStatus,
-  updateSyncResult,
-  deleteOfflineSession,
-  setLastSyncTime as setLastSyncTimeMeta,
+  ensureDB,
   STORES,
+  setLastSyncTime as setLastSyncTimeMeta,
 } from './queue';
 import {
   setApiReachable,
@@ -15,9 +10,7 @@ import {
   setLastSyncTime,
   setOfflineError,
   setPendingCount,
-  setSessions,
   setSyncing,
-  setActiveSyncId,
 } from './slice';
 
 const MAX_RETRY = 5;
@@ -52,243 +45,274 @@ const shouldRetry = error => {
   return false;
 };
 
-const broadcastOfflineState = async () => {
-  if (!storeRef) return;
+const HISTORY_CACHE_KEY = 'cache_order_history';
+const BILLS_CACHE_KEY = 'cache_openbills';
 
-  const userId = getCurrentUserId();
-  if (!userId) {
-    storeRef.dispatch(setSessions([]));
-    storeRef.dispatch(setPendingCount(0));
-    storeRef.dispatch(setFailedCount(0));
-    return;
-  }
+// ===== HELPER: map order fields to /sales/sync payload =====
 
-  const all = await getAllSessions(userId);
-  const failed = all.filter(s => s.syncStatus === 'failed');
-  // Hitung total items yg perlu sync (semua offline orders + topups)
-  const pendingCount = all.reduce((sum, s) => {
-    if (s.syncStatus === 'synced') return sum;
-    const itemCount = (s.orders || []).length + (s.topups || []).length;
-    return sum + (itemCount > 0 ? itemCount : 1);
-  }, 0);
+const mapOrderToSync = (order, sessionSyncId) => ({
+  sync_id: order.sync_id || '',
+  sales_channel_id: order.sales_channel_id || order.salesChannelId || null,
+  sales_channel_name: order.sales_channel_name || order.salesChannelName || '',
+  payment_method_id: order.payment_method_id || order.paymentMethodId || null,
+  membership_id: order.membership_id || order.membershipId || null,
+  payment_ref: order.payment_ref || order.paymentRef || '',
+  bill_name: order.bill_name || order.billName || '',
+  cashier_name: order.cashier_name || order.cashierName || '',
+  service_charge_value: order.service_charge_value || order.serviceChargeValue || 0,
+  service_charge_percentage: order.service_charge_percentage || order.serviceChargePercentage || 0,
+  discount_percentage: order.discount_percentage || order.discountPercentage || 0,
+  discount_value: order.discount_value || order.discountValue || 0,
+  category_discounts: (order.category_discounts || order.categoryDiscounts || []).map(cd => ({
+    category_id: cd.category_id || cd.id,
+    discount_percentage: cd.discount_percentage,
+    discount_value: cd.discount_value,
+  })),
+  items: mapItemsToSync(order),
+  code: order.code || '',
+  status: order.status || 'pending',
+  total_payment: order.total_payment || order.totalPayment || 0,
+  paid_at: order.paid_at || order.paidAt || null,
+  is_offline_mode: true,
+  ref_sync_id: order.ref_sync_id || order.refSyncId || '',
+  session_sync_id: sessionSyncId,
+  origin_session_sync_id: order.origin_session_sync_id || order.originSessionSyncId || '',
+  paid_session_sync_id: order.paid_session_sync_id || order.paidSessionSyncId || '',
+  is_show: order.is_show !== false,
+  original_items: (order.original_items || order.originalItems || []).map(oi => ({
+    catalog_id: oi.catalog_id,
+    catalog_name: oi.catalog_name || '',
+    quantity: oi.quantity || 0,
+    unit_price: oi.unit_price || 0,
+    ...(oi.addons?.length > 0 ? {
+      addons: oi.addons.map(a => ({
+        addon_group_id: a.addon_group_id,
+        addon_item_id: a.addon_item_id,
+        catalog_name: a.catalog_name || '',
+        unit_price: a.unit_price || 0,
+        quantity: a.quantity || 1,
+      })),
+    } : {}),
+    ...(oi.is_custom ? { is_custom: true } : {}),
+  })),
+});
 
-  storeRef.dispatch(setSessions(all));
-  storeRef.dispatch(setPendingCount(pendingCount));
-  storeRef.dispatch(setFailedCount(failed.length));
+const mapItemsToSync = order => {
+  const sourceItems = (order.status === 'pending' && (order.original_items || order.originalItems)?.length > 0)
+    ? (order.original_items || order.originalItems)
+    : (order.items || []);
+
+  return sourceItems.map(item => ({
+    catalog_id: item.catalog_id,
+    catalog_name: item.catalog_name || '',
+    quantity: item.quantity || 0,
+    unit_price: item.unit_price || 0,
+    addons: (item.addons || []).map(a => ({
+      addon_group_id: a.addon_group_id,
+      addon_item_id: a.addon_item_id,
+      catalog_name: a.catalog_name || '',
+      unit_price: a.unit_price || 0,
+      quantity: a.quantity || 1,
+    })),
+  }));
 };
 
+const mapTopupsToSync = (topups, sessionSyncId) => topups.map(t => ({
+  session_sync_id: sessionSyncId,
+  membership_id: t.membership_id || t.membershipId || null,
+  membership_sync_id: t.membership_sync_id || t.membershipSyncId || null,
+  nominal: t.nominal || 0,
+  payment_type: t.payment_type || t.paymentType || 'cash',
+  card_id: t.card_id || t.cardId || '',
+  member_name: t.member_name || t.memberName || '',
+  member_code: t.member_code || t.memberCode || '',
+  created_at: t.created_at || t.createdAt,
+}));
+
+const cleanupLocalStorageCache = () => {
+  try {
+    for (const key of [HISTORY_CACHE_KEY, BILLS_CACHE_KEY]) {
+      const existing = getCache(key) || [];
+      const updated = existing.map(e => {
+        if (e?.needs_sync) {
+          return { ...e, needs_sync: false };
+        }
+        return e;
+      });
+      setCache(key, updated);
+    }
+  } catch {
+    // Silently fail
+  }
+};
+
+// ===== MAIN SYNC FUNCTION =====
+
 export const syncPendingSessions = async () => {
-  if (!storeRef) return;
-  if (isSyncingInternal) return;
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+  if (!storeRef) { console.log('[SYNC] no storeRef'); return; }
+  if (isSyncingInternal) { console.log("[SYNC] already syncing — resetting"); isSyncingInternal = false; }
+  if (typeof navigator !== 'undefined' && !navigator.onLine) { console.log('[SYNC] offline'); return; }
 
   const userId = getCurrentUserId();
-  if (!userId) return;
+  if (!userId) { console.log('[SYNC] no userId'); return; }
 
-  isSyncingInternal = true;
+  console.log("[SYNC] start!"); isSyncingInternal = true;
   storeRef.dispatch(setSyncing(true));
+  console.log("[SYNC] step: ensureDB");
   storeRef.dispatch(setOfflineError(null));
 
+  const fakeApi = {
+    ...storeRef,
+    getState: storeRef.getState,
+    dispatch: storeRef.dispatch,
+  };
+
   try {
-    const pending = await getPendingSessions(userId);
-    const toSync = pending.filter(s => s.syncStatus === 'pending');
+    const db = await ensureDB(userId);
+    console.log("[SYNC] step: got db, checking memberships");
+    const now = new Date().toISOString();
 
-    for (const session of toSync) {
-      // Prevent duplicate processing
-      if (session.syncStatus !== 'pending') continue;
-
-      let success = false;
-      await setSyncStatus(session.sync_id, 'syncing', { userId });
+    // ===== 1. MEMBERSHIPS → POST /membership/sync =====
+    const memberships = await db.getAll(STORES.memberships);
+    console.log("[SYNC] memberships count:", memberships.length);
+    if (memberships.length > 0) {
+      const payload = {
+        members: memberships.map(m => ({
+          sync_id: m.sync_id || m.card_id,
+          card_id: m.card_id || '',
+          name: m.name || '',
+          reff_code: m.reff_code || '',
+        })),
+      };
 
       for (let attempt = 0; attempt < MAX_RETRY; attempt += 1) {
         try {
-          // Session payload — hanya kirim kalo bener-bener offline session (no referenceId)
-          // atau session udah di-close. Kalo cuma reference (start online, masih open) → null
-          const hasReference = !!session.referenceId;
-          const isClosed = !!session.session?.close_at;
-          const sendSession = isClosed || !hasReference;
-
-          const payload = {
-            session: sendSession
-              ? {
-                  sync_id: session.sync_id,
-                  id: session.referenceId || '',
-                  open_at: session.session.open_at,
-                  close_at: session.session.close_at,
-                  cash_started: session.session.cash_started,
-                  cash_finished: session.session.cash_finished,
-                  latitude: session.session.latitude,
-                  longitude: session.session.longitude,
-                  battery_health: session.session.battery_health,
-                }
-              : null,
-            orders: (session.orders || []).map(o => ({
-              sync_id: o.sync_id || '',
-              id: o.id || o.serverId || '',
-              sales_channel_id: o.salesChannelId || o.sales_channel_id,
-              sales_channel_name: o.salesChannelName || o.sales_channel_name || '',
-              payment_method_id: o.paymentMethodId || o.payment_method_id || null,
-              membership_id: o.membershipId || o.membership_id || null,
-              payment_ref: o.paymentRef || o.payment_ref || '',
-              bill_name: o.billName || o.bill_name || '',
-              cashier_name: o.cashierName || o.cashier_name || '',
-              service_charge_value: o.serviceChargeValue || o.service_charge_value || 0,
-              service_charge_percentage: o.serviceChargePercentage || o.service_charge_percentage || 0,
-              discount_percentage: o.discountPercentage || o.discount_percentage || 0,
-              discount_value: o.discountValue || o.discount_value || 0,
-              category_discounts: (o.categoryDiscounts || o.category_discounts || []).map(cd => ({
-                category_id: cd.category_id || cd.id,
-                discount_percentage: cd.discount_percentage,
-                discount_value: cd.discount_value,
-              })),
-              // Pending → kirim originalItems (snapshot asli biar backend dapet item penuh)
-              items: ((o.status === 'pending' && o.originalItems?.length > 0) ? o.originalItems : (o.items || [])).map(item => ({
-                catalog_id: item.catalog_id,
-                catalog_name: item.catalog_name || '',
-                quantity: item.quantity || 0,
-                unit_price: item.unit_price || 0,
-                addons: (item.addons || []).map(a => ({
-                  addon_group_id: a.addon_group_id,
-                  addon_item_id: a.addon_item_id,
-                  catalog_name: a.catalog_name || '',
-                  unit_price: a.unit_price || 0,
-                  quantity: a.quantity || 1,
-                })),
-              })),
-              code: o.code || '',
-              status: o.status || 'pending',
-              total_payment: o.totalPayment || o.total_payment || 0,
-              paid_at: o.paidAt || o.paid_at || null,
-              is_offline_mode: true,
-              ref_sync_id: o.refSyncId || o.ref_sync_id || '',
-              session_sync_id: session.referenceId || session.sync_id,
-              // BARU: origin/paid session tracking + isShow + originalItems
-              origin_session_sync_id: o.originSessionSyncId || '',
-              paid_session_sync_id: o.paidSessionSyncId || '',
-              is_show: o.isShow !== false,
-              original_items: (o.originalItems || []).map(oi => ({
-                catalog_id: oi.catalog_id,
-                catalog_name: oi.catalog_name || '',
-                quantity: oi.quantity || 0,
-                unit_price: oi.unit_price || 0,
-                ...(oi.addons?.length > 0 ? {
-                  addons: oi.addons.map(a => ({
-                    addon_group_id: a.addon_group_id,
-                    addon_item_id: a.addon_item_id,
-                    catalog_name: a.catalog_name || '',
-                    unit_price: a.unit_price || 0,
-                    quantity: a.quantity || 1,
-                  }))
-                } : {}),
-                ...(oi.is_custom ? { is_custom: true } : {}),
-              })),
-            })),
-            memberships: (session.memberships || []).map(m => ({
-              sync_id: m.sync_id || m.card_id,
-              card_id: m.card_id,
-              name: m.name || '',
-              reff_code: m.reff_code || '',
-            })),
-            topups: (session.topups || []).map(t => {
-              // Cari membership_sync_id dari session.memberships by card_id
-              const matchedMember = (session.memberships || []).find(m => String(m.card_id) === String(t.card_id || t.member_card_id));
-              return {
-                session_sync_id: session.referenceId || t.session_sync_id || session.sync_id,
-                membership_id: t.membership_id,
-                membership_sync_id: matchedMember?.sync_id || null,
-                nominal: t.nominal || 0,
-                payment_type: t.payment_type || 'cash',
-                card_id: t.card_id || t.member_card_id || '',
-                member_name: t.member_name || '',
-                member_code: t.member_code || '',
-                created_at: t.created_at,
-              };
-            }),
-          };
-
-          const fakeApi = {
-            ...storeRef,
-            getState: storeRef.getState,
-            dispatch: storeRef.dispatch,
-          };
-
           const result = await baseQuery(
-            {
-              url: '/sales/sync',
-              method: 'POST',
-              body: payload,
-              __skipOfflineQueue: true,
-            },
+            { url: '/membership/sync', method: 'POST', body: payload, __skipOfflineQueue: true },
             fakeApi,
             {}
           );
 
           if (!result?.error) {
-            const response = result?.data?.data || result?.data || {};
-            const referenceId = response?.session?.id || response?.id || null;
-            const orderMap = {};
-
-            if (Array.isArray(response?.orders)) {
-              response.orders.forEach(o => {
-                if (o.sync_id && o.id) {
-                  orderMap[o.sync_id] = o.id;
-                }
-              });
+            for (const m of memberships) {
+              await db.delete(STORES.memberships, m.sync_id);
             }
+          }
 
-            await updateSyncResult(session.sync_id, { referenceId, orderMap }, userId);
+          if (!result?.error || !shouldRetry(result.error)) break;
+          await sleep(BASE_DELAY * 2 ** attempt);
+        } catch {
+          await sleep(BASE_DELAY * 2 ** attempt);
+        }
+      }
+    }
 
-            // Hapus dari IndexedDB setelah sync sukses
-            await deleteOfflineSession(session.sync_id, userId);
+    // ===== 2. GROUP ORDERS + TOPUPS BY SESSION ID → POST /sales/sync =====
+    const allSessions = await db.getAll(STORES.sessions);
+    const allBills = await db.getAll(STORES.orderBills);
+    const allPayments = await db.getAll(STORES.orderPayments);
+    const allTopups = await db.getAll(STORES.topups);
+    console.log("[SYNC] allSessions:", allSessions.length, "allBills:", allBills.length, "allPayments:", allPayments.length, "allTopups:", allTopups.length);
 
-            // Hapus semua offline entries dari history cache — server udah punya data
-            try {
-              const HISTORY_CACHE_KEY = 'cache_order_history';
-              const existing = JSON.parse(localStorage.getItem(HISTORY_CACHE_KEY) || '[]');
-              const cleaned = existing.filter(e => !e?.offline_queued);
-              if (cleaned.length !== existing.length) {
-                localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(cleaned));
-              }
-            } catch {}
+    // Group by session ID (origin_session_id / paid_session_id / session_sync_id / sessions.sync_id)
+    const grouped = {};
+    for (const session of allSessions) {
+      const sid = session.id || session.sync_id;
+      if (!sid) continue;
+      if (!grouped[sid]) grouped[sid] = { session: null, orders: [], topups: [] };
+      const hasReference = !!session.id;
+      const isClosed = !!session.close_at;
+      if (isClosed || !hasReference) {
+        grouped[sid].session = session;
+      }
+    }
+    for (const bill of allBills) {
+      const sid = bill.origin_session_id || bill.origin_session_sync_id;
+      if (!sid) continue;
+      if (!grouped[sid]) grouped[sid] = { session: null, orders: [], topups: [] };
+      grouped[sid].orders.push({ ...bill, _store: STORES.orderBills });
+    }
+    for (const pay of allPayments) {
+      const sid = pay.paid_session_id;
+      if (!sid) continue;
+      if (!grouped[sid]) grouped[sid] = { session: null, orders: [], topups: [] };
+      grouped[sid].orders.push({ ...pay, _store: STORES.orderPayments });
+    }
+    for (const topup of allTopups) {
+      const sid = topup.session_sync_id;
+      if (!sid) continue;
+      if (!grouped[sid]) grouped[sid] = { session: null, orders: [], topups: [] };
+      grouped[sid].topups.push({ ...topup, _store: STORES.topups });
+    }
 
+    console.log("[SYNC] grouped sessions:", Object.keys(grouped).length);
+
+    for (const [sessionSyncId, group] of Object.entries(grouped)) {
+      let success = false;
+
+      for (let attempt = 0; attempt < MAX_RETRY; attempt += 1) {
+        try {
+          const payload = {};
+
+          // Session — include kalo ada close_at atau start offline (tanpa id)
+          if (group.session) {
+            const hasRef = !!group.session.id;
+            const isClosed = !!group.session.close_at;
+            if (isClosed || !hasRef) {
+              payload.session = {
+                sync_id: group.session.sync_id,
+                open_at: group.session.open_at,
+                close_at: group.session.close_at,
+                cash_started: group.session.cash_started,
+                cash_finished: group.session.cash_finished,
+                latitude: group.session.latitude,
+                longitude: group.session.longitude,
+                battery_health: group.session.battery_health,
+              };
+            }
+          }
+
+          payload.orders = group.orders.map(o => mapOrderToSync(o, sessionSyncId));
+          payload.topups = group.topups.map(t => mapTopupsToSync(t, sessionSyncId));
+
+          const result = await baseQuery(
+            { url: '/sales/sync', method: 'POST', body: payload, __skipOfflineQueue: true },
+            fakeApi,
+            {}
+          );
+
+          if (!result?.error) {
+            for (const o of group.orders) {
+              await db.delete(o._store, o.sync_id);
+            }
+            for (const t of group.topups) {
+              await db.delete(STORES.topups, t.sync_id);
+            }
+            cleanupLocalStorageCache();
+            storeRef.dispatch(setPendingCount(0));
             success = true;
             break;
           }
 
           const status = getStatusCode(result.error);
           if (status === 401) {
-            await setSyncStatus(session.sync_id, 'failed', {
-              error: 'Session expired. Please login again.',
-              userId,
-            });
+            console.log('[SYNC] 401 session expired');
             break;
           }
 
           if (!shouldRetry(result.error)) {
-            await setSyncStatus(session.sync_id, 'failed', {
-              error: result?.error?.data?.message || 'Client error, not retried',
-              userId,
-            });
+            console.log('[SYNC] client error, not retried');
             break;
           }
 
-          const delay = BASE_DELAY * 2 ** attempt;
-          await sleep(delay);
+          await sleep(BASE_DELAY * 2 ** attempt);
         } catch (err) {
-          const delay = BASE_DELAY * 2 ** attempt;
-          await sleep(delay);
+          await sleep(BASE_DELAY * 2 ** attempt);
         }
-      }
-
-      if (!success) {
-        await setSyncStatus(session.sync_id, 'failed', {
-          error: 'Max retries reached.',
-          userId,
-        });
       }
     }
 
-    const now = new Date().toISOString();
+    // Update last sync time
     await setLastSyncTimeMeta(now, userId);
     storeRef.dispatch(setLastSyncTime(now));
 
@@ -301,38 +325,16 @@ export const syncPendingSessions = async () => {
     if (storeRef) {
       storeRef.dispatch(setSyncing(false));
     }
-    await broadcastOfflineState();
   }
 };
 
-const syncOfflineState = async () => {
-  const userId = getCurrentUserId();
-  if (!userId) return;
-
-  const allSessions = await getAllSessions(userId);
-  const active = allSessions.find(s => s.syncStatus === 'pending' && !s.session.close_at);
-
-  storeRef.dispatch(setSessions(allSessions));
-  storeRef.dispatch(setPendingCount(await getOfflinePendingCount(userId)));
-  storeRef.dispatch(setFailedCount(allSessions.filter(s => s.syncStatus === 'failed').length));
-
-  if (active) {
-    storeRef.dispatch(setActiveSyncId(active.sync_id));
-  }
-
-  if (allSessions.some(s => s.syncStatus === 'pending')) {
-    syncPendingSessions();
-  }
-};
+// ===== INIT ======
 
 let prevUserId = null;
 
 export const initSyncManager = async store => {
   storeRef = store;
 
-  // Init-time rehydration
-  await syncOfflineState();
-  await broadcastOfflineState();
   startHeartbeat();
 
   // Subscribe to auth changes
@@ -342,12 +344,9 @@ export const initSyncManager = async store => {
     if (userId !== prevUserId) {
       prevUserId = userId;
       if (userId) {
-        syncOfflineState();
-        broadcastOfflineState();
         syncPendingSessions();
         startHeartbeat();
       } else {
-        storeRef.dispatch(setSessions([]));
         storeRef.dispatch(setPendingCount(0));
         storeRef.dispatch(setFailedCount(0));
         stopHeartbeat();
@@ -358,12 +357,12 @@ export const initSyncManager = async store => {
   if (typeof window !== 'undefined') {
     const onOnline = () => {
       const userId = getCurrentUserId();
+      console.log('[SYNC] online event fired, userId:', userId);
       if (!userId) return;
 
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-      }
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       reconnectTimer = setTimeout(() => {
+        console.log('[SYNC] calling syncPendingSessions after reconnect delay');
         syncPendingSessions();
       }, RECONNECT_DELAY);
     };
@@ -372,18 +371,16 @@ export const initSyncManager = async store => {
   }
 };
 
+// ===== HEARTBEAT =====
+
 const getSyncingState = () => isSyncingInternal;
 
-// Heartbeat: retry pending/failed sessions
 const startHeartbeat = () => {
   stopHeartbeat();
   heartbeatTimer = setInterval(() => {
-    if (!storeRef) return;
-    const state = storeRef.getState();
-    const pending = state?.Offline?.sessions?.filter(
-      s => s.syncStatus === 'pending' || s.syncStatus === 'failed'
-    ) || [];
-    if (pending.length > 0) {
+    const state = storeRef?.getState();
+    const pendingCount = state?.Offline?.pendingCount || 0;
+    if (pendingCount > 0) {
       syncPendingSessions();
     }
   }, HEARTBEAT_INTERVAL);
@@ -396,15 +393,7 @@ const stopHeartbeat = () => {
   }
 };
 
-export {
-  getSyncingState,
-  startHeartbeat,
-  stopHeartbeat,
-};
-
-// ========== BACKWARD COMPAT — retained for UI components (layout, PendingDrawer) ==========
-// These no longer operate on individual queue items but are kept as no-ops so existing
-// imports don't break. Will be removed in Phase 2 when checkout is refactored.
+// ===== EXPORTS =====
 
 export const syncNow = async () => {
   await syncPendingSessions();
@@ -415,35 +404,46 @@ export const retryFailedItem = async (itemId) => {
   const userId = getCurrentUserId();
   if (!userId) return false;
 
-  const sessions = await getAllSessions(userId);
+  try {
+    const db = await ensureDB(userId);
 
-  // Cari di orders
-  for (const s of sessions) {
-    if ((s.orders || []).some(o => o.sync_id === itemId)) {
-      await setSyncStatus(s.sync_id, 'pending', { userId });
+    // Cari di sessions
+    const sessions = await db.getAll(STORES.sessions);
+    const found = sessions.find(s => s.sync_id === itemId);
+    if (found) {
+      found.syncStatus = 'pending';
+      await db.put(STORES.sessions, found);
       syncPendingSessions();
       return true;
     }
-  }
 
-  // Cari di topups/memberships
-  const found = sessions.find(s =>
-    (s.topups || []).some(t => t.sync_id === itemId) ||
-    (s.memberships || []).some(m => m.sync_id === itemId)
-  );
-  if (found) {
-    await setSyncStatus(found.sync_id, 'pending', { userId });
-    syncPendingSessions();
-    return true;
-  }
+    // Cari di orders — cek parent session
+    const bills = await db.getAll(STORES.orderBills);
+    const bill = bills.find(b => b.sync_id === itemId);
+    if (bill) {
+      const parent = sessions.find(s => s.sync_id === bill.origin_session_id);
+      if (parent) {
+        parent.syncStatus = 'pending';
+        await db.put(STORES.sessions, parent);
+        syncPendingSessions();
+        return true;
+      }
+    }
 
-  // Maybe session-level ID
-  if (sessions.find(s => s.sync_id === itemId)) {
-    await setSyncStatus(itemId, 'pending', { userId });
-    syncPendingSessions();
-    return true;
+    const payments = await db.getAll(STORES.orderPayments);
+    const payment = payments.find(p => p.sync_id === itemId);
+    if (payment) {
+      const parent = sessions.find(s => s.sync_id === payment.paid_session_id);
+      if (parent) {
+        parent.syncStatus = 'pending';
+        await db.put(STORES.sessions, parent);
+        syncPendingSessions();
+        return true;
+      }
+    }
+  } catch (e) {
+    console.error('[retryFailedItem] error:', e);
   }
-
   return false;
 };
 
@@ -452,65 +452,57 @@ export const removeFailedItem = async (itemId) => {
   if (!userId || !itemId) return false;
 
   try {
-    const { ensureDB } = await import('./queue');
-    const sessions = await getAllSessions(userId);
+    const db = await ensureDB(userId);
 
-    for (const s of sessions) {
-      const orderIdx = (s.orders || []).findIndex(o => o.sync_id === itemId);
-      if (orderIdx !== -1) {
-        const orders = [...(s.orders || [])];
-        orders.splice(orderIdx, 1);
-        s.orders = orders;
-        const db = await ensureDB(userId);
-        await db.put(STORES.offlineSessions, s);
-        const fresh = await getAllSessions(userId);
-        storeRef.dispatch(setSessions(fresh));
-        storeRef.dispatch(setPendingCount(await getOfflinePendingCount(userId)));
-        storeRef.dispatch(setFailedCount(fresh.filter(x => x.syncStatus === 'failed').length));
-        return true;
-      }
-
-      const topupIdx = (s.topups || []).findIndex(t => t.sync_id === itemId);
-      if (topupIdx !== -1) {
-        const topups = [...(s.topups || [])];
-        topups.splice(topupIdx, 1);
-        s.topups = topups;
-        const db = await ensureDB(userId);
-        await db.put(STORES.offlineSessions, s);
-        const fresh = await getAllSessions(userId);
-        storeRef.dispatch(setSessions(fresh));
-        storeRef.dispatch(setPendingCount(await getOfflinePendingCount(userId)));
-        storeRef.dispatch(setFailedCount(fresh.filter(x => x.syncStatus === 'failed').length));
-        return true;
-      }
-
-      const memIdx = (s.memberships || []).findIndex(m => m.sync_id === itemId);
-      if (memIdx !== -1) {
-        const mems = [...(s.memberships || [])];
-        mems.splice(memIdx, 1);
-        s.memberships = mems;
-        const db = await ensureDB(userId);
-        await db.put(STORES.offlineSessions, s);
-        const fresh = await getAllSessions(userId);
-        storeRef.dispatch(setSessions(fresh));
-        storeRef.dispatch(setPendingCount(await getOfflinePendingCount(userId)));
-        storeRef.dispatch(setFailedCount(fresh.filter(x => x.syncStatus === 'failed').length));
-        return true;
-      }
+    // Cek di sessions
+    const session = await db.get(STORES.sessions, itemId);
+    if (session) {
+      // Cascade hapus semua yg terkait
+      const bills = await db.getAllFromIndex(STORES.orderBills, 'origin_session_id', itemId);
+      for (const b of bills) await db.delete(STORES.orderBills, b.sync_id);
+      const payments = await db.getAllFromIndex(STORES.orderPayments, 'paid_session_id', itemId);
+      for (const p of payments) await db.delete(STORES.orderPayments, p.sync_id);
+      const topups = await db.getAllFromIndex(STORES.topups, 'session_sync_id', itemId);
+      for (const t of topups) await db.delete(STORES.topups, t.sync_id);
+      await db.delete(STORES.sessions, itemId);
+      return true;
     }
 
-    // Maybe session-level ID
-    const session = sessions.find(s => s.sync_id === itemId);
-    if (session) {
-      await deleteOfflineSession(itemId, userId);
-      const fresh = await getAllSessions(userId);
-      storeRef.dispatch(setSessions(fresh));
-      storeRef.dispatch(setPendingCount(await getOfflinePendingCount(userId)));
-      storeRef.dispatch(setFailedCount(fresh.filter(x => x.syncStatus === 'failed').length));
+    // Cek di order_bills
+    const bill = await db.get(STORES.orderBills, itemId);
+    if (bill) {
+      await db.delete(STORES.orderBills, itemId);
+      return true;
+    }
+
+    // Cek di order_payments
+    const payment = await db.get(STORES.orderPayments, itemId);
+    if (payment) {
+      await db.delete(STORES.orderPayments, itemId);
+      return true;
+    }
+
+    // Cek di topups
+    const topup = await db.get(STORES.topups, itemId);
+    if (topup) {
+      await db.delete(STORES.topups, itemId);
+      return true;
+    }
+
+    // Cek di memberships
+    const membership = await db.get(STORES.memberships, itemId);
+    if (membership) {
+      await db.delete(STORES.memberships, itemId);
       return true;
     }
   } catch (e) {
     console.error('[removeFailedItem] error:', e);
   }
   return false;
+};
+
+export {
+  getSyncingState,
+  startHeartbeat,
+  stopHeartbeat,
 };

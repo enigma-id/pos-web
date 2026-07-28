@@ -6,8 +6,9 @@ import { useNavigate } from 'react-router-dom';
 import { Input } from '../../../components/ui';
 import { BackIcon } from '../../../components/ui/icon';
 import { useUpdateMutation, useLazyCheckSaldoQuery } from '../../../services/membership/action';
-import { updateMembershipInSession, getAllSessions, getOfflinePendingCount, getOrCreateOfflineSession } from '../../../services/offline/queue';
-import { setSessions, setPendingCount, setWarning } from '../../../services/offline/slice';
+import { updateMembership } from '../../../services/offline/queue';
+import { setPendingCount, setWarning } from '../../../services/offline/slice';
+import { store } from '../../../services/store';
 import { setMemberCache, getCache, setCache } from '../../../utils/cache';
 
 const ChangeCardManual = () => {
@@ -88,16 +89,7 @@ const ChangeCardManual = () => {
 
       setLoading(true);
 
-      const sessionDoc = await getOrCreateOfflineSession(userId, authSession);
-      const syncId = sessionDoc?.sync_id;
-      if (!syncId) {
-        dispatch(setWarning('No active session. Please start a session first.'));
-        setLoading(false);
-        return;
-      }
-      dispatch(setSessions([sessionDoc]));
-
-      await updateMembershipInSession(syncId, oldCardId, { card_id: uid, name: member.name, reff_code: member.reff_code }, userId);
+      await updateMembership(oldCardId, { card_id: uid, name: member.name, reff_code: member.reff_code }, userId);
 
       // Cache baru
       setMemberCache(uid, { ...member, card_id: uid });
@@ -125,10 +117,7 @@ const ChangeCardManual = () => {
       );
       setCache(TABLE_CACHE_KEY, { ...existing, data: updated });
 
-      const fresh = await getAllSessions(userId);
-      dispatch(setSessions(fresh));
-      const c = await getOfflinePendingCount(userId);
-      dispatch(setPendingCount(c));
+      dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
 
       dispatch(setWarning('Card changed offline. Will sync when online.'));
       setLoading(false);

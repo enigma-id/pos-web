@@ -37,7 +37,7 @@ const SuccessModal = ({ data, backToMenu }) => {
         }
       >
         <div className="text-lg font-semibold tracking-wide uppercase">
-          {data?.offline_queued ? 'Payment Queued' : 'Bill Saved'}
+          {data?.is_offline_mode ? 'Payment Queued' : 'Bill Saved'}
         </div>
       </Modal.Header>
 
@@ -47,7 +47,7 @@ const SuccessModal = ({ data, backToMenu }) => {
         </div>
 
         <div className="py-4 text-center">
-          {data?.offline_queued && data?.status !== 'pending' ? (
+          {data?.is_offline_mode && data?.status !== 'pending' ? (
             <>
               <p className="text-base font-semibold">Payment saved locally.</p>
               <p className="text-base-300 text-sm">
@@ -70,7 +70,7 @@ const SuccessModal = ({ data, backToMenu }) => {
                 )}
               </div>
             </>
-          ) : data?.offline_queued ? (
+          ) : data?.is_offline_mode ? (
             <>
               <p className="text-base font-semibold">Bill saved locally.</p>
               <p className="text-base-300 text-sm">

@@ -10,7 +10,7 @@ import {
 } from '../../utils/cache';
 import { changeServiceCharge, resetCart } from '../cart/slice';
 import { $failure } from '../form/action';
-import { getOfflinePendingCount, deleteUserDB } from '../offline/queue';
+import { ensureDB, STORES, deleteUserDB } from '../offline/queue';
 import { syncPendingSessions } from '../offline/syncManager';
 import { clearSelectedChannel } from '../sales/channel/slice';
 import { invalidateSession } from '../sales/session/slice';
@@ -84,8 +84,12 @@ const useAuth = () => {
     // Clean up queue DB if empty
     if (userId) {
       try {
-        const pending = await getOfflinePendingCount(userId);
-        if (pending === 0) {
+        const db = await ensureDB(userId);
+        const sessions = await db.getAll(STORES.sessions);
+        const orders = await db.getAll(STORES.orderBills);
+        const payments = await db.getAll(STORES.orderPayments);
+        const hasPending = sessions.length > 0 || orders.length > 0 || payments.length > 0;
+        if (!hasPending) {
           await deleteUserDB(userId);
         }
         // If pending > 0, leave DB intact for next login

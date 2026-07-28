@@ -162,7 +162,7 @@ const HistoryScreen = () => {
                 </div>
                 <div className="flex flex-col place-content-between">
                   <div className="text-base-300 text-end text-sm">
-                    {item?.offline_queued && (
+                    {item?.needs_sync && (
                       <span className="badge badge-warning badge-xs me-1">pending sync</span>
                     )}
                     {item?.code}

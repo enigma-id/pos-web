@@ -7,11 +7,11 @@ import CardMockup from '../../../assets/card-mockup.jpg';
 import { PaypassIcon } from '../../../components/ui/icon';
 import TopupReceipt from '../../../components/ui/topup-receipt';
 import useMembership from '../../../services/membership/hook';
-import { appendTopupToSession, getAllSessions, getOfflinePendingCount, getOrCreateOfflineSession } from '../../../services/offline/queue';
-import { setSessions, setPendingCount, setOfflineSummary, setWarning } from '../../../services/offline/slice';
-import { computeOfflineSummary } from '../../../services/sales/session/hook';
+import { createTopup } from '../../../services/offline/queue';
+import { setPendingCount, setWarning } from '../../../services/offline/slice';
 import { updateMemberCacheSaldo, getCache, setCache } from '../../../utils/cache';
 import { currencyFormat } from '../../../utils/common';
+import { store } from '../../../services/store';
 import { usePrintWindow } from '../../../utils/print';
 
 const CardContent = ({ data, onClose }) => {
@@ -42,28 +42,26 @@ const CardContent = ({ data, onClose }) => {
     // ===== OFFLINE PATH =====
     if (isOffline) {
       const handleOffline = async () => {
-        const sessionDoc = await getOrCreateOfflineSession(userId, authSession);
-        const syncId = sessionDoc?.sync_id;
-        if (!syncId) {
+        const sessionId = store.getState()?.Offline?.sessionSummary?.id || '';
+        if (!sessionId) {
           dispatch(setWarning('No active session. Please start a session first.'));
           topupSubmitted.current = false;
           return;
         }
-        dispatch(setSessions([sessionDoc]));
 
         const topupItem = {
           sync_id: uuidv4(),
-          session_sync_id: syncId,
+          session_sync_id: sessionId,
           membership_id: data?.id,
           nominal,
           payment_type: method,
           member_name: data?.name,
           member_code: data?.reff_code,
-          member_card_id: data?.card_id,
+          card_id: data?.card_id,
           created_at: new Date().toISOString(),
         };
 
-        await appendTopupToSession(syncId, topupItem, userId);
+        await createTopup(topupItem, userId);
         // Update cache saldo
         const newSaldo = (data?.saldo || 0) + nominal;
         if (data?.card_id) {
@@ -91,16 +89,7 @@ const CardContent = ({ data, onClose }) => {
           />
         );
 
-        // Refresh Redux sessions & recompute summary
-        const fresh = await getAllSessions(userId);
-        dispatch(setSessions(fresh));
-        const c = await getOfflinePendingCount(userId);
-        dispatch(setPendingCount(c));
-        const activeSession = fresh.find(s => s.sync_id === syncId);
-        if (activeSession) {
-          const s = computeOfflineSummary(activeSession, syncId, authUser || authSession?.user);
-          dispatch(setOfflineSummary(s));
-        }
+        dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
 
         topupSubmitted.current = false;
         onClose?.();
@@ -118,7 +107,7 @@ const CardContent = ({ data, onClose }) => {
   React.useEffect(() => {
     if (topupResult?.isSuccess && topupSubmitted.current) {
       // Skip kalo ini offline — offline path handle sendiri
-      if (topupResult?.data?.data?.offline_queued) return;
+      if (topupResult?.data?.data?.is_offline_mode) return;
 
       topupSubmitted.current = false;
       const nominal = Number(value) || 0;
