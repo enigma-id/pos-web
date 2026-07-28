@@ -260,14 +260,25 @@ const useCart = catalog_id => {
       try {
         const res = await triggerBill(search ? { search } : {}).unwrap();
         serverData = res?.data || [];
-        // Online search → simpan di cache search; online no-search → simpan di cache utama
+        // Merge: server data + offline pending bills (yang ada di cache tp belum di server)
+        const existingCache = getCache(BILLS_CACHE_KEY) || [];
+        const offlineBills = existingCache.filter(c => c.needs_sync);
+        const merged = [...serverData];
+        for (const ob of offlineBills) {
+          // Jangan duplikat kalo server udah punya (by sync_id)
+          if (!merged.find(m => m.sync_id === ob.sync_id || m.id === ob.id)) {
+            merged.push(ob);
+          }
+        }
+        serverData = merged;
         if (search) {
           setCache(BILLS_CACHE_KEY + '_search', serverData);
         } else {
           setCache(BILLS_CACHE_KEY, serverData);
         }
       } catch (error) {
-        // online error
+        // online error → fallback ke cache
+        serverData = getCache(BILLS_CACHE_KEY) || [];
       }
     } else {
       // Offline — selalu baca cache utama, filter client
