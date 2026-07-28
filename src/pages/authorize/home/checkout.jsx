@@ -607,7 +607,9 @@ const CheckoutScreen = () => {
           onClick={() => {
             setSaveBillError('');
             handleUpdateBill(CartState?.bill?.bill_name);
-            closeModal();
+            // ⛔️ Don't closeModal — handleUpdateBill calls openModal internally.
+            // closeModal has a 200ms setTimeout that nukes the component,
+            // which would override openModal's SuccessModal.
           }}
         >
           Confirm{' '}
@@ -760,6 +762,8 @@ const CheckoutScreen = () => {
     billName = billName || CartState?.bill?.bill_name || '';
     const { payload, discount_categories, allItems } = buildBillPayload(billName);
     payload.bill_name = billName;
+    console.log('[SAVE BILL] CartState bill items:', CartState?.items?.bill?.map(i => ({ name: i.name, qty: i.quantity })));
+    console.log('[SAVE BILL] allItems qty:', allItems.map(i => ({ name: i.name, qty: i.quantity })));
 
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     if (isOffline) {
@@ -797,14 +801,64 @@ const CheckoutScreen = () => {
       created_at: new Date().toISOString(),
     };
 
-    console.log('[DBG] handleUpdateBill: set isSaveBillFlow true');
     isSaveBillFlowRef.current = true;
     setIsSaveBillFlow(true);
     try {
-      await update({ id: CartState?.bill?.id, payload });
+      // ── Capture item data BEFORE update() since reset() clears CartState ──
+      const orderItems = allItems.map(i => ({
+        catalog: { name: i.name || '' },
+        catalog_name: i.name || '',
+        quantity: i.quantity || 0,
+        unit_nett: i.unit_price || 0,
+        discount_value: i?.discount_amount || 0,
+        addons: (i.additionals_flat || []).map(a => ({
+          catalog_name: a.name || '',
+          unit_nett: a.unit_price || 0,
+          quantity: Number(a.quantity || 1) * Number(i.quantity),
+        })),
+      }));
+
+      const res = await update({ id: CartState?.bill?.id, payload });
+
+      // ⛔️ Skip stale effect triggers (showResult masih dari GET sebelumnya)
+      isOfflineSaveRef.current = true;
+      const serverData = res?.data || res || {};
+      const metaRef = billPayloadMetaRef.current;
+
+      openModal(
+        <SuccessModal
+          data={{
+            ...serverData,
+            items: orderItems,
+            new_items: kitchenNewItemsRef.current || undefined,
+            code: serverData?.code || metaRef?.code || '',
+            total_charges: serverData?.total_charges || metaRef?.total_charges || 0,
+            service_charge_value:
+              serverData?.service_charge_value || metaRef?.service_charge_value || 0,
+            discount_value: serverData?.discount_value || metaRef?.discount_value || 0,
+            paid_at: metaRef?.created_at || new Date().toISOString(),
+            sales_channel:
+              serverData?.sales_channel ||
+              (Channel?.selectedChannel?.name
+                ? { name: Channel.selectedChannel.name }
+                : null),
+            session:
+              serverData?.session || { cashier: { name: session?.user?.name || '' } },
+          }}
+          backToMenu
+          isPayment={false}
+        />,
+        'w-md'
+      );
+
+      kitchenNewItemsRef.current = null;
+      billPayloadMetaRef.current = null;
+      setIsSaveBillFlow(false);
+      isSaveBillFlowRef.current = false;
     } catch (err) {
       dispatch($failure(err));
       setSaveBillError(err?.data?.message || 'Something went wrong');
+      closeModal();
     }
   };
 
@@ -943,35 +997,98 @@ const CheckoutScreen = () => {
         return s + itemTotal + addonsTotal;
       }, 0);
       existing.unshift({
-        id: orderId,
-        bill_name: billName,
+        id: '',
+        sync_id: orderId,
+        ref_id: '',
+        session_id: '',
+        sales_channel_id: Channel?.selectedChannel?.id || '',
+        payment_method_id: String(paymentMethodId || ''),
+        membership_id: CartState?.meta?.customer?.id || '',
         code: orderCode,
+        payment_ref: '',
+        bill_name: billName,
+        subtotal_tax: 0,
+        subtotal_taxed: 0,
+        subtotal_gross: itemsTotalCache,
+        subtotal_nett: itemsTotalCache,
+        total_bill: itemsTotalCache + (Number(CartState?.meta?.service_charge_value) || 0),
+        discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
+        discount_value: CartState?.discount?.cart?.type === 'nominal' ? CartState?.discount?.cart?.value : 0,
+        service_charge_percentage: CartState?.meta?.service_charge_percentage || 0,
+        service_charge_value: CartState?.meta?.service_charge_value || 0,
         total_charges: itemsTotalCache + (Number(CartState?.meta?.service_charge_value) || 0),
+        total_payment: totalPayment || 0,
+        cost_goods: 0,
+        status: 'completed',
+        is_discount_percentage: CartState?.discount?.cart?.type === 'percentage',
+        cancelled_reason: '',
+        cancelled_by: '',
+        cancelled_at: null,
+        paid_at: new Date().toISOString(),
+        paid_session_id: '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_category_discount: false,
+        is_offline_mode: true,
+        needs_sync: true,
+        session: {
+          id: '',
+          cashier: { name: session?.user?.name || '' },
+          outlet: session?.sales_session?.outlet ? {
+            id: session.sales_session.outlet.id,
+            name: session.sales_session.outlet.name,
+          } : null,
+        },
+        sales_channel: Channel?.selectedChannel
+          ? {
+              id: Channel.selectedChannel.id,
+              name: Channel.selectedChannel.name,
+            }
+          : null,
         items: orderItems.map(i => {
           const ci = allItems.find(ci => ci.catalog_id === i.catalog_id);
           return {
+            id: '',
+            order_id: orderId,
+            additional_id: '',
+            addon_group_id: '',
+            catalog_id: i.catalog_id || '',
+            catalog_name: i.catalog_name || '',
+            category_name: '',
+            unit_base: i.unit_price || 0,
+            unit_gross: i.unit_price || 0,
+            discount_percentage: 0,
+            discount_value: ci?.discount_amount || 0,
+            is_discount_percentage: false,
+            unit_nett: i.unit_price || 0,
+            unit_tax: 0,
+            unit_taxed: 0,
+            unit_bill: i.unit_price || 0,
+            quantity: i.quantity || 0,
             catalog: {
               name: i.catalog_name || '',
               category_id: ci?.category?.id || ci?.category_id || 0,
             },
-            catalog_name: i.catalog_name || '',
-            quantity: i.quantity || 0,
-            unit_nett: i.unit_price || 0,
-            discount_value: ci?.discount_amount || 0,
             addons: (i.addons || []).map(a => ({
+              id: '',
+              order_id: orderId,
+              additional_id: '',
+              addon_group_id: a.addon_group_id || '',
+              catalog_id: '',
               catalog_name: a.catalog_name || '',
+              unit_base: a.unit_price || 0,
+              unit_gross: a.unit_price || 0,
+              discount_percentage: 0,
+              discount_value: 0,
+              is_discount_percentage: false,
               unit_nett: a.unit_price || 0,
+              unit_tax: 0,
+              unit_taxed: 0,
+              unit_bill: a.unit_price || 0,
               quantity: a.quantity || 1,
             })),
           };
         }),
-        sales_channel: Channel?.selectedChannel?.name
-          ? { name: Channel.selectedChannel.name }
-          : null,
-        payment_ref: '',
-        session: { cashier: { name: session?.user?.name || '' } },
-        is_offline_mode: true,
-        needs_sync: true,
       });
       setCache(BILLS_CACHE_KEY, existing);
     } catch {}
@@ -1089,9 +1206,13 @@ const CheckoutScreen = () => {
   }, [checkResult]);
 
   React.useEffect(() => {
-    // ⛔️ Skip stale mutation trigger from offline path
+    // ⛔️ Skip stale mutation trigger from offline/save-bill path
     if (isOfflineSaveRef.current) {
       isOfflineSaveRef.current = false;
+      // Reset stale mutations so effect 2 doesn't fire with cached data
+      checkoutResult?.reset();
+      closeBillResult?.reset();
+      updateResult?.reset();
       return;
     }
 
@@ -1109,11 +1230,9 @@ const CheckoutScreen = () => {
   }, [checkoutResult?.isSuccess, closeBillResult?.isSuccess, updateResult?.isSuccess]);
 
   React.useEffect(() => {
-    // ⛔️ Skip stale mutation trigger from offline path
+    // ⛔️ Skip stale mutation trigger from offline/save-bill path
+    // (handleUpdateBill & handlePay offline udah langsung open modal)
     if (isOfflineSaveRef.current) return;
-
-    // ⛔️ Skip render ulang — udah pernah render modal save bill
-    if (isSaveBillFlowRef.current === false && billPayloadMetaRef.current === null) return;
 
     if (
       (closeBillResult?.isSuccess || checkoutResult?.isSuccess || updateResult?.isSuccess) &&
