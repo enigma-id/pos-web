@@ -56,6 +56,8 @@ const CheckoutScreen = () => {
     checkoutResult,
     closeBill,
     closeBillResult,
+    update,
+    updateResult,
     remove,
     billItems,
   } = useCart();
@@ -82,6 +84,7 @@ const CheckoutScreen = () => {
   const [selectedMethod, setSelectedMethod] = React.useState(null);
   const checkoutSnapshotRef = React.useRef(null);
   const [isSaveBillFlow, setIsSaveBillFlow] = React.useState(false);
+  const kitchenNewItemsRef = React.useRef(null);
 
   const renderAdditionals = item => {
     return (item?.addons || [])
@@ -430,6 +433,38 @@ const CheckoutScreen = () => {
       });
       console.log('[PAYMENT] sessionSummary updated');
 
+      // Receipt items: semua items (bill + list)
+      const receiptItems = orderItems.map(i => {
+        const ci = allItems.find(ci => ci.catalog_id === i.catalog_id);
+        return {
+          catalog: {
+            name: i.catalog_name || '',
+            category_id: ci?.category?.id || ci?.category_id || 0,
+          },
+          catalog_name: i.catalog_name || '',
+          quantity: i.quantity || 0,
+          unit_nett: i.unit_price || 0,
+          discount_value: ci?.discount_amount || 0,
+          addons: (i.addons || []).map(a => ({
+            catalog_name: a.catalog_name || '',
+            unit_nett: a.unit_price || 0,
+            quantity: a.quantity || 1,
+          })),
+        };
+      });
+      // Kitchen items: cuma tambahan baru (list-only, bukan bill)
+      const payNewItems = (CartState?.items?.list || []).map(i => ({
+        catalog: { name: i.name || '' },
+        catalog_name: i.name || '',
+        quantity: i.quantity || 0,
+        unit_nett: i.unit_price || 0,
+        discount_value: i?.discount_amount || 0,
+        addons: (i.additionals_flat || []).map(a => ({
+          catalog_name: a.name || '',
+          unit_nett: a.unit_price || 0,
+          quantity: Number(a.quantity || 1) * Number(i.quantity),
+        })),
+      }));
       // Build receipt-ready shape
       const paySuccessData = {
         ...completedOrder,
@@ -444,24 +479,8 @@ const CheckoutScreen = () => {
         payment_method: selectedMethod ? { id: selectedMethod.id, name: selectedMethod.name } : null,
         payment_ref: selectedMethod?.provider === 'cash' ? '' : paymentRef,
         session: { cashier: { name: session?.user?.name || '' } },
-        items: orderItems.map(i => {
-          const ci = allItems.find(ci => ci.catalog_id === i.catalog_id);
-          return {
-            catalog: {
-              name: i.catalog_name || '',
-              category_id: ci?.category?.id || ci?.category_id || 0,
-            },
-            catalog_name: i.catalog_name || '',
-            quantity: i.quantity || 0,
-            unit_nett: i.unit_price || 0,
-            discount_value: ci?.discount_amount || 0,
-            addons: (i.addons || []).map(a => ({
-              catalog_name: a.catalog_name || '',
-              unit_nett: a.unit_price || 0,
-              quantity: a.quantity || 1,
-            })),
-          };
-        }),
+        items: receiptItems,
+        new_items: payNewItems,
         subtotal_nett: histItemsTotal,
         service_charge_value: CartState?.meta?.service_charge_value || 0,
         discount_value: completedOrder.discountValue,
@@ -477,6 +496,20 @@ const CheckoutScreen = () => {
     }
 
     // ===== ONLINE PATH =====
+    // Stash new_items for kitchen print (online — API returns all items)
+    kitchenNewItemsRef.current = (CartState?.items?.list || []).map(i => ({
+      catalog: { name: i.name || '' },
+      catalog_name: i.name || '',
+      quantity: i.quantity || 0,
+      unit_nett: i.unit_price || 0,
+      discount_value: i?.discount_amount || 0,
+      addons: (i.additionals_flat || []).map(a => ({
+        catalog_name: a.name || '',
+        unit_nett: a.unit_price || 0,
+        quantity: Number(a.quantity || 1) * Number(i.quantity),
+      })),
+    }));
+
     checkoutSnapshotRef.current = {
       cartState: JSON.parse(JSON.stringify(CartState || {})),
       selectedChannel: Channel?.selectedChannel ? { ...Channel.selectedChannel } : null,
@@ -716,6 +749,18 @@ const CheckoutScreen = () => {
         const addonsTotal = (i.addons || []).reduce((asum, a) => asum + (a.unit_price || 0) * (a.quantity || 0), 0);
         return s + itemTotal + addonsTotal;
       }, 0);
+      const saveNewItems = (CartState?.items?.list || []).map(i => ({
+        catalog: { name: i.name || '' },
+        catalog_name: i.name || '',
+        quantity: i.quantity || 0,
+        unit_nett: i.unit_price || 0,
+        discount_value: i?.discount_amount || 0,
+        addons: (i.additionals_flat || []).map(a => ({
+          catalog_name: a.name || '',
+          unit_nett: a.unit_price || 0,
+          quantity: Number(a.quantity || 1) * Number(i.quantity),
+        })),
+      }));
       const successData = {
         sync_id: orderId,
         code: orderCode,
@@ -750,6 +795,7 @@ const CheckoutScreen = () => {
             })),
           };
         }),
+        new_items: saveNewItems,
         subtotal_nett: itemsTotalReceipt,
         service_charge_value: CartState?.meta?.service_charge_value || 0,
         discount_value: orderData.discountValue,
@@ -765,6 +811,18 @@ const CheckoutScreen = () => {
     }
 
     // ===== ONLINE PATH =====
+    kitchenNewItemsRef.current = (CartState?.items?.list || []).map(i => ({
+      catalog: { name: i.name || '' },
+      catalog_name: i.name || '',
+      quantity: i.quantity || 0,
+      unit_nett: i.unit_price || 0,
+      discount_value: i?.discount_amount || 0,
+      addons: (i.additionals_flat || []).map(a => ({
+        catalog_name: a.name || '',
+        unit_nett: a.unit_price || 0,
+        quantity: Number(a.quantity || 1) * Number(i.quantity),
+      })),
+    }));
     checkoutSnapshotRef.current = {
       cartState: JSON.parse(JSON.stringify(CartState || {})),
       selectedChannel: Channel?.selectedChannel ? { ...Channel.selectedChannel } : null,
@@ -775,10 +833,14 @@ const CheckoutScreen = () => {
       authSession: session,
     };
 
-    await checkout({
-      ...payload,
-      __offlinePreview: checkoutSnapshotRef.current,
-    });
+    if (CartState?.bill?.id) {
+      // Existing bill → update (PUT)
+      await update({ id: CartState.bill.id, payload });
+      setIsSaveBillFlow(true);
+    } else {
+      // New bill → create (POST)
+      await checkout(payload);
+    }
   };
 
   // React.useEffect(() => {
@@ -835,27 +897,34 @@ const CheckoutScreen = () => {
 
     const checkoutData = checkoutResult?.data?.data || {};
     const closeBillData = closeBillResult?.data?.data || {};
+    const updateData = updateResult?.data?.data || {};
 
-    if (checkoutResult?.isSuccess || closeBillResult?.isSuccess) {
+    if (checkoutResult?.isSuccess || closeBillResult?.isSuccess || updateResult?.isSuccess) {
       setSelectedMethod(paymentMethod[0]);
-      const id = checkoutData?.id || closeBillData?.id;
+      const id = checkoutData?.id || closeBillData?.id || updateData?.id;
       if (id) {
         show(id);
       }
     }
-  }, [checkoutResult?.isSuccess, closeBillResult?.isSuccess]);
+  }, [checkoutResult?.isSuccess, closeBillResult?.isSuccess, updateResult?.isSuccess]);
 
   React.useEffect(() => {
     // ⛔️ Skip stale mutation trigger from offline path
     if (isOfflineSaveRef.current) return;
 
-    if ((closeBillResult?.isSuccess || checkoutResult?.isSuccess) && showResult?.isSuccess) {
-      openModal(<SuccessModal data={showResult?.data?.data} backToMenu isPayment={!isSaveBillFlow} />, 'w-md');
+    if ((closeBillResult?.isSuccess || checkoutResult?.isSuccess || updateResult?.isSuccess) && showResult?.isSuccess) {
+      const serverData = showResult?.data?.data || {};
+      openModal(<SuccessModal data={{
+        ...serverData,
+        new_items: kitchenNewItemsRef.current || undefined,
+      }} backToMenu isPayment={!isSaveBillFlow} />, 'w-md');
+      kitchenNewItemsRef.current = null;
       setIsSaveBillFlow(false);
     }
   }, [
     checkoutResult?.isSuccess,
     closeBillResult?.isSuccess,
+    updateResult?.isSuccess,
     showResult?.isSuccess,
     showResult?.data?.data,
   ]);
@@ -1296,13 +1365,13 @@ const CheckoutScreen = () => {
 
           <div className="flex gap-1">
             <div
-              className={`btn btn-default btn-xl btn-block flex-1 ${CartState?.items?.list?.count === 0 || checkoutResult?.isLoading ? 'btn-disabled' : ''}`}
+              className={`btn btn-default btn-xl btn-block flex-1 ${CartState?.items?.list?.count === 0 || checkoutResult?.isLoading || updateResult?.isLoading ? 'btn-disabled' : ''}`}
               onClick={
                 CartState?.bill ? () => handleSaveBill(CartState?.bill?.ticket) : () => openTicket()
               }
             >
               Save Bill
-              {checkoutResult?.isLoading && <span className="loading loading-spinner"></span>}
+              {(checkoutResult?.isLoading || updateResult?.isLoading) && <span className="loading loading-spinner"></span>}
             </div>
 
             <div

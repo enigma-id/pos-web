@@ -243,6 +243,17 @@ const Cart = ({ onUpdate }) => {
         return s + it + at;
       }, 0);
       console.log('[CONFIRM SAVE] orderItems:', JSON.stringify(orderItems.map(i => ({ name: i.catalog_name, addons: i.addons }))));
+      const newItems = (CartState?.items?.list || []).map(item => ({
+        catalog: { name: item.name || '' },
+        catalog_name: item.name || '',
+        quantity: item.quantity || 0,
+        unit_nett: item.unit_price || 0,
+        addons: (item.additionals_flat || []).map(a => ({
+          catalog_name: a.name || '',
+          unit_nett: a.unit_price || 0,
+          quantity: Number(a.quantity || 1) * Number(item.quantity),
+        })),
+      }));
       openModal(<SuccessModal data={{
         bill_name: ticket,
         code: billData.code || '',
@@ -261,6 +272,7 @@ const Cart = ({ onUpdate }) => {
             quantity: a.quantity || 1,
           })),
         })),
+        new_items: newItems,
         service_charge_value: CartState?.meta?.service_charge_value || 0,
         discount_value: CartState?.discount?.cart?.amount || 0,
         sales_channel: Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null,
@@ -410,6 +422,18 @@ const Cart = ({ onUpdate }) => {
       }, 0);
       const totalCharges = itemsTotal + (Number(CartState?.meta?.service_charge_value) || 0);
 
+      const newItems = (CartState?.items?.list || []).map(i => ({
+        catalog: { name: i.name || '' },
+        catalog_name: i.name || '',
+        quantity: i.quantity || 0,
+        unit_nett: i.unit_price || 0,
+        discount_value: 0,
+        addons: (i.additionals_flat || []).map(a => ({
+          catalog_name: a.name || '',
+          unit_nett: a.unit_price || 0,
+          quantity: Number(a.quantity || 1) * Number(i.quantity),
+        })),
+      }));
       const successData = {
         bill_name: ticket,
         code: code,
@@ -430,6 +454,7 @@ const Cart = ({ onUpdate }) => {
             quantity: a.quantity || 1,
           })),
         })),
+        new_items: newItems,
         service_charge_value: CartState?.meta?.service_charge_value || 0,
         discount_value:
           CartState?.discount?.cart?.type === 'nominal' ? CartState?.discount?.cart?.value : 0,

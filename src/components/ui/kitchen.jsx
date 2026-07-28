@@ -3,6 +3,9 @@ import { dateFormat } from '../../utils/common';
 const Kitchen = ({ data }) => {
   if (!data) return;
 
+  // Prioritaskan new_items (tambahan baru) — fallback ke items (semua)
+  const displayItems = data?.new_items?.length > 0 ? data?.new_items : (data?.items || []);
+
   return (
     <div className="sheet page-break" style={{ padding: '10px' }}>
       <div
@@ -98,7 +101,7 @@ const Kitchen = ({ data }) => {
         </p>
       </div>
 
-      {data?.items?.map((item, i) => (
+      {displayItems?.map((item, i) => (
         <div key={i} style={{ marginBottom: 5 }}>
           <div style={{ display: 'flex', alignItems: '', justifyContent: 'space-between' }}>
             <div>

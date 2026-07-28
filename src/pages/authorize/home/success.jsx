@@ -10,7 +10,7 @@ import { usePrintWindow } from '../../../utils/print';
 
 const SuccessModal = ({ data, backToMenu, isPayment }) => {
   const isCurrentlyOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-  const isCompletedFlow = isPayment || isCompletedFlow;
+  const isCompletedFlow = isPayment;
   const navigate = useNavigate();
   const { closeModal } = useModal();
   const { open: openPrint } = usePrintWindow({ title: 'Print Preview', autoClose: true });
