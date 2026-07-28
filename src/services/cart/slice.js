@@ -212,7 +212,7 @@ function convertApiOrderToCartItem(item) {
     id: add.id,
     addon_group_id: add.addon?.id || add.addon_group_id || add.id,
     addon_item_id: add.catalog?.id || add.catalog_id || add.addon_item_id,
-    name: add.catalog?.name || add.name || '',
+    name: add.catalog?.name || add.name || add.catalog_name || '',
     unit_price: Number(add.catalog?.unit_price) || Number(add.unit_price) || 0,
     quantity: add.quantity > 0 ? add.quantity / item.quantity : 1,
   }));
@@ -222,28 +222,28 @@ function convertApiOrderToCartItem(item) {
 
   return {
     id: item.id,
-    category_id: item.catalog?.category_id,
+    category_id: item.catalog?.category_id || item.category_id,
     category_name: item?.category_name,
-    brand_id: item.catalog.brand_id,
-    ref_id: item.catalog.ref_id,
-    code: item.catalog.code,
-    name: item.catalog.name || item?.description,
-    base_price: item.catalog.base_price,
-    image: item.catalog.image,
-    is_custom: item.catalog.is_custom,
-    is_vatable: item.catalog.is_vatable,
-    is_active: item.catalog.is_active,
-    is_additional: item.catalog.is_additional,
-    is_deleted: item.catalog.is_deleted,
-    unit_price: item.unit_nett,
+    brand_id: item.catalog?.brand_id,
+    ref_id: item.catalog?.ref_id,
+    code: item.catalog?.code,
+    name: item.catalog?.name || item.catalog_name || '',
+    base_price: item.catalog?.base_price,
+    image: item.catalog?.image,
+    is_custom: item.catalog?.is_custom || item?.is_custom,
+    is_vatable: item.catalog?.is_vatable || item?.is_vatable,
+    is_active: item.catalog?.is_active,
+    is_additional: item.catalog?.is_additional,
+    is_deleted: item.catalog?.is_deleted,
+    unit_price: item.unit_nett ?? item.unit_price ?? 0,
     quantity: item.quantity,
     subtotal,
-    catalog_id: item.catalog.id,
+    catalog_id: item.catalog?.id || item.catalog_id,
     addons: additionalsGrouped,
     additionals_flat: additionalsFlat,
     discount_amount: item.discount_value || 0,
     discount_percentage: item.discount || 0,
-    final_total: item.unit_bill * item.quantity,
+    final_total: item.unit_bill ? item.unit_bill * item.quantity : subtotal,
     from_bill: true,
     is_discount_percentage: item.is_discount_percentage,
   };
@@ -315,7 +315,7 @@ function convertOfflineQueueItemToCartItem(item) {
     addon_group_name: add.addon_group_name || add.addon?.name || add.name || '',
     addon_group_type: add.addon_group_type || add.addon?.type || add.addon_type || '',
     addon_item_id: add.catalog?.id || add?.addon_item_id,
-    name: add.catalog?.name || add.name || '',
+    name: add.catalog?.name || add.name || add.catalog_name || '',
     unit_price: Number(add.catalog?.unit_price) || Number(add.unit_price) || 0,
     quantity: add?.quantity || 1,
   }));
@@ -512,7 +512,18 @@ const cartSlice = createSlice({
     },
 
     setBillItems: (state, action) => {
-      const { items, category_discounts } = action.payload;
+      const raw = action.payload;
+      let items, category_discounts;
+
+      if (Array.isArray(raw)) {
+        items = raw;
+        category_discounts = undefined;
+      } else if (raw && Array.isArray(raw.items)) {
+        items = raw.items;
+        category_discounts = raw.category_discounts;
+      } else {
+        return;
+      }
 
       state.items.bill = items.map(item => convertApiOrderToCartItem(item));
 
@@ -676,14 +687,21 @@ const cartSlice = createSlice({
       state.items.list = [];
       state.items.bill = [];
 
+      let parsedBillItems = [];
+
       // Use items from transaction_preview if available (they are in Order Item format)
       if (Array.isArray(preview?.items) && preview.items.length > 0) {
-        state.items.bill = preview.items.map(item => convertApiOrderToCartItem(item));
+        parsedBillItems = preview.items.map(item => convertApiOrderToCartItem(item));
+        state.items.bill = parsedBillItems;
       } else {
         // Fallback to body items (raw format)
         const rawItems = Array.isArray(body?.items) ? body.items : [];
-        state.items.bill = rawItems.map(item => convertOfflineQueueItemToCartItem(item));
+        parsedBillItems = rawItems.map(item => convertOfflineQueueItemToCartItem(item));
+        state.items.bill = parsedBillItems;
       }
+
+      // Save source items so Reset/restore works
+      state.bill.items = preview?.items || body?.items || [];
 
       state.items.count = 0; // bill items don't count as new items
 
