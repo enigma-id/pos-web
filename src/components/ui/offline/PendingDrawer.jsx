@@ -15,6 +15,7 @@ const statusConfig = {
 const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh }) => {
   const userId = useSelector(state => state?.Auth?.session?.user?.id);
   const [activeTab, setActiveTab] = useState('order');
+  const [refreshKey, setRefreshKey] = useState(0);
   const [data, setData] = useState({
     orders: [],
     bills: [],
@@ -50,7 +51,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
     };
 
     fetchData();
-  }, [open, userId]);
+  }, [open, userId, refreshKey]);
 
   const hasPendingOrFailed = useMemo(() => {
     return data.sessions.some(s => s.syncStatus === 'pending' || s.syncStatus === 'failed');
@@ -386,40 +387,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                       </div>
                     </div>
                     <div className="mt-2 flex gap-1">
-                      <button className="btn btn-ghost btn-xs text-base-content/50" onClick={() => onRemove?.(item.id)}>
-                        🗑️ Remove
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            }
-
-            if (apiType === 'create member') {
-              return (
-                <div key={item.id} className="rounded-lg border border-base-200 bg-base-100 transition-colors hover:border-base-300 overflow-hidden">
-                  <div className="h-1 w-full bg-success" />
-                  <div className="p-2.5">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className="badge badge-xs badge-success uppercase font-bold tracking-wider">👤 Create Member</span>
-                      <span className="flex-1" />
-                      <span className={`badge badge-xs ${status.badge} gap-0.5`}>
-                        <span className="text-[9px]">{status.icon}</span>
-                        {item.status}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center bg-base-200/30 rounded p-2">
-                      <div className="flex flex-col">
-                        <span className="text-[9px] uppercase text-base-content/40 font-bold">Member</span>
-                        <span className="text-[13px] font-bold">{item.name || '-'} {item.reff_code ? `(${item.reff_code})` : ''}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[9px] uppercase text-base-content/40 font-bold block">Card ID</span>
-                        <span className="text-sm font-black text-base-content">{item.card_id || '-'}</span>
-                      </div>
-                    </div>
-                    <div className="mt-2 flex gap-1">
-                      <button className="btn btn-ghost btn-xs text-base-content/50" onClick={() => onRemove?.(item.id)}>
+                      <button className="btn btn-ghost btn-xs text-base-content/50" onClick={async () => { await onRemove?.(item.id); setRefreshKey(k => k + 1); }}>
                         🗑️ Remove
                       </button>
                     </div>
@@ -513,7 +481,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                     </button>
                   )}
                   {item.status === 'pending' && (
-                    <button className="btn btn-error btn-ghost btn-xs text-base-content/50" onClick={() => onRemove?.(item.id)}>
+                    <button className="btn btn-error btn-ghost btn-xs text-base-content/50" onClick={async () => { await onRemove?.(item.id); setRefreshKey(k => k + 1); }}>
                       &#10006; Remove
                     </button>
                   )}
