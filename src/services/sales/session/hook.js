@@ -75,18 +75,24 @@ export const updateSessionSummary = (newData) => {
     });
   } else if (newData.type === 'payment') {
     const totalPayment = newData.totalPayment || newData.total_payment || 0;
-    summary.summary.sales.total_sales = (summary.summary.sales.total_sales || 0) + totalPayment;
+    const serviceCharge = newData.serviceChargeValue || newData.service_charge_value || 0;
+    const discount = newData.discountValue || newData.discount_value || 0;
+    const itemsTotal = totalPayment - serviceCharge + discount;
+    summary.summary.sales.total_sales = (summary.summary.sales.total_sales || 0) + itemsTotal;
     summary.summary.sales.total_discount = (summary.summary.sales.total_discount || 0) + (newData.discountValue || newData.discount_value || 0);
-    summary.summary.sales.total_service = (summary.summary.sales.total_service || 0) + (newData.serviceChargeValue || newData.service_charge_value || 0);
+    summary.summary.sales.total_service = (summary.summary.sales.total_service || 0) + serviceCharge;
     summary.summary.sales.grand_total = (summary.summary.sales.grand_total || 0) + totalPayment;
-    summary.summary.sales.total_after_discount = (summary.summary.sales.total_after_discount || 0) + totalPayment;
+    summary.summary.sales.total_after_discount = (summary.summary.sales.total_after_discount || 0) + (totalPayment - serviceCharge);
     summary.summary.cash.expected_cash = (summary.summary.cash.expected_cash || 0) + totalPayment;
 
     const pmId = newData.paymentMethodId || newData.payment_method_id || 0;
-    const existingPm = summary.summary.payment_methods.find(p => p.payment_method_id === pmId);
-    if (existingPm) {
-      existingPm.total_paid = (existingPm.total_paid || 0) + totalPayment;
-      existingPm.count = (existingPm.count || 0) + 1;
+    const pmIdx = summary.summary.payment_methods.findIndex(p => p.payment_method_id === pmId);
+    if (pmIdx >= 0) {
+      summary.summary.payment_methods[pmIdx] = {
+        ...summary.summary.payment_methods[pmIdx],
+        total_paid: (summary.summary.payment_methods[pmIdx].total_paid || 0) + totalPayment,
+        count: (summary.summary.payment_methods[pmIdx].count || 0) + 1,
+      };
     } else {
       summary.summary.payment_methods.push({
         payment_method_id: pmId,

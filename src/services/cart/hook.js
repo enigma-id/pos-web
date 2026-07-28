@@ -262,7 +262,7 @@ const useCart = catalog_id => {
         serverData = res?.data || [];
         // Online search → simpan di cache search; online no-search → simpan di cache utama
         if (search) {
-          setCache(BILLS_CACHE_KEY + "_search", serverData);
+          setCache(BILLS_CACHE_KEY + '_search', serverData);
         } else {
           setCache(BILLS_CACHE_KEY, serverData);
         }
@@ -272,7 +272,6 @@ const useCart = catalog_id => {
     } else {
       // Offline — selalu baca cache utama, filter client
       serverData = getCache(BILLS_CACHE_KEY) || [];
-      console.log('[BILL HOOK] offline, cache key:', BILLS_CACHE_KEY, 'data:', serverData.length);
     }
 
     setMergedBillData(serverData);
@@ -296,28 +295,19 @@ const useCart = catalog_id => {
 
     try {
       // Queue item → use local data, no server fetch
-      if (data?.from_queue || data?.is_offline_mode) {
-        const orderId = data?.sync_id || data?.queue_id || data?.id;
-        let orderItem = null;
-        if (orderId) {
-          try {
-            const db = await ensureDB(userId);
-            orderItem = await db.get(STORES.orderBills, orderId);
-            if (!orderItem) {
-              orderItem = await db.get(STORES.orderPayments, orderId);
-            }
-          } catch {}
-        }
-
-        if (orderItem) {
-          dispatch(loadOfflineBill(orderItem));
-        }
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+      if (isOffline || apiReachable === false) {
+        billItems({ items: data?.items, category_discounts: data?.category_discounts });
+        dispatch(selectedBill(data));
+        showSetDiscount(data);
         return;
       }
 
       const res = await showOrder({ id: data?.id }).unwrap();
       if (res?.message === 'success') {
         billItems({ items: res?.data?.items, category_discounts: res?.data?.category_discounts });
+
+        console.log(res?.data);
 
         dispatch(selectedBill(res?.data));
 

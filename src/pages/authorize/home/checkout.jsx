@@ -204,12 +204,27 @@ const CheckoutScreen = () => {
       ?.filter(
         cat => cat?.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
       )
-      ?.map(cat => ({
-        category_id: cat.id,
-        ...(cat.discount_type === 'percentage'
-          ? { discount_percentage: cat.discount_value }
-          : { discount_value: cat.discount_value }),
-      }));
+      ?.map(cat => {
+        // Sum category discount dari masing2 item di category itu
+        const itemsInCat = allItems.filter(i =>
+          (i.category?.id || i.category_id) === cat.id
+        );
+        const computedValue = itemsInCat.reduce((sum, item) => {
+          const discountPerUnit = cat.discount_type === 'percentage'
+            ? Math.ceil((item.unit_price || 0) * cat.discount_value / 100)
+            : Math.min(cat.discount_value, item.unit_price || 0);
+          return sum + (discountPerUnit * (item.quantity || 1));
+        }, 0);
+        return {
+          category_id: cat.id,
+          name: cat.name || '',
+          category: { name: cat.name || '' },
+          discount_value: computedValue,
+          ...(cat.discount_type === 'percentage'
+            ? { discount_percentage: cat.discount_value }
+            : {}),
+        };
+      });
 
     const payload = {
       status: "completed",
@@ -273,6 +288,8 @@ const CheckoutScreen = () => {
         unit_price: Number(item.unit_price) || Number(item.unit_nett) || 0,
         addons: (item.additionals_flat || []).map(a => ({
           addon_group_id: a.addon_group_id,
+          addon_group_name: a.addon_group_name || '',
+          addon_group_type: a.addon_group_type || '',
           addon_item_id: a.addon_item_id,
           catalog_name: a.name || '',
           unit_price: a.unit_price || 0,
@@ -322,7 +339,7 @@ const CheckoutScreen = () => {
         billName: billName || CartState?.bill?.bill_name || '',
         cashierName: session?.user?.name || '',
         discountPercentage: CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
-        discountValue: CartState?.discount?.cart?.type === 'nominal' ? CartState?.discount?.cart?.value : 0,
+        discountValue: CartState?.discount?.cart?.amount || 0,
         categoryDiscounts: discount_categories || [],
         serviceChargeValue: CartState?.meta?.service_charge_value || 0,
         serviceChargePercentage: CartState?.meta?.service_charge_percentage || 0,
@@ -379,26 +396,33 @@ const CheckoutScreen = () => {
         payment_method: selectedMethod ? { id: selectedMethod.id, name: selectedMethod.name } : null,
         total_payment: completedOrder.totalPayment,
         payment_ref: selectedMethod?.provider === 'cash' ? '' : paymentRef,
-        items: orderItems.map(i => ({
-          catalog: { name: i.catalog_name || '' },
-          catalog_name: i.catalog_name || '',
-          quantity: i.quantity || 0,
-          unit_nett: i.unit_price || 0,
-          discount_value: 0,
-          addons: (i.addons || []).map(a => ({
-            catalog_name: a.catalog_name || '',
-            unit_nett: a.unit_price || 0,
-            quantity: a.quantity || 1,
-          })),
-        })),
+        items: orderItems.map(i => {
+          const ci = allItems.find(ci => ci.catalog_id === i.catalog_id);
+          return {
+            catalog: {
+              name: i.catalog_name || '',
+              category_id: ci?.category?.id || ci?.category_id || 0,
+            },
+            catalog_name: i.catalog_name || '',
+            quantity: i.quantity || 0,
+            unit_nett: i.unit_price || 0,
+            discount_value: ci?.discount_amount || 0,
+            addons: (i.addons || []).map(a => ({
+              catalog_name: a.catalog_name || '',
+              unit_nett: a.unit_price || 0,
+              quantity: a.quantity || 1,
+            })),
+          };
+        }),
         membership: null,
         discount_value: completedOrder.discountValue,
         service_charge_value: CartState?.meta?.service_charge_value || 0,
-        subtotal_nett: completedOrder.totalPayment,
+        subtotal_nett: histItemsTotal,
         session: { cashier: { name: session?.user?.name || '' } },
         from_queue: true,
         is_offline_mode: true,
         needs_sync: true,
+        category_discounts: discount_categories || [],
         offline_meta: { order_sync_id: orderId },
       };
       setCache(HISTORY_CACHE_KEY, [historyEntry, ...existing]);
@@ -427,23 +451,31 @@ const CheckoutScreen = () => {
         code: completedOrder.code,
         paid_at: now,
         bill_name: completedOrder.billName,
+        category_discounts: discount_categories || [],
         sales_channel: Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null,
           payment_ref: '',
         payment_method: selectedMethod ? { id: selectedMethod.id, name: selectedMethod.name } : null,
         payment_ref: selectedMethod?.provider === 'cash' ? '' : paymentRef,
         session: { cashier: { name: session?.user?.name || '' } },
-        items: orderItems.map(i => ({
-          catalog: { name: i.catalog_name || '' },
-          catalog_name: i.catalog_name || '',
-          quantity: i.quantity || 0,
-          unit_nett: i.unit_price || 0,
-          discount_value: 0,
-          addons: (i.addons || []).map(a => ({
-            catalog_name: a.catalog_name || '',
-            unit_nett: a.unit_price || 0,
-            quantity: a.quantity || 1,
-          })),
-        })),
+        items: orderItems.map(i => {
+          const ci = allItems.find(ci => ci.catalog_id === i.catalog_id);
+          return {
+            catalog: {
+              name: i.catalog_name || '',
+              category_id: ci?.category?.id || ci?.category_id || 0,
+            },
+            catalog_name: i.catalog_name || '',
+            quantity: i.quantity || 0,
+            unit_nett: i.unit_price || 0,
+            discount_value: ci?.discount_amount || 0,
+            addons: (i.addons || []).map(a => ({
+              catalog_name: a.catalog_name || '',
+              unit_nett: a.unit_price || 0,
+              quantity: a.quantity || 1,
+            })),
+          };
+        }),
+        subtotal_nett: histItemsTotal,
         service_charge_value: CartState?.meta?.service_charge_value || 0,
         discount_value: completedOrder.discountValue,
       };
@@ -526,12 +558,27 @@ const CheckoutScreen = () => {
       ?.filter(
         cat => cat?.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
       )
-      ?.map(cat => ({
-        category_id: cat.id,
-        ...(cat.discount_type === 'percentage'
-          ? { discount_percentage: cat.discount_value }
-          : { discount_value: cat.discount_value }),
-      }));
+      ?.map(cat => {
+        // Sum category discount dari masing2 item di category itu
+        const itemsInCat = allItems.filter(i =>
+          (i.category?.id || i.category_id) === cat.id
+        );
+        const computedValue = itemsInCat.reduce((sum, item) => {
+          const discountPerUnit = cat.discount_type === 'percentage'
+            ? Math.ceil((item.unit_price || 0) * cat.discount_value / 100)
+            : Math.min(cat.discount_value, item.unit_price || 0);
+          return sum + (discountPerUnit * (item.quantity || 1));
+        }, 0);
+        return {
+          category_id: cat.id,
+          name: cat.name || '',
+          category: { name: cat.name || '' },
+          discount_value: computedValue,
+          ...(cat.discount_type === 'percentage'
+            ? { discount_percentage: cat.discount_value }
+            : {}),
+        };
+      });
 
     const payload = {
       sales_channel_id: Channel?.selectedChannel?.id,
@@ -580,6 +627,8 @@ const CheckoutScreen = () => {
         unit_price: Number(item.unit_price) || Number(item.unit_nett) || 0,
         addons: (item.additionals_flat || []).map(a => ({
           addon_group_id: a.addon_group_id,
+          addon_group_name: a.addon_group_name || '',
+          addon_group_type: a.addon_group_type || '',
           addon_item_id: a.addon_item_id,
           catalog_name: a.name || '',
           unit_price: a.unit_price || 0,
@@ -613,7 +662,7 @@ const CheckoutScreen = () => {
         serviceChargeValue: CartState?.meta?.service_charge_value || 0,
         serviceChargePercentage: CartState?.meta?.service_charge_percentage || 0,
         discountPercentage: CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
-        discountValue: CartState?.discount?.cart?.type === 'nominal' ? CartState?.discount?.cart?.value : 0,
+        discountValue: CartState?.discount?.cart?.amount || 0,
         categoryDiscounts: discount_categories || [],
         items: orderItems,
         status: 'pending',
@@ -654,18 +703,24 @@ const CheckoutScreen = () => {
           bill_name: ticket,
           code: orderCode,
           total_charges: itemsTotalCache + (Number(CartState?.meta?.service_charge_value) || 0),
-          items: orderItems.map(i => ({
-            catalog: { name: i.catalog_name || '' },
-            catalog_name: i.catalog_name || '',
-            quantity: i.quantity || 0,
-            unit_nett: i.unit_price || 0,
-            discount_value: 0,
-            addons: (i.addons || []).map(a => ({
-              catalog_name: a.catalog_name || '',
-              unit_nett: a.unit_price || 0,
-              quantity: a.quantity || 1,
-            })),
-          })),
+          items: orderItems.map(i => {
+            const ci = allItems.find(ci => ci.catalog_id === i.catalog_id);
+            return {
+              catalog: {
+                name: i.catalog_name || '',
+                category_id: ci?.category?.id || ci?.category_id || 0,
+              },
+              catalog_name: i.catalog_name || '',
+              quantity: i.quantity || 0,
+              unit_nett: i.unit_price || 0,
+              discount_value: ci?.discount_amount || 0,
+              addons: (i.addons || []).map(a => ({
+                catalog_name: a.catalog_name || '',
+                unit_nett: a.unit_price || 0,
+                quantity: a.quantity || 1,
+              })),
+            };
+          }),
           sales_channel: Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null,
           payment_ref: '',
           session: { cashier: { name: session?.user?.name || '' } },
@@ -699,18 +754,25 @@ const CheckoutScreen = () => {
         payment_method: null,
         payment_ref: '',
         session: { cashier: { name: session?.user?.name || '' } },
-        items: orderItems.map(i => ({
-          catalog: { name: i.catalog_name || '' },
-          catalog_name: i.catalog_name || '',
-          quantity: i.quantity || 0,
-          unit_nett: i.unit_price || 0,
-          discount_value: 0,
-          addons: (i.addons || []).map(a => ({
-            catalog_name: a.catalog_name || '',
-            unit_nett: a.unit_price || 0,
-            quantity: a.quantity || 1,
-          })),
-        })),
+        items: orderItems.map(i => {
+          const ci = allItems.find(ci => ci.catalog_id === i.catalog_id);
+          return {
+            catalog: {
+              name: i.catalog_name || '',
+              category_id: ci?.category?.id || ci?.category_id || 0,
+            },
+            catalog_name: i.catalog_name || '',
+            quantity: i.quantity || 0,
+            unit_nett: i.unit_price || 0,
+            discount_value: ci?.discount_amount || 0,
+            addons: (i.addons || []).map(a => ({
+              catalog_name: a.catalog_name || '',
+              unit_nett: a.unit_price || 0,
+              quantity: a.quantity || 1,
+            })),
+          };
+        }),
+        subtotal_nett: itemsTotalReceipt,
         service_charge_value: CartState?.meta?.service_charge_value || 0,
         discount_value: orderData.discountValue,
       };

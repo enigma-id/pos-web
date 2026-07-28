@@ -98,7 +98,7 @@ const OrderDetails = ({ data }) => {
           <>
             {data?.category_discounts?.map((d, i) => (
               <div key={i} className="flex place-content-between place-items-center text-base">
-                <div>Discount Category {catNames[d?.category_id] || ''}</div>
+                <div>Discount Category {catNames[d?.category_id] || d?.category?.name || d?.name || ''}</div>
                 <div>-{currencyFormat(d?.total_discount || d?.discount_value)}</div>
               </div>
             ))}

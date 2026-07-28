@@ -3,43 +3,6 @@ import React from 'react';
 import { currencyFormat, dateFormat } from '../../utils/common';
 
 const Receipt = ({ data }) => {
-  const [discountMap, setDiscountMap] = React.useState([]);
-
-  const groupedCategories = (items, category_discounts) => {
-    if (!category_discounts || category_discounts.length === 0) {
-      setDiscountMap([]);
-      return;
-    }
-
-    const group = {};
-
-    category_discounts.forEach(discount => {
-      const categoryId = discount.category_id;
-
-      // The category name is outside the catalog, so it's item.category_name
-      const itemWithCategory = items.find(item => item?.catalog?.category_id === categoryId);
-      const categoryName = itemWithCategory?.category_name || 'Unknown Category';
-
-      if (!group[categoryId]) {
-        group[categoryId] = {
-          id: categoryId,
-          name: categoryName,
-          subtotal: 0,
-        };
-      }
-      group[categoryId].subtotal += itemWithCategory?.discount_value;
-    });
-
-
-    const result = Object.values(group).filter(item => item.subtotal > 0);
-    setDiscountMap(result);
-  };
-
-  React.useEffect(() => {
-    if (!data) return;
-    groupedCategories(data?.items, data?.category_discounts);
-
-  }, [data]);
 
   if (!data) return;
 
@@ -167,35 +130,15 @@ const Receipt = ({ data }) => {
           </div>
         )}
 
-        {discountMap?.length > 0 &&
-          discountMap?.map((d, i) => (
+        {data?.category_discounts?.filter(d => (d?.total_discount || d?.discount_value || 0) > 0)?.map((d, i) => (
             <div
               key={i}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
             >
-              <p style={{ marginBlock: 2, fontSize: 11 }}>Discount Category {d?.name}</p>
-              <p style={{ marginBlock: 2, fontSize: 11 }}>-{currencyFormat(d?.subtotal)}</p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>Discount Category {d?.category?.name || d?.name || ''}</p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>-{currencyFormat(d?.total_discount || d?.discount_value)}</p>
             </div>
           ))}
-        {/* {data?.items.reduce((sum, item) => {
-          const qty = item.quantity ?? 1;
-          const discount = item.discount_value ?? 0;
-          return sum + discount * qty;
-        }, 0) > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>Discount Category</p>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>
-              -
-              {currencyFormat(
-                data?.items.reduce((sum, item) => {
-                  const qty = item.quantity ?? 1;
-                  const discount = item.discount_value ?? 0;
-                  return sum + discount * qty;
-                }, 0)
-              )}
-            </p>
-          </div>
-        )} */}
         {data?.discount_value > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <p style={{ marginBlock: 2, fontSize: 11 }}>Discount Order</p>

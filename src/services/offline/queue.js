@@ -210,13 +210,32 @@ export const createOrderBill = async (data, userId) => {
   return doc;
 };
 
-export const updateOrderBill = async (syncId, data, userId) => {
+export const updateOrderBill = async (idOrSyncId, data, userId) => {
   const db = await ensureDB(userId);
-  const existing = await db.get(STORES.orderBills, syncId);
-  if (!existing) throw new Error(`OrderBill not found: ${syncId}`);
+  // Cari by sync_id dulu, kalo gak ketemu coba by id (server ID)
+  let existing = await db.get(STORES.orderBills, idOrSyncId);
+  if (!existing) {
+    const all = await db.getAll(STORES.orderBills);
+    existing = all.find(b => b.id === idOrSyncId);
+  }
+  if (!existing) {
+    // Bill dari server — belum ada di IndexedDB, insert sebagai data baru
+    const doc = {
+      id: idOrSyncId,
+      bill_name: data.bill_name || '',
+      items: data.items || [],
+      code: data.code || '',
+      status: 'completed',
+      is_offline_mode: true,
+      needs_sync: false,
+      createdAt: new Date().toISOString(),
+    };
+    await db.add(STORES.orderBills, doc);
+    return doc;
+  }
 
-  // Merge update — biarin field yg gak di-set pake existing
-  const updated = { ...existing, ...data, sync_id: syncId };
+  // Merge update
+  const updated = { ...existing, ...data, sync_id: existing.sync_id };
   await db.put(STORES.orderBills, updated);
   return updated;
 };

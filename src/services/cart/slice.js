@@ -10,7 +10,7 @@ function flattenAdditionals(additionals = []) {
   const result = [];
 
   additionals.forEach(add => {
-    const { id: addon_group_id, type, items = [] } = add;
+    const { id: addon_group_id, type, name: addon_group_name, items = [] } = add;
 
     items.forEach(child => {
       const isSelected = type === 'quantity' ? (child.quantity || 0) > 0 : !!child.selected;
@@ -18,8 +18,10 @@ function flattenAdditionals(additionals = []) {
       if (isSelected) {
         const entry = {
           addon_group_id,
-          addon_item_id: child.addon_item_id ?? child.id,
-          name: child.name || '',
+          addon_group_name: addon_group_name || '',
+          addon_group_type: type || '',
+          addon_item_id: child.catalog_id ?? child.addon_item_id ?? child.id,
+          name: child.catalog_name ?? child.name,
           unit_price: Number(child.unit_price) || 0,
         };
 
@@ -156,8 +158,9 @@ function convertApiOrderToCartItem(item) {
   const groupedAdditionals = {};
 
   for (const add of item.addons || []) {
-    const addon = add.addon || {};
-    const addonId = addon.id || add.addon_group_id;
+    // Prefer addon_group (API), fallback addon (legacy / offline synthetic)
+    const group = add.addon_group || add.addon || {};
+    const addonId = group.id || add.addon_group_id;
 
     // Flat order response (no group metadata) → group under shared sentinel
     if (!addonId) {
@@ -184,8 +187,8 @@ function convertApiOrderToCartItem(item) {
     if (!groupedAdditionals[addonId]) {
       groupedAdditionals[addonId] = {
         id: addonId,
-        name: addon.name || add.name || '',
-        type: addon.type || add.addon_type || '',
+        name: group.name || add.name || '',
+        type: group.type || add.addon_type || '',
         items: [],
       };
     }
@@ -264,8 +267,7 @@ function recalculateGrandTotalWithServiceCharge(state) {
 
   if (state.meta.service_charge_percentage > 0) {
     state.meta.service_charge_value = Math.ceil(
-      baseGrandTotal *
-        (state.meta.service_charge_percentage / 100)
+      baseGrandTotal * (state.meta.service_charge_percentage / 100)
     );
   } else {
     // If percentage is 0, preserve existing value if it was set manually from preview
@@ -291,8 +293,8 @@ function convertOfflineQueueItemToCartItem(item) {
     if (!additionalsGrouped[addonId]) {
       additionalsGrouped[addonId] = {
         id: addonId,
-        name: addon.name || add.name || '',
-        type: addon.type || add.addon_type || '',
+        name: add.addon_group_name || addon.name || add.name || 'Add-ons',
+        type: add.addon_group_type || addon.type || add.addon_type || 'checkbox',
         items: [],
       };
     }
@@ -310,6 +312,8 @@ function convertOfflineQueueItemToCartItem(item) {
 
   const additionalsFlat = rawAdditionals.map(add => ({
     addon_group_id: add.addon?.id || add?.addon_group_id,
+    addon_group_name: add.addon_group_name || add.addon?.name || add.name || '',
+    addon_group_type: add.addon_group_type || add.addon?.type || add.addon_type || '',
     addon_item_id: add.catalog?.id || add?.addon_item_id,
     name: add.catalog?.name || add.name || '',
     unit_price: Number(add.catalog?.unit_price) || Number(add.unit_price) || 0,
@@ -586,10 +590,16 @@ const cartSlice = createSlice({
         // Compute total from items (since totalPayment = 0 for pending save-bills)
         const computedTotal = (order.items || []).reduce((sum, item) => {
           const itemTotal = Number(item.unit_price || 0) * Number(item.quantity || 0);
-          const addonsTotal = (item.addons || []).reduce((asum, a) => asum + (Number(a.unit_price || 0) * Number(a.quantity || 0)), 0);
+          const addonsTotal = (item.addons || []).reduce(
+            (asum, a) => asum + Number(a.unit_price || 0) * Number(a.quantity || 0),
+            0
+          );
           return sum + itemTotal + addonsTotal;
         }, 0);
-        const totalCharges = order.total_payment || order.totalPayment || (computedTotal + Number(order.service_charge_value || order.serviceChargeValue || 0));
+        const totalCharges =
+          order.total_payment ||
+          order.totalPayment ||
+          computedTotal + Number(order.service_charge_value || order.serviceChargeValue || 0);
 
         // Build preview directly from order fields
         preview = {
@@ -606,13 +616,26 @@ const cartSlice = createSlice({
             discount_value: 0,
             // Wrap flat addons so convertApiOrderToCartItem groups them with type 'checkbox'
             addons: (item.addons || []).map((a, idx) => ({
-              addon: { id: `oad-${idx}`, name: 'Add-ons', type: 'checkbox' },
-              catalog: { id: a.addon_item_id, name: a.catalog_name || '', unit_price: a.unit_price || 0 },
+              addon_group_name: a.addon_group_name || '',
+              addon_group_type: a.addon_group_type || '',
+              addon: {
+                id: `oad-${idx}`,
+                name: a.addon_group_name || 'Add-ons',
+                type: a.addon_group_type || 'checkbox',
+              },
+              catalog: {
+                id: a.addon_item_id,
+                name: a.catalog_name || '',
+                unit_price: a.unit_price || 0,
+              },
               quantity: a.quantity || 1,
               selected: true,
             })),
           })),
-          membership: (order.membership_id || order.membershipId) ? { id: order.membership_id || order.membershipId } : null,
+          membership:
+            order.membership_id || order.membershipId
+              ? { id: order.membership_id || order.membershipId }
+              : null,
         };
         body = { ...order, bill_name: order.bill_name || order.billName };
       } else {
@@ -630,8 +653,19 @@ const cartSlice = createSlice({
         is_offline_mode: true,
         sync_id: order?.sync_id || order?.id,
         // BARU: untuk deteksi cross-session & hitung sisa split
-        origin_session_sync_id: order.origin_session_sync_id || order.originSessionSyncId || body?.origin_session_sync_id || body?.originSessionSyncId || order._sessionData?.sync_id || null,
-        originalItems: order.original_items || order.originalItems || body?.original_items || body?.originalItems || null,
+        origin_session_sync_id:
+          order.origin_session_sync_id ||
+          order.originSessionSyncId ||
+          body?.origin_session_sync_id ||
+          body?.originSessionSyncId ||
+          order._sessionData?.sync_id ||
+          null,
+        originalItems:
+          order.original_items ||
+          order.originalItems ||
+          body?.original_items ||
+          body?.originalItems ||
+          null,
         itemSnapshot: (order.items || body?.items || preview?.items || []).map(i => ({
           catalog_id: i.catalog_id || i.catalog?.id,
           quantity: i.quantity || 0,
