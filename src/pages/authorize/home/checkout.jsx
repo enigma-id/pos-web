@@ -6,7 +6,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import DetailScreen from './detail';
 import BillModal from './saveBill';
 import SuccessModal from './success';
-import { Input, Kitchen, Modal, NFCField, Receipt } from '../../../components/ui';
+import { Input, Modal, NFCField } from '../../../components/ui';
 import { changeServiceCharge } from '../../../services/cart/slice';
 import {
   BackIcon,
@@ -14,7 +14,6 @@ import {
   ChevronDownIcon,
   EditIcon,
   MoneyIcon,
-  PrintIcon,
   TrashIcon,
   UserCircleIcon,
 } from '../../../components/ui/icon';
@@ -26,7 +25,6 @@ import { buildOfflineTransactionPayload, setWarning } from '../../../services/of
 import { createOrderBill, createOrderPayment, updateOrderBill, updateOrderPayment, ensureDB, STORES } from '../../../services/offline/queue';
 import { setPendingCount } from '../../../services/offline/slice';
 import { updateSessionSummary } from '../../../services/sales/session/hook';
-import { resetCart } from '../../../services/cart/slice';
 import { $failure } from '../../../services/form/action';
 import { v4 as uuidv4 } from 'uuid';
 import { store } from '../../../services/store';
@@ -35,7 +33,7 @@ import { getCache, setCache } from '../../../utils/cache';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
 import { getMemberCache } from '../../../utils/cache';
-import { usePrintWindow } from '../../../utils/print';
+
 
 
 const CheckoutScreen = () => {
@@ -70,7 +68,6 @@ const CheckoutScreen = () => {
   const syncIdOffline = useSelector(state => state?.Offline?.activeSyncId);
   const syncIdServer = useSelector(state => state?.Auth?.session?.sales_session?.id);
   const activeSyncId = syncIdOffline || syncIdServer;
-  const { open: openPrint } = usePrintWindow({ title: 'Print Preview', autoClose: true });
   const { openModal, closeModal } = useModal();
 
   const [isOpen, setIsOpen] = React.useState(false);
@@ -84,6 +81,7 @@ const CheckoutScreen = () => {
 
   const [selectedMethod, setSelectedMethod] = React.useState(null);
   const checkoutSnapshotRef = React.useRef(null);
+  const [isSaveBillFlow, setIsSaveBillFlow] = React.useState(false);
 
   const renderAdditionals = item => {
     return (item?.addons || [])
@@ -204,27 +202,14 @@ const CheckoutScreen = () => {
       ?.filter(
         cat => cat?.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
       )
-      ?.map(cat => {
-        // Sum category discount dari masing2 item di category itu
-        const itemsInCat = allItems.filter(i =>
-          (i.category?.id || i.category_id) === cat.id
-        );
-        const computedValue = itemsInCat.reduce((sum, item) => {
-          const discountPerUnit = cat.discount_type === 'percentage'
-            ? Math.ceil((item.unit_price || 0) * cat.discount_value / 100)
-            : Math.min(cat.discount_value, item.unit_price || 0);
-          return sum + (discountPerUnit * (item.quantity || 1));
-        }, 0);
-        return {
-          category_id: cat.id,
-          name: cat.name || '',
-          category: { name: cat.name || '' },
-          discount_value: computedValue,
-          ...(cat.discount_type === 'percentage'
-            ? { discount_percentage: cat.discount_value }
-            : {}),
-        };
-      });
+      ?.map(cat => ({
+        category_id: cat.id,
+        name: cat.name || '',
+        category: { name: cat.name || '' },
+        ...(cat.discount_type === 'percentage'
+          ? { discount_percentage: cat.discount_value }
+          : { discount_value: cat.discount_value }),
+      }));
 
     const payload = {
       status: "completed",
@@ -242,20 +227,18 @@ const CheckoutScreen = () => {
 
     if (billName) {
       payload.bill_name = billName;
+    } else if (CartState?.bill?.bill_name) {
+      payload.bill_name = CartState.bill.bill_name;
     }
 
     if (CartState?.meta?.customer) {
       payload.membership_id = CartState?.meta?.customer?.id;
     }
 
-    if (CartState?.discount?.cart?.type) {
-      if (CartState?.discount?.cart?.type === 'percentage') {
-        payload.discount_percentage = CartState?.discount?.cart?.value;
-      }
-
-      if (CartState?.discount?.cart?.type === 'nominal') {
-        payload.discount_value = CartState?.discount?.cart?.value;
-      }
+    if (CartState?.discount?.cart?.type === 'percentage') {
+      payload.discount_percentage = CartState?.discount?.cart?.value;
+    } else if (CartState?.discount?.cart?.type === 'nominal') {
+      payload.discount_value = CartState?.discount?.cart?.value;
     }
 
     if (discount_categories?.length > 0) {
@@ -338,8 +321,12 @@ const CheckoutScreen = () => {
         paymentRef: selectedMethod?.provider === 'cash' ? '' : paymentRef,
         billName: billName || CartState?.bill?.bill_name || '',
         cashierName: session?.user?.name || '',
-        discountPercentage: CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
-        discountValue: CartState?.discount?.cart?.amount || 0,
+        ...(CartState?.discount?.cart?.type === 'percentage'
+          ? { discountPercentage: CartState?.discount?.cart?.value }
+          : {}),
+        ...(CartState?.discount?.cart?.type === 'nominal'
+          ? { discountValue: CartState?.discount?.cart?.amount }
+          : {}),
         categoryDiscounts: discount_categories || [],
         serviceChargeValue: CartState?.meta?.service_charge_value || 0,
         serviceChargePercentage: CartState?.meta?.service_charge_percentage || 0,
@@ -558,27 +545,16 @@ const CheckoutScreen = () => {
       ?.filter(
         cat => cat?.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
       )
-      ?.map(cat => {
-        // Sum category discount dari masing2 item di category itu
-        const itemsInCat = allItems.filter(i =>
-          (i.category?.id || i.category_id) === cat.id
-        );
-        const computedValue = itemsInCat.reduce((sum, item) => {
-          const discountPerUnit = cat.discount_type === 'percentage'
-            ? Math.ceil((item.unit_price || 0) * cat.discount_value / 100)
-            : Math.min(cat.discount_value, item.unit_price || 0);
-          return sum + (discountPerUnit * (item.quantity || 1));
-        }, 0);
-        return {
-          category_id: cat.id,
-          name: cat.name || '',
-          category: { name: cat.name || '' },
-          discount_value: computedValue,
-          ...(cat.discount_type === 'percentage'
-            ? { discount_percentage: cat.discount_value }
-            : {}),
-        };
-      });
+      ?.map(cat => ({
+        category_id: cat.id,
+        name: cat.name || '',
+        category: { name: cat.name || '' },
+        ...(cat.discount_type === 'percentage'
+          ? { discount_percentage: cat.discount_value }
+          : { discount_value: cat.discount_value }),
+      }));
+
+    setIsSaveBillFlow(true);
 
     const payload = {
       sales_channel_id: Channel?.selectedChannel?.id,
@@ -588,20 +564,18 @@ const CheckoutScreen = () => {
 
     if (billName) {
       payload.bill_name = billName;
+    } else if (CartState?.bill?.bill_name) {
+      payload.bill_name = CartState.bill.bill_name;
     }
 
     if (CartState?.meta?.customer) {
       payload.membership_id = CartState?.meta?.customer?.id;
     }
 
-    if (CartState?.discount?.cart?.type) {
-      if (CartState?.discount?.cart?.type === 'percentage') {
-        payload.discount_percentage = CartState?.discount?.cart?.value;
-      }
-
-      if (CartState?.discount?.cart?.type === 'nominal') {
-        payload.discount_value = CartState?.discount?.cart?.value;
-      }
+    if (CartState?.discount?.cart?.type === 'percentage') {
+      payload.discount_percentage = CartState?.discount?.cart?.value;
+    } else if (CartState?.discount?.cart?.type === 'nominal') {
+      payload.discount_value = CartState?.discount?.cart?.value;
     }
 
     if (discount_categories?.length > 0) {
@@ -661,8 +635,12 @@ const CheckoutScreen = () => {
         cashierName: session?.user?.name || '',
         serviceChargeValue: CartState?.meta?.service_charge_value || 0,
         serviceChargePercentage: CartState?.meta?.service_charge_percentage || 0,
-        discountPercentage: CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
-        discountValue: CartState?.discount?.cart?.amount || 0,
+        ...(CartState?.discount?.cart?.type === 'percentage'
+          ? { discountPercentage: CartState?.discount?.cart?.value }
+          : {}),
+        ...(CartState?.discount?.cart?.type === 'nominal'
+          ? { discountValue: CartState?.discount?.cart?.amount }
+          : {}),
         categoryDiscounts: discount_categories || [],
         items: orderItems,
         status: 'pending',
@@ -834,78 +812,9 @@ const CheckoutScreen = () => {
     checkSaldo(params);
   };
 
-  const handleOpenPrint = data => {
-    openPrint(<Receipt data={data} />);
-  };
-
-  const handleOpenPrintKitchen = data => {
-    openPrint(<Kitchen data={data} />);
-  };
-
   const openNFC = async () => {
     openModal(
       <NFCField onRead={handleRead} isOpen={true} onClose={closeModal} result={checkResult} />
-    );
-  };
-
-  const openSuccess = async data => {
-    openModal(
-      <>
-        <Modal.Header
-          onClose={() => {
-            closeModal();
-            navigate('/');
-          }}
-        >
-          <div className="text-lg font-semibold tracking-wide uppercase">Payment success</div>
-        </Modal.Header>
-        <Modal.Body>
-          <div className="flex place-content-center place-items-center">
-            <img src="./print.png" className="h-64" />
-          </div>
-
-          <div className="flex h-16 place-items-center">
-            <div className="flex flex-1 flex-col place-content-center place-items-center">
-              <div className="text-xl font-semibold">{currencyFormat(data?.total_payment)}</div>
-              <div className="text-base-300 text-base font-thin capitalize">total paid</div>
-            </div>
-            {data?.payment_method?.provider === "cash" && data?.total_payment - data?.total_charges > 0 && (
-              <div className="border-base-200 flex flex-1 flex-col place-content-center place-items-center border-l">
-                <div className="text-xl font-semibold">
-                  {currencyFormat(data?.total_payment - data?.total_charges)}
-                </div>
-                <div className="text-base-300 text-base font-thin capitalize">change</div>
-              </div>
-            )}
-          </div>
-          <div className="mt-4">
-            <div className="flex h-16 gap-4">
-              <div
-                className="btn btn-lg btn-soft btn-primary mb-3 flex-1 rounded-none"
-                onClick={() => handleOpenPrint(data)}
-              >
-                <PrintIcon /> Print Receipt
-              </div>
-              <div
-                className="btn btn-lg btn-soft btn-primary mb-3 flex-1 rounded-none"
-                onClick={() => handleOpenPrintKitchen(data)}
-              >
-                <PrintIcon /> Print Kitchen
-              </div>
-            </div>
-
-            <div
-              className="btn btn-block btn-lg btn-primary mb-3"
-              onClick={() => {
-                closeModal();
-                navigate('/');
-              }}
-            >
-              Back to menu
-            </div>
-          </div>
-        </Modal.Body>
-      </>
     );
   };
 
@@ -941,7 +850,8 @@ const CheckoutScreen = () => {
     if (isOfflineSaveRef.current) return;
 
     if ((closeBillResult?.isSuccess || checkoutResult?.isSuccess) && showResult?.isSuccess) {
-      openSuccess(showResult?.data?.data);
+      openModal(<SuccessModal data={showResult?.data?.data} backToMenu isPayment={!isSaveBillFlow} />, 'w-md');
+      setIsSaveBillFlow(false);
     }
   }, [
     checkoutResult?.isSuccess,

@@ -8,7 +8,9 @@ import useModal from '../../../components/ui/modal/hook';
 import { currencyFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
 
-const SuccessModal = ({ data, backToMenu }) => {
+const SuccessModal = ({ data, backToMenu, isPayment }) => {
+  const isCurrentlyOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+  const isCompletedFlow = isPayment || isCompletedFlow;
   const navigate = useNavigate();
   const { closeModal } = useModal();
   const { open: openPrint } = usePrintWindow({ title: 'Print Preview', autoClose: true });
@@ -37,7 +39,11 @@ const SuccessModal = ({ data, backToMenu }) => {
         }
       >
         <div className="text-lg font-semibold tracking-wide uppercase">
-          {data?.is_offline_mode ? 'Payment Queued' : 'Bill Saved'}
+          {isCurrentlyOffline
+            ? 'Payment Queued'
+            : isCompletedFlow
+              ? 'Payment success'
+              : 'Bill Saved'}
         </div>
       </Modal.Header>
 
@@ -47,7 +53,27 @@ const SuccessModal = ({ data, backToMenu }) => {
         </div>
 
         <div className="py-4 text-center">
-          {data?.is_offline_mode && data?.status !== 'pending' ? (
+          {isCompletedFlow && !isCurrentlyOffline ? (
+            <>
+              <p className="text-base font-semibold">Payment success.</p>
+
+              <div className="flex h-16 place-items-center">
+                <div className="flex flex-1 flex-col place-content-center place-items-center">
+                  <div className="text-xl font-semibold">{currencyFormat(data?.total_payment)}</div>
+                  <div className="text-base-300 text-base font-thin capitalize">total paid</div>
+                </div>
+
+                {data?.payment_method?.provider === 'cash' && (
+                  <div className="border-base-200 flex flex-1 flex-col place-content-center place-items-center border-l">
+                    <div className="text-xl font-semibold text-red-500">
+                      {currencyFormat(data?.total_payment - data?.total_charges)}
+                    </div>
+                    <div className="text-base-300 text-base font-thin capitalize">change</div>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : isCurrentlyOffline && isCompletedFlow ? (
             <>
               <p className="text-base font-semibold">Payment saved locally.</p>
               <p className="text-base-300 text-sm">
@@ -70,7 +96,7 @@ const SuccessModal = ({ data, backToMenu }) => {
                 )}
               </div>
             </>
-          ) : data?.is_offline_mode ? (
+          ) : isCurrentlyOffline ? (
             <>
               <p className="text-base font-semibold">Bill saved locally.</p>
               <p className="text-base-300 text-sm">

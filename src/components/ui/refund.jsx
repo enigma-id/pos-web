@@ -36,10 +36,10 @@ const Refund = ({ id, onClose, status }) => {
         <div className="text-lg font-semibold">{isPending ? 'Cancel' : 'Refund'}</div>
       </Modal.Header>
       <Modal.Body>
-        <div className="mb-3 py-4 ">
+        <div className="mb-3 py-4">
           <div>Are you sure you want to {isPending ? 'cancel' : 'refund'} this transaction?</div>
           <div className="mb-3">Cash amount on hand will be recalculated.</div>
-          <div className='space-y-4' >
+          <div className="space-y-4">
             <Input
               label="Reason"
               value={reason}
@@ -51,11 +51,10 @@ const Refund = ({ id, onClose, status }) => {
               label="Enter PIN"
               value={pin}
               onChange={e => setPin(e?.target?.value)}
-              error={FormState?.errors?.password}
+              error={FormState?.errors?.id || FormState?.errors?.password}
               type="password"
             />
           </div>
-
         </div>
       </Modal.Body>
       <Modal.Footer>
