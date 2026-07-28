@@ -279,7 +279,7 @@ export const buildOfflineTransactionPayload = ({
 
   return {
     id: orderId,
-    paid_session_id: session?.id || null,
+    paid_session_sync_id: session?.id || null,
     session,
     channel: selectedChannel,
     code: `OFF-${localId}`,

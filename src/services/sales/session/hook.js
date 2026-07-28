@@ -92,7 +92,7 @@ export const updateSessionSummary = (newData) => {
         payment_method_id: pmId,
         total_paid: totalPayment,
         count: 1,
-        name: pmId === 0 ? 'Cash' : `#${pmId}`,
+        name: newData.paymentMethodName || newData.payment_method_name || (pmId === 0 ? 'Cash' : `#${pmId}`),
       });
     }
 

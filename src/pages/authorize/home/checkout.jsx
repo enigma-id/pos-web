@@ -316,6 +316,7 @@ const CheckoutScreen = () => {
         salesChannelId: Channel?.selectedChannel?.id,
         salesChannelName: Channel?.selectedChannel?.name,
         paymentMethodId: selectedMethod?.id,
+        paymentMethodName: selectedMethod?.name || selectedMethod?.provider || 'Cash',
         membershipId: CartState?.meta?.customer?.id || null,
         paymentRef: selectedMethod?.provider === 'cash' ? '' : paymentRef,
         billName: billName || CartState?.bill?.bill_name || '',
@@ -338,8 +339,10 @@ const CheckoutScreen = () => {
         isShow: true,
       };
 
+      console.log('[PAYNOW] completedOrder keys:', Object.keys(completedOrder).join(','), 'paidSessionSyncId:', completedOrder.paidSessionSyncId, 'originSessionSyncId:', completedOrder.originSessionSyncId, 'paymentMethodId:', completedOrder.paymentMethodId, 'paymentMethodName:', completedOrder.paymentMethodName);
       try {
         await createOrderPayment(completedOrder, session?.user?.id);
+        console.log('[PAYNOW] createOrderPayment success');
       } catch (err) {
         dispatch($failure(err));
         return;
@@ -412,6 +415,7 @@ const CheckoutScreen = () => {
         discountValue: completedOrder.discountValue,
         serviceChargeValue: completedOrder.serviceChargeValue,
         paymentMethodId: selectedMethod?.id,
+        paymentMethodName: selectedMethod?.name || selectedMethod?.provider || 'Cash',
       });
       console.log('[PAYMENT] sessionSummary updated');
 

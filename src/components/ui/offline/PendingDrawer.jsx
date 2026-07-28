@@ -75,7 +75,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
           cash_finished: s.cash_finished,
           open_at: s.open_at,
           close_at: s.close_at,
-          orderCount: data.bills.filter(b => b.origin_session_id === s.sync_id).length + data.orders.filter(o => o.paid_session_id === s.sync_id).length,
+          orderCount: data.bills.filter(b => b.origin_session_sync_id === s.sync_id).length + data.orders.filter(o => o.paid_session_sync_id === s.sync_id).length,
         },
         transaction_preview: {
           code: `SES-${(s.sync_id || '').slice(0, 8)}`,
@@ -102,7 +102,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
         code: b.code || `OFF-${(b.sync_id || '').slice(0, 8)}`,
         bill_name: b.bill_name,
         channel: { name: b.sales_channel_name || '-' },
-        payment_method: { name: b.payment_method_id ? `#${b.payment_method_id}` : 'Cash' },
+        payment_method: { name: b.payment_method_name || (b.payment_method_id === 0 || b.payment_method_id === null ? 'Cash' : '#' + b.payment_method_id) },
         cashier: { name: b.cashier_name || '-' },
         item_count: (b.items || []).length,
         total_charges: b.total_payment || 0,
@@ -122,7 +122,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
         code: p.code || `OFF-${(p.sync_id || '').slice(0, 8)}`,
         bill_name: p.bill_name,
         channel: { name: p.sales_channel_name || '-' },
-        payment_method: { name: p.payment_method_id ? `#${p.payment_method_id}` : 'Cash' },
+        payment_method: { name: p.payment_method_name || (p.payment_method_id === 0 || p.payment_method_id === null ? 'Cash' : '#' + p.payment_method_id) },
         cashier: { name: p.cashier_name || '-' },
         item_count: (p.items || []).length,
         total_charges: p.total_payment || 0,
@@ -276,7 +276,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
             const preview = item?.transaction_preview || {};
             const code = preview?.code || item?.code || `OFF-${item?.sync_id?.slice(0, 8) || item?.id}`;
             const channelName = preview?.channel?.name || item?.sales_channel_name || item?.sales_channel_id || '-';
-            const paymentName = preview?.payment_method?.name || (item?.payment_method_id ? `#${item.payment_method_id}` : 'Cash');
+            const paymentName = preview?.payment_method?.name || item?.payment_method_name || (item?.payment_method_id === 0 || item?.payment_method_id === null ? 'Cash' : '#' + item?.payment_method_id);
             const cashierName = preview?.cashier?.name || preview?.session?.cashier?.name || '-';
             const itemCount = Number(preview?.item_count) || preview?.items?.length || item?.items?.length || 0;
             const totalCharges = Number(preview?.total_charges || preview?.total_bill) || item?.total_payment || 0;

@@ -227,13 +227,14 @@ export const syncPendingSessions = async () => {
       }
     }
     for (const bill of allBills) {
-      const sid = bill.origin_session_id || bill.origin_session_sync_id;
+      const sid = bill.origin_session_sync_id;
       if (!sid) continue;
       if (!grouped[sid]) grouped[sid] = { session: null, orders: [], topups: [] };
       grouped[sid].orders.push({ ...bill, _store: STORES.orderBills });
     }
     for (const pay of allPayments) {
-      const sid = pay.paid_session_id;
+      console.log("[SYNC] payment:", pay.sync_id, "paid_session_sync_id:", pay.paid_session_sync_id);
+      const sid = pay.paid_session_sync_id;
       if (!sid) continue;
       if (!grouped[sid]) grouped[sid] = { session: null, orders: [], topups: [] };
       grouped[sid].orders.push({ ...pay, _store: STORES.orderPayments });
@@ -421,7 +422,7 @@ export const retryFailedItem = async (itemId) => {
     const bills = await db.getAll(STORES.orderBills);
     const bill = bills.find(b => b.sync_id === itemId);
     if (bill) {
-      const parent = sessions.find(s => s.sync_id === bill.origin_session_id);
+      const parent = sessions.find(s => s.sync_id === bill.origin_session_sync_id);
       if (parent) {
         parent.syncStatus = 'pending';
         await db.put(STORES.sessions, parent);
@@ -433,7 +434,7 @@ export const retryFailedItem = async (itemId) => {
     const payments = await db.getAll(STORES.orderPayments);
     const payment = payments.find(p => p.sync_id === itemId);
     if (payment) {
-      const parent = sessions.find(s => s.sync_id === payment.paid_session_id);
+      const parent = sessions.find(s => s.sync_id === payment.paid_session_sync_id);
       if (parent) {
         parent.syncStatus = 'pending';
         await db.put(STORES.sessions, parent);
@@ -458,9 +459,9 @@ export const removeFailedItem = async (itemId) => {
     const session = await db.get(STORES.sessions, itemId);
     if (session) {
       // Cascade hapus semua yg terkait
-      const bills = await db.getAllFromIndex(STORES.orderBills, 'origin_session_id', itemId);
+      const bills = await db.getAllFromIndex(STORES.orderBills, 'origin_session_sync_id', itemId);
       for (const b of bills) await db.delete(STORES.orderBills, b.sync_id);
-      const payments = await db.getAllFromIndex(STORES.orderPayments, 'paid_session_id', itemId);
+      const payments = await db.getAllFromIndex(STORES.orderPayments, 'paid_session_sync_id', itemId);
       for (const p of payments) await db.delete(STORES.orderPayments, p.sync_id);
       const topups = await db.getAllFromIndex(STORES.topups, 'session_sync_id', itemId);
       for (const t of topups) await db.delete(STORES.topups, t.sync_id);

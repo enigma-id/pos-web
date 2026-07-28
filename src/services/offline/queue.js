@@ -1,7 +1,7 @@
 import { openDB, deleteDB } from 'idb';
 import { v4 as uuidv4 } from 'uuid';
 
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 export const STORES = {
   sessions: 'sessions',
@@ -46,13 +46,13 @@ export const ensureDB = async userId => {
 
         if (!db.objectStoreNames.contains(STORES.orderBills)) {
           const store = db.createObjectStore(STORES.orderBills, { keyPath: 'sync_id' });
-          store.createIndex('origin_session_id', 'origin_session_id', { unique: false });
+          store.createIndex('origin_session_sync_id', 'origin_session_sync_id', { unique: false });
         }
 
         if (!db.objectStoreNames.contains(STORES.orderPayments)) {
           const store = db.createObjectStore(STORES.orderPayments, { keyPath: 'sync_id' });
-          store.createIndex('origin_session_id', 'origin_session_id', { unique: false });
-          store.createIndex('paid_session_id', 'paid_session_id', { unique: false });
+          store.createIndex('origin_session_sync_id', 'origin_session_sync_id', { unique: false });
+          store.createIndex('paid_session_sync_id', 'paid_session_sync_id', { unique: false });
         }
 
         if (!db.objectStoreNames.contains(STORES.topups)) {
@@ -157,10 +157,10 @@ export const deleteOfflineSession = async (syncId, userId) => {
   const db = await ensureDB(userId);
 
   // Cascade: hapus order_bills, order_payments, topups yg terkait
-  let bills = await db.getAllFromIndex(STORES.orderBills, 'origin_session_id', syncId);
+  let bills = await db.getAllFromIndex(STORES.orderBills, 'origin_session_sync_id', syncId);
   for (const b of bills) await db.delete(STORES.orderBills, b.sync_id);
 
-  let payments = await db.getAllFromIndex(STORES.orderPayments, 'paid_session_id', syncId);
+  let payments = await db.getAllFromIndex(STORES.orderPayments, 'paid_session_sync_id', syncId);
   for (const p of payments) await db.delete(STORES.orderPayments, p.sync_id);
 
   let topups = await db.getAllFromIndex(STORES.topups, 'session_sync_id', syncId);
@@ -179,9 +179,9 @@ export const createOrderBill = async (data, userId) => {
 
   const doc = {
     sync_id,
-    origin_session_id: data.origin_session_id || null,
-    sales_channel_id: data.sales_channel_id || null,
-    sales_channel_name: data.sales_channel_name || null,
+    origin_session_sync_id: data.origin_session_sync_id || null,
+    sales_channel_id: data.sales_channel_id || data.salesChannelId || null,
+    sales_channel_name: data.sales_channel_name || data.salesChannelName || null,
     payment_method_id: data.payment_method_id || null,
     membership_id: data.membership_id || null,
     payment_ref: data.payment_ref || '',
@@ -236,9 +236,9 @@ export const createOrderPayment = async (data, userId) => {
 
   const doc = {
     sync_id,
-    origin_session_id: data.origin_session_id || data.originSessionId || null,
-    paid_session_id: data.paid_session_id || data.paidSessionId || null,
-    sales_channel_id: data.sales_channel_id || null,
+    origin_session_sync_id: data.origin_session_sync_id || data.originSessionSyncId || data.originSessionId || null,
+    paid_session_sync_id: data.paid_session_sync_id || data.paidSessionSyncId || data.paidSessionId || null,
+    sales_channel_id: data.sales_channel_id || data.salesChannelId || null,
     sales_channel_name: data.sales_channel_name || data.salesChannelName || null,
     payment_method_id: data.payment_method_id || data.paymentMethodId || null,
     payment_method_name: data.payment_method_name || data.paymentMethodName || null,
