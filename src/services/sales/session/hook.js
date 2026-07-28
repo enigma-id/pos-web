@@ -64,7 +64,8 @@ export const updateSessionSummary = (newData) => {
 
   if (newData.type === 'bill') {
     const serviceCharge = newData.serviceChargeValue || newData.service_charge_value || 0;
-    const totalBill = itemsTotal + serviceCharge;
+    const discount = newData.discountValue || newData.discount_value || 0;
+    const totalBill = itemsTotal - discount + serviceCharge;
     summary.summary.sales.outstanding_bill = (summary.summary.sales.outstanding_bill || 0) + totalBill;
     summary.orders.push({
       sync_id: newData.sync_id,
@@ -129,14 +130,15 @@ export const updateSessionSummary = (newData) => {
       const existingShifts = getCache(SHIFTS_CACHE_KEY) || [];
       // Cari index shift yg sama, update atau push baru
       const idx = existingShifts.findIndex(s => s.id === id);
+      const { orders: _orders, ...summaryNoOrders } = summary;
       const shiftEntry = {
         id,
-        cashier: summary.cashier || { name: '' },
-        started_at: summary.started_at,
-        finished_at: summary.finished_at,
-        status: summary.finished_at ? 'closed' : 'open',
+        cashier: summaryNoOrders.cashier || { name: '' },
+        started_at: summaryNoOrders.started_at,
+        finished_at: summaryNoOrders.finished_at,
+        status: summaryNoOrders.finished_at ? 'closed' : 'open',
         _offline: true,
-        ...summary,  // full sessionSummary data termasuk summary.sales, orders, dll
+        ...summaryNoOrders,
       };
       if (idx >= 0) {
         existingShifts[idx] = shiftEntry;
