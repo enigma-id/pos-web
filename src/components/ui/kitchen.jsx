@@ -4,7 +4,7 @@ const Kitchen = ({ data }) => {
   if (!data) return;
 
   // Prioritaskan new_items (tambahan baru) — fallback ke items (semua)
-  const displayItems = data?.new_items?.length > 0 ? data?.new_items : (data?.items || []);
+  const displayItems = data?.new_items?.length > 0 ? data?.new_items : data?.items || [];
 
   return (
     <div className="sheet page-break" style={{ padding: '10px' }}>
@@ -28,9 +28,9 @@ const Kitchen = ({ data }) => {
           }}
         >
           <p style={{ marginBlock: 2, fontSize: 12 }}>
-            {dateFormat(data?.ordered_at, 'DD-MM-YYYY')}
+            {dateFormat(data?.created_at, 'DD-MM-YYYY')}
           </p>
-          <p style={{ marginBlock: 2, fontSize: 12 }}>{dateFormat(data?.ordered_at, 'HH:mm')}</p>
+          <p style={{ marginBlock: 2, fontSize: 12 }}>{dateFormat(data?.created_at, 'HH:mm')}</p>
         </div>
         <div
           style={{
@@ -41,7 +41,9 @@ const Kitchen = ({ data }) => {
           }}
         >
           <p style={{ marginBlock: 2, fontSize: 12 }}>Cashier</p>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.session?.cashier?.name || data?.session?.name}</p>
+          <p style={{ marginBlock: 2, fontSize: 11 }}>
+            {data?.session?.cashier?.name || data?.session?.name}
+          </p>
         </div>
         {data?.note && (
           <div
@@ -71,7 +73,7 @@ const Kitchen = ({ data }) => {
           </div>
         )}
 
-        {data?.ticket && (
+        {data?.bill_name && (
           <div
             style={{
               marginBottom: 5,
@@ -81,7 +83,7 @@ const Kitchen = ({ data }) => {
             }}
           >
             <p style={{ marginBlock: 2, fontSize: 11 }}>Bill Name</p>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.ticket}</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.bill_name}</p>
           </div>
         )}
       </div>
@@ -118,7 +120,7 @@ const Kitchen = ({ data }) => {
                 {/* {addon?.addon?.type === 'quantity' || addon?.addon?.type === 'checkbox'
                   ? `(${addon?.quantity / item?.quantity})`
                   : ''} */}
-                {addon?.quantity > 0 ? `(${addon?.quantity})` : ""}
+                {addon?.quantity > 0 ? `(${addon?.quantity})` : ''}
               </p>
             </div>
           ))}

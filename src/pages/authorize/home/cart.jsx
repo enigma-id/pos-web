@@ -40,6 +40,7 @@ const Cart = ({ onUpdate }) => {
   const updateBillNameRef = React.useRef(false);
   const saveBillOfflineDataRef = React.useRef(null);
   const isOfflineSaveRef = React.useRef(false);
+  const billPayloadMetaRef = React.useRef(null);
   const { showCustomer } = useSidebar();
   const { openModal, closeModal } = useModal();
 
@@ -121,7 +122,7 @@ const Cart = ({ onUpdate }) => {
     return { orderItems, discountCats };
   };
 
-  const onUpdateBillName = async ticket => {
+  const onUpdateBillName = async billName => {
     // ⚡ Edit nama — tetep kirim items biar validasi API lolos, tp jangan reset cart
     const { orderItems, discountCats } = getOrderPayload();
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
@@ -131,7 +132,7 @@ const Cart = ({ onUpdate }) => {
       if (offlineId) {
         try {
           await updateOrderBill(offlineId, {
-            bill_name: ticket,
+            bill_name: billName,
             items: orderItems,
             original_items: orderItems,
             category_discounts: discountCats || [],
@@ -149,7 +150,7 @@ const Cart = ({ onUpdate }) => {
           return;
         }
       }
-      dispatch(selectedBill({ ...CartState?.bill, bill_name: ticket }));
+      dispatch(selectedBill({ ...CartState?.bill, bill_name: billName }));
       setUpdateBillName(false);
       closeModal();
       return;
@@ -158,7 +159,7 @@ const Cart = ({ onUpdate }) => {
     // Online
     try {
       const payload = {
-        bill_name: ticket,
+        bill_name: billName,
         items: orderItems,
         category_discounts: discountCats || [],
         discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
@@ -170,7 +171,7 @@ const Cart = ({ onUpdate }) => {
       };
       const res = await updateBillNameMutation({ id: CartState?.bill?.id, payload }).unwrap();
       if (res?.message === 'success') {
-        dispatch(selectedBill({ ...CartState?.bill, bill_name: ticket }));
+        dispatch(selectedBill({ ...CartState?.bill, bill_name: billName }));
         setUpdateBillName(false);
         closeModal();
       }
@@ -179,10 +180,10 @@ const Cart = ({ onUpdate }) => {
     }
   };
 
-  const onUpdateBill = async (ticket, { isEditName } = {}) => {
+  const onUpdateBill = async (billName, { isEditName } = {}) => {
     // 👇 Baru: delegasi edit name biar gak reset cart
     if (isEditName) {
-      return onUpdateBillName(ticket);
+      return onUpdateBillName(billName);
     }
 
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
@@ -194,7 +195,7 @@ const Cart = ({ onUpdate }) => {
       if (offlineId) {
         try {
           await updateOrderBill(offlineId, {
-            bill_name: ticket,
+            bill_name: billName,
             items: orderItems,
             original_items: orderItems,
             category_discounts: discountCats || [],
@@ -212,7 +213,7 @@ const Cart = ({ onUpdate }) => {
           return;
         }
       }
-      dispatch(selectedBill({ ...CartState?.bill, bill_name: ticket }));
+      dispatch(selectedBill({ ...CartState?.bill, bill_name: billName }));
       dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
       bill();
       setUpdateBillName(false);
@@ -223,7 +224,7 @@ const Cart = ({ onUpdate }) => {
     // Online — API (confirm save — reset cart OK)
     try {
       const payload = {
-        bill_name: ticket,
+        bill_name: billName,
         items: orderItems,
         category_discounts: discountCats || [],
         discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
@@ -233,16 +234,26 @@ const Cart = ({ onUpdate }) => {
         cashier_name: session?.user?.name || '',
         status: 'pending',
       };
+
+      // Simpan meta sebelum reset
+      const savedCode = CartState?.bill?.code || '';
+      const savedTotals = {
+        total_charges: CartState?.meta?.grand_total || 0,
+        service_charge_value: CartState?.meta?.service_charge_value || 0,
+        discount_value: CartState?.discount?.cart?.amount || 0,
+        created_at: new Date().toISOString(),
+      };
+      billPayloadMetaRef.current = { ...savedTotals, code: savedCode };
       const res = await update({ id: CartState?.bill?.id, payload });
       // update() udah resetCart + reset bill. Langsung show success.
       isOfflineSaveRef.current = true; // skip stale effect
       const billData = res?.data || res || {};
+      console.log('[SAVE BILL] savedCode:', savedCode, 'res code:', billData.code);
       const itemsTotal = orderItems.reduce((s, i) => {
         const it = (i.unit_price || 0) * (i.quantity || 0);
         const at = (i.addons || []).reduce((a, ad) => a + (ad.unit_price || 0) * (ad.quantity || 0), 0);
         return s + it + at;
       }, 0);
-      console.log('[CONFIRM SAVE] orderItems:', JSON.stringify(orderItems.map(i => ({ name: i.catalog_name, addons: i.addons }))));
       const newItems = (CartState?.items?.list || []).map(item => ({
         catalog: { name: item.name || '' },
         catalog_name: item.name || '',
@@ -255,8 +266,10 @@ const Cart = ({ onUpdate }) => {
         })),
       }));
       openModal(<SuccessModal data={{
-        bill_name: ticket,
-        code: billData.code || '',
+        bill_name: billName,
+        code: billData.code || savedCode || '',
+        paid_at: billData.created_at || savedTotals.created_at || new Date().toISOString(),
+        created_at: billData.created_at || savedTotals.created_at || new Date().toISOString(),
         total_charges: billData.total_charges || itemsTotal + (CartState?.meta?.service_charge_value || 0),
         total_payment: 0,
         status: 'pending',
@@ -288,7 +301,7 @@ const Cart = ({ onUpdate }) => {
     setUpdateBillName(false);
   };
 
-  const onCreateBill = async ticket => {
+  const onCreateBill = async billName => {
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     const userId = session?.user?.id;
 
@@ -329,7 +342,7 @@ const Cart = ({ onUpdate }) => {
               payment_method_id: null,
               membership_id: CartState?.meta?.customer?.id || null,
               payment_ref: '',
-              bill_name: ticket,
+              bill_name: billName,
               cashier_name: session?.user?.name || '',
               service_charge_value: CartState?.meta?.service_charge_value || 0,
               service_charge_percentage: CartState?.meta?.service_charge_percentage || 0,
@@ -373,7 +386,7 @@ const Cart = ({ onUpdate }) => {
         const totalCharges = itemsTotal + (Number(CartState?.meta?.service_charge_value) || 0);
         existing.unshift({
           id: orderId,
-          bill_name: ticket,
+          bill_name: billName,
           code: code,
           total_charges: totalCharges,
           items: orderItems.map(i => ({
@@ -407,7 +420,7 @@ const Cart = ({ onUpdate }) => {
         type: 'bill',
         sync_id: orderId,
         items: orderItems,
-        billName: ticket,
+        billName: billName,
         serviceChargeValue: CartState?.meta?.service_charge_value || 0,
       });
       console.log('[SAVE BILL] sessionSummary updated');
@@ -435,7 +448,7 @@ const Cart = ({ onUpdate }) => {
         })),
       }));
       const successData = {
-        bill_name: ticket,
+        bill_name: billName,
         code: code,
         total_charges: totalCharges,
         total_payment: 0,
@@ -531,8 +544,17 @@ const Cart = ({ onUpdate }) => {
       return base;
     });
 
+    // Simpan meta sebelum reset (online path)
+    billPayloadMetaRef.current = {
+      total_charges: CartState?.meta?.grand_total || 0,
+      service_charge_value: CartState?.meta?.service_charge_value || 0,
+      discount_value: CartState?.discount?.cart?.amount || 0,
+      code: CartState?.bill?.code || '',
+      created_at: new Date().toISOString(),
+    };
+
     const payload = {
-      bill_name: ticket,
+      bill_name: billName,
       membership_id: CartState?.meta?.customer?.id,
       sales_channel_id: Channel?.selectedChannel?.id,
       status: 'pending',
@@ -556,6 +578,15 @@ const Cart = ({ onUpdate }) => {
     if (discount_categories?.length > 0) {
       payload.category_discounts = discount_categories;
     }
+
+    // Simpan meta sebelum reset (online path)
+    billPayloadMetaRef.current = {
+      total_charges: CartState?.meta?.grand_total || 0,
+      service_charge_value: CartState?.meta?.service_charge_value || 0,
+      discount_value: CartState?.discount?.cart?.amount || 0,
+      code: CartState?.bill?.code || '',
+      created_at: new Date().toISOString(),
+    };
 
     // Online — API
     try {
@@ -651,7 +682,7 @@ const Cart = ({ onUpdate }) => {
             <img src="./error.png" className="h-64" />
           </div>
           <div className="-mt-5 pb-4 text-center">
-            <div className="text-lg font-semibold capitalize">{FormState?.errors?.ticket}</div>
+            <div className="text-lg font-semibold capitalize">{FormState?.errors?.billName}</div>
             <p className="text-base-300 text-xs">Try another bill’s</p>
           </div>
         </Modal.Body>
@@ -711,7 +742,23 @@ const Cart = ({ onUpdate }) => {
         return;
       }
 
-      const billData = checkoutResult?.data?.data || updateResult?.data?.data || {};
+      const respData = checkoutResult?.data?.data || updateResult?.data?.data || {};
+      const metaRef = billPayloadMetaRef.current;
+      const billData = {
+        ...respData,
+        code: respData?.code || metaRef?.code || checkoutResult?.data?.code || updateResult?.data?.code || '',
+        sales_channel: respData?.sales_channel
+          || (Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null),
+        session: respData?.session
+          || { cashier: { name: session?.user?.name || '' } },
+        total_charges: respData?.total_charges || metaRef?.total_charges || 0,
+        service_charge_value: respData?.service_charge_value || metaRef?.service_charge_value || 0,
+        discount_value: respData?.discount_value || metaRef?.discount_value || 0,
+        paid_at: respData?.paid_at && !respData.paid_at.startsWith('0001')
+          ? respData.paid_at
+          : metaRef?.created_at || respData?.created_at || new Date().toISOString(),
+      };
+      billPayloadMetaRef.current = null;
 
       if (updateBillNameRef.current) {
         closeModal();

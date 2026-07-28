@@ -111,7 +111,7 @@ const BillScreen = () => {
     if (!search) return true;
     const q = search.toLowerCase();
     return (
-      (item?.bill_name || item?.ticket || '').toLowerCase().includes(q) ||
+      (item?.bill_name || '').toLowerCase().includes(q) ||
       (item?.code || '').toLowerCase().includes(q)
     );
   });
@@ -140,7 +140,7 @@ const BillScreen = () => {
             if (!search) return true;
             const q = search.toLowerCase();
             return (
-              (item?.bill_name || item?.ticket || '').toLowerCase().includes(q) ||
+              (item?.bill_name || '').toLowerCase().includes(q) ||
               (item?.code || '').toLowerCase().includes(q)
             );
           })?.map((item, index) => (
@@ -160,7 +160,7 @@ const BillScreen = () => {
                     <div className={`text-base ${selectedIndex === index ? 'text-primary' : ''}`}>
                       {currencyFormat(item?.total_charges)}
                     </div>
-                    <div className="text-base-300 text-xs">{item?.bill_name || item?.ticket || '-'}</div>
+                    <div className="text-base-300 text-xs">{item?.bill_name || '-'}</div>
                   </div>
                 </div>
                 <div className="flex flex-col place-content-between">

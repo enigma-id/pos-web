@@ -11,7 +11,7 @@ import { currencyFormat, dateFormat } from '../../../utils/common';
 const BillModal = ({ mode, count, onBillCreate }) => {
   const FormState = useSelector(state => state?.Form);
   const { closeModal } = useModal();
-  const [ticket, setTicket] = React.useState('');
+  const [billName, setBillName] = React.useState('');
   const { bill, billResult, billData, onBillSelected } = useCart();
 
 
@@ -73,9 +73,9 @@ const BillModal = ({ mode, count, onBillCreate }) => {
           <div className="mb-3 py-4">
             <Input
               label="bill name"
-              value={ticket}
-              onChange={e => setTicket(e?.target?.value)}
-              error={FormState?.errors?.ticket}
+              value={billName}
+              onChange={e => setBillName(e?.target?.value)}
+              error={FormState?.errors?.billName}
             />
           </div>
         )}
@@ -84,7 +84,7 @@ const BillModal = ({ mode, count, onBillCreate }) => {
         <Modal.Footer>
           <div
             className={`btn btn-block btn-primary btn-lg ${billResult?.isLoading ? 'btn-disabled' : ''}`}
-            onClick={() => onBillCreate(ticket)}
+            onClick={() => onBillCreate(billName)}
           >
             Save Bill
             {billResult?.isLoading && <span className="loading loading-spinner loading-sm"></span>}

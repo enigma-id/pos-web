@@ -19,9 +19,9 @@ const OrderDetails = ({ data }) => {
       </div>
 
       <div className="border-base-200 border-b py-4">
-        {(data?.bill_name || data?.ticket || data?.note) && (
+        {(data?.bill_name || data?.note) && (
           <div className="mb-2 text-sm">
-            <span className="font-semibold">Bills name :</span> {data?.bill_name || data?.ticket || data?.note}
+            <span className="font-semibold">Bills name :</span> {data?.bill_name || data?.note}
           </div>
         )}
         <div className="mb-2 text-sm">

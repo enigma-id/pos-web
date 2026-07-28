@@ -8,10 +8,10 @@ import useModal from '../../../components/ui/modal/hook';
 const UpdateTicket = ({ data, onSubmit, isLoading, onClose }) => {
   const FormState = useSelector(state => state?.Form);
   const { closeModal } = useModal();
-  const [ticket, setTicket] = React.useState('');
+  const [billName, setBillName] = React.useState('');
 
   useEffect(() => {
-    setTicket(data?.ticket || data?.bill_name || '');
+    setBillName(data?.billName || data?.bill_name || '');
   }, [data]);
 
   return (
@@ -23,9 +23,9 @@ const UpdateTicket = ({ data, onSubmit, isLoading, onClose }) => {
         <div className="mb-3 py-4">
           <Input
             label="Bill Name"
-            value={ticket}
-            onChange={e => setTicket(e?.target?.value)}
-            error={FormState?.errors?.ticket}
+            value={billName}
+            onChange={e => setBillName(e?.target?.value)}
+            error={FormState?.errors?.billName}
           />
         </div>
       </Modal.Body>
@@ -35,7 +35,7 @@ const UpdateTicket = ({ data, onSubmit, isLoading, onClose }) => {
         </div>
         <div
           className={`btn btn-md btn-primary px-10 text-white ${isLoading ? 'btn-disabled' : ''}`}
-          onClick={() => onSubmit(ticket)}
+          onClick={() => onSubmit(billName)}
         >
           Update Bill{' '}
           {isLoading ? <span className="loading loading-spinner loading-sm"></span> : null}

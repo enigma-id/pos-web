@@ -3,8 +3,9 @@ import React from 'react';
 import { currencyFormat, dateFormat } from '../../utils/common';
 
 const Receipt = ({ data }) => {
-
   if (!data) return;
+
+  console.log(data, '=============================');
 
   return (
     <div className="sheet page-break" style={{ padding: '10px' }}>
@@ -21,10 +22,8 @@ const Receipt = ({ data }) => {
 
       <div style={{ paddingBottom: 5, marginBottom: 5 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>
-            {dateFormat(data?.paid_at, 'DD-MM-YYYY')}
-          </p>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>{dateFormat(data?.paid_at, 'HH:mm')}</p>
+          <p style={{ marginBlock: 2, fontSize: 11 }}>{dateFormat(data?.paid_at || data?.ordered_at || data?.created_at, 'DD-MM-YYYY')}</p>
+          <p style={{ marginBlock: 2, fontSize: 11 }}>{dateFormat(data?.paid_at || data?.ordered_at || data?.created_at, 'HH:mm')}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p style={{ marginBlock: 2, fontSize: 11 }}>Transaction</p>
@@ -36,7 +35,9 @@ const Receipt = ({ data }) => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p style={{ marginBlock: 2, fontSize: 11 }}>Cashier</p>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.session?.cashier?.name || data?.session?.name}</p>
+          <p style={{ marginBlock: 2, fontSize: 11 }}>
+            {data?.session?.cashier?.name || data?.session?.name}
+          </p>
         </div>
 
         {data?.bill_name && (
@@ -52,13 +53,6 @@ const Receipt = ({ data }) => {
             <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.membership?.name}</p>
           </div>
         )}
-
-        {/* {data?.ticket && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>Bill Name</p>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.ticket}</p>
-          </div>
-        )} */}
       </div>
 
       <div
@@ -99,8 +93,9 @@ const Receipt = ({ data }) => {
             >
               <p style={{ marginBlock: 2, fontSize: 9, textTransform: 'capitalize' }}>
                 + {addon?.catalog_name}{' '}
-                {addon?.addon?.type === 'options' ? ''
-                  : `${addon?.quantity > 0 ? `(${addon?.quantity} x ${currencyFormat(addon?.unit_nett)})` : ""}`}
+                {addon?.addon?.type === 'options'
+                  ? ''
+                  : `${addon?.quantity > 0 ? `(${addon?.quantity} x ${currencyFormat(addon?.unit_nett)})` : ''}`}
               </p>
               <p style={{ marginBlock: 2, fontSize: 9 }}>
                 {currencyFormat(
@@ -130,13 +125,19 @@ const Receipt = ({ data }) => {
           </div>
         )}
 
-        {data?.category_discounts?.filter(d => (d?.total_discount || d?.discount_value || 0) > 0)?.map((d, i) => (
+        {data?.category_discounts
+          ?.filter(d => (d?.total_discount || d?.discount_value || 0) > 0)
+          ?.map((d, i) => (
             <div
               key={i}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
             >
-              <p style={{ marginBlock: 2, fontSize: 11 }}>Discount Category {d?.category?.name || d?.name || ''}</p>
-              <p style={{ marginBlock: 2, fontSize: 11 }}>-{currencyFormat(d?.total_discount || d?.discount_value)}</p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>
+                Discount Category {d?.category?.name || d?.name || ''}
+              </p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>
+                -{currencyFormat(d?.total_discount || d?.discount_value)}
+              </p>
             </div>
           ))}
         {data?.discount_value > 0 && (
