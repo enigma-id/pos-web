@@ -136,7 +136,7 @@ const ShiftScreen = () => {
 
   React.useEffect(() => {
     if (isOffline) return;
-    if (sessionResult?.isSuccess && data[selectedIndex] && selectedIndex > 0) {
+    if (sessionResult?.isSuccess && data[selectedIndex]) {
       show(data[selectedIndex]?.id);
     }
   }, [selectedIndex, data]);
@@ -237,7 +237,7 @@ const ShiftScreen = () => {
                     </div>
                   </div>
                   <div
-                    className={`h-fit w-fit rounded-full px-4 py-1 text-[11px] text-white ${item?.status === 'opened' ? 'bg-success' : 'bg-base-300'}`}
+                    className={`h-fit w-fit rounded-full px-4 py-1 text-[11px] text-white ${item?.status === 'opened' ? 'bg-primary' : item?.status === 'closed' ? 'bg-success' : 'bg-base-300'}`}
                   >
                     {item?.status}
                   </div>

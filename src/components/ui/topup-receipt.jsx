@@ -14,7 +14,7 @@ const TopupReceipt = ({ member, nominal, paymentMethod, createdAt }) => {
           marginBottom: 20,
         }}
       >
-        <img src="./logo.png" style={{ height: 50, width: 'auto' }} />
+        <img src="/logo.png" style={{ height: 50, width: 'auto' }} />
       </div>
 
       <div style={{ textAlign: 'center', marginBottom: 15 }}>
@@ -45,15 +45,9 @@ const TopupReceipt = ({ member, nominal, paymentMethod, createdAt }) => {
           <p style={{ marginBlock: 2, fontSize: 11, textTransform: 'uppercase' }}>{member?.name || '-'}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>Code</p>
+          <p style={{ marginBlock: 2, fontSize: 11 }}>Phone Number</p>
           <p style={{ marginBlock: 2, fontSize: 11, textTransform: 'uppercase' }}>{member?.reff_code || '-'}</p>
         </div>
-        {member?.card_id && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>Card ID</p>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>{member?.card_id}</p>
-          </div>
-        )}
       </div>
 
       <div style={{ paddingBlock: 5, marginBottom: 5 }}>

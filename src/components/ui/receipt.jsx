@@ -15,7 +15,7 @@ const Receipt = ({ data }) => {
           marginBottom: 20,
         }}
       >
-        <img src="./logo.png" style={{ height: 50, width: 'auto' }} />
+        <img src="/logo.png" style={{ height: 50, width: 'auto' }} />
       </div>
 
       <div style={{ paddingBottom: 5, marginBottom: 5 }}>

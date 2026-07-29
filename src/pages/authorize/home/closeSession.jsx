@@ -133,6 +133,29 @@ const CloseSection = () => {
     doEndSession();
   };
 
+  const openEndSessionConfirm = () => {
+    openModal(
+      <>
+        <Modal.Header onClose={closeModal}>
+          <div className="text-[16px] font-semibold tracking-wide">End Session</div>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="p-6 text-center">
+            <div className="mb-4 text-[16px] font-semibold tracking-wide">Are you sure to end this session?</div>
+            <div className="flex place-content-center place-items-center gap-4">
+              <div className="btn btn-primary btn-lg px-6 text-white" onClick={() => { closeModal(); onSubmit(); }}>
+                Yes
+              </div>
+              <div className="btn btn-outline btn-lg px-6" onClick={closeModal}>
+                Cancel
+              </div>
+            </div>
+          </div>
+        </Modal.Body>
+      </>
+    );
+  };
+
   const openLogout = () => {
     openModal(
       <>
@@ -281,7 +304,7 @@ const CloseSection = () => {
       <div className="border-base-200 min-h-15 border-t">
         <button
           className={`btn btn-block btn-xl btn-primary rounded-none ${endResult?.isLoading || syncing ? 'btn-disabled' : ''}`}
-          onClick={onSubmit}
+          onClick={openEndSessionConfirm}
           disabled={endResult?.isLoading || syncing}
         >
           {syncing ? 'Syncing pending sessions...' : 'End Session'}

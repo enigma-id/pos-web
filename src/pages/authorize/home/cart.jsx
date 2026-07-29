@@ -564,24 +564,23 @@ const Cart = ({ onUpdate }) => {
 
         if (selectedChilds.length === 0) return null;
 
-        const childNames = selectedChilds.map(child => {
-          const suffix =
-            add?.type === 'quantity' || add?.type === 'checkbox'
-              ? `(${item?.quantity} x ${child?.quantity}) x ${currencyFormat(child?.unit_nett || child?.unit_nett || 0)}`
-              : '';
-          return (
-            <div className="text-base-300 flex place-content-between text-xs font-thin">
-              <span>
-                + {child?.name} {suffix}
-              </span>
-              <span>
-                {currencyFormat(
-                  item?.quantity * child?.quantity * (child?.unit_nett || child?.unit_nett || 0)
-                )}
-              </span>
-            </div>
-          );
-        });
+        const childNames = selectedChilds.map(child => (
+          <div
+            key={child.id}
+            className="text-base-300 flex place-content-between text-xs font-thin"
+          >
+            <span>
+              + {child?.name}{' '}
+              {(add?.type === 'quantity' || add?.type === 'checkbox') &&
+                `(${item?.quantity} x ${child?.quantity}) x ${currencyFormat(child?.unit_nett || child?.unit_nett || 0)}`}
+            </span>
+            <span>
+              {currencyFormat(
+                item?.quantity * child?.quantity * (child?.unit_nett || child?.unit_nett || 0)
+              )}
+            </span>
+          </div>
+        ));
 
         return (
           <div key={add.id} className="text-sm">
