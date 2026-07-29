@@ -47,7 +47,7 @@ const BillScreen = () => {
         id={id}
         status={status}
         onClose={() => {
-          bill()
+          bill();
           closeModal();
         }}
       />,
@@ -56,21 +56,23 @@ const BillScreen = () => {
   };
 
   React.useEffect(() => {
-    bill(search)
+    bill(search);
   }, [lastSyncTime]);
 
   // Re-read cache when offline pending count changes
   React.useEffect(() => {
     if (isOnline && apiReachable !== false) return;
-    console.log('[BILLS PAGE] offlinePendingCount changed, calling bill()');
     bill();
   }, [offlinePendingCount]);
 
   // Search online → fetch; kosong → baca cache (online/offline sama)
   React.useEffect(() => {
-    const t = setTimeout(() => {
-      bill(search);
-    }, search ? 1000 : 0);
+    const t = setTimeout(
+      () => {
+        bill(search);
+      },
+      search ? 1000 : 0
+    );
     return () => clearTimeout(t);
   }, [search]);
 
@@ -136,48 +138,50 @@ const BillScreen = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {data?.filter(item => {
-            if (!search) return true;
-            const q = search.toLowerCase();
-            return (
-              (item?.bill_name || '').toLowerCase().includes(q) ||
-              (item?.code || '').toLowerCase().includes(q)
-            );
-          })?.map((item, index) => (
-            <div
-              key={item.id}
-              onClick={() => setSelectedIndex(index)}
-              className={`border-base-200 cursor-pointer border-b p-4 ${
-                selectedIndex === index ? 'bg-gray-100' : 'hover:bg-gray-50'
-              }`}
-            >
-              <div className="flex place-content-between">
-                <div className="flex place-items-center gap-4">
-                  <div className={`text-base ${selectedIndex === index ? 'text-primary' : ''}`}>
-                    <MoneysIcon />
-                  </div>
-                  <div>
+          {data
+            ?.filter(item => {
+              if (!search) return true;
+              const q = search.toLowerCase();
+              return (
+                (item?.bill_name || '').toLowerCase().includes(q) ||
+                (item?.code || '').toLowerCase().includes(q)
+              );
+            })
+            ?.map((item, index) => (
+              <div
+                key={item.id}
+                onClick={() => setSelectedIndex(index)}
+                className={`border-base-200 cursor-pointer border-b p-4 ${
+                  selectedIndex === index ? 'bg-gray-100' : 'hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex place-content-between">
+                  <div className="flex place-items-center gap-4">
                     <div className={`text-base ${selectedIndex === index ? 'text-primary' : ''}`}>
-                      {currencyFormat(item?.total_charges)}
+                      <MoneysIcon />
                     </div>
-                    <div className="text-base-300 text-xs">{item?.bill_name || '-'}</div>
+                    <div>
+                      <div className={`text-base ${selectedIndex === index ? 'text-primary' : ''}`}>
+                        {currencyFormat(item?.total_charges)}
+                      </div>
+                      <div className="text-base-300 text-xs">{item?.bill_name || '-'}</div>
+                    </div>
                   </div>
-                </div>
-                <div className="flex flex-col place-content-between">
-                  <div className="text-base-300 text-end text-sm">
-                    {item?.needs_sync && (
-                      <span className="badge badge-warning badge-xs me-1">pending sync</span>
-                    )}
-                    {item?.code}
-                  </div>
+                  <div className="flex flex-col place-content-between">
+                    <div className="text-base-300 text-end text-sm">
+                      {item?.needs_sync && (
+                        <span className="badge badge-warning badge-xs me-1">pending sync</span>
+                      )}
+                      {item?.code}
+                    </div>
 
-                  <div className="text-base-300 text-end text-xs">
-                    {dateFormat(item?.ordered_at)}
+                    <div className="text-base-300 text-end text-xs">
+                      {dateFormat(item?.ordered_at)}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
         </div>
       </div>
 
@@ -207,7 +211,7 @@ const BillScreen = () => {
                 <PrintIcon />
                 print kitchen
               </div>
-              {(isOnline && apiReachable !== false) && (
+              {isOnline && apiReachable !== false && (
                 <div
                   className="bg-error text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
                   onClick={() => onRefund(detail?.id, detail?.status)}

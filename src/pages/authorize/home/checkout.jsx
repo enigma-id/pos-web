@@ -35,6 +35,12 @@ import { updateSessionSummary } from '../../../services/sales/session/hook';
 import { $failure } from '../../../services/form/action';
 import { v4 as uuidv4 } from 'uuid';
 import { store } from '../../../services/store';
+import {
+  makePendingBill,
+  makeCompletedOrder,
+  makeSuccessData,
+  makeIdbBillData,
+} from '../../../services/offline/shapes';
 import { getCache, setCache } from '../../../utils/cache';
 // import useOutlet from '../../../services/outlet/hooks';
 import useOrder from '../../../services/sales/order/hook';
@@ -106,14 +112,14 @@ const CheckoutScreen = () => {
         const childNames = selectedChilds.map(child => {
           const suffix =
             add?.type === 'quantity' || add?.type === 'checkbox'
-              ? `(${item?.quantity} x ${child?.quantity}) x ${currencyFormat(child?.unit_price)}`
+              ? `(${item?.quantity} x ${child?.quantity}) x ${currencyFormat(child?.unit_nett)}`
               : '';
           return (
             <div className="text-base-300 flex place-content-between text-xs font-thin">
               <span>
                 + {child?.name} {suffix}
               </span>
-              <span>{currencyFormat(item?.quantity * child?.quantity * child?.unit_price)}</span>
+              <span>{currencyFormat(item?.quantity * child?.quantity * child?.unit_nett)}</span>
             </div>
           );
         });
@@ -194,7 +200,7 @@ const CheckoutScreen = () => {
                 catalog: {
                   id: child?.catalog_id ?? child?.id ?? null,
                   name: child?.name || '',
-                  unit_price: Number(child?.unit_price) || 0,
+                  unit_nett: Number(child?.unit_nett) || 0,
                 },
               }));
           })
@@ -203,7 +209,7 @@ const CheckoutScreen = () => {
 
       if (item?.is_custom) {
         base.catalog_name = item?.name;
-        base.unit_price = item?.unit_price;
+        base.unit_nett = item?.unit_nett;
       }
 
       return base;
@@ -270,18 +276,20 @@ const CheckoutScreen = () => {
       const orderId = uuidv4();
       const now = new Date().toISOString();
 
-      // Build items with catalog_name + unit_price for preview
+      // Build items with catalog_name + unit_nett for preview
       const orderItems = allItems.map(item => ({
         catalog_id: item.catalog_id,
         catalog_name: item.name || '',
         quantity: item.quantity,
-        unit_price: Number(item.unit_price) || Number(item.unit_nett) || 0,
+        unit_nett: Number(item.unit_nett) || 0,
         addons: (item.additionals_flat || []).map(a => ({
           addon_group: a.addon_group || { id: a.addon_group?.id },
-          addon_item_id: a.addon_item_id || a.id,
+          addon_item_id: a.addon_item_id,
           catalog_name: a.name || '',
-          unit_price: a.unit_price || 0,
-          ...(a?.addon_group?.type === 'quantity' ? { quantity: Number(a.quantity || 1) * Number(item.quantity) } : {}),
+          unit_nett: a.unit_nett || 0,
+          ...(a?.addon_group?.type === 'quantity'
+            ? { quantity: Number(a.quantity || 1) * Number(item.quantity) }
+            : {}),
         })),
         ...(item.is_custom ? { is_custom: true } : {}),
       }));
@@ -315,57 +323,29 @@ const CheckoutScreen = () => {
       }
 
       const code = `${new Date().toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
-      const completedOrder = {
-        sync_id: orderId,
+      const totalPay =
+        selectedMethod?.provider === 'cash' ? Number(pay) || 0 : CartState?.meta?.grand_total || 0;
+      const completedOrder = makeCompletedOrder({
+        orderId,
         code,
-        salesChannelId: Channel?.selectedChannel?.id,
-        salesChannelName: Channel?.selectedChannel?.name,
-        paymentMethodId: selectedMethod?.id,
-        paymentMethodName: selectedMethod?.name || selectedMethod?.provider || 'Cash',
-        membershipId: CartState?.meta?.customer?.id || null,
-        paymentRef: selectedMethod?.provider === 'cash' ? '' : paymentRef,
         billName: billName || CartState?.bill?.bill_name || '',
-        cashierName: session?.user?.name || '',
-        ...(CartState?.discount?.cart?.type === 'percentage'
-          ? { discountPercentage: CartState?.discount?.cart?.value }
-          : {}),
-        ...(CartState?.discount?.cart?.type === 'nominal'
-          ? { discountValue: CartState?.discount?.cart?.amount }
-          : {}),
-        categoryDiscounts: discount_categories || [],
-        serviceChargeValue: CartState?.meta?.service_charge_value || 0,
-        serviceChargePercentage: CartState?.meta?.service_charge_percentage || 0,
         items: orderItems,
-        status: 'completed',
-        totalPayment:
-          selectedMethod?.provider === 'cash'
-            ? Number(pay) || 0
-            : CartState?.meta?.grand_total || 0,
+        cartState: CartState,
+        channel: Channel?.selectedChannel,
+        session,
+        paymentMethod: selectedMethod,
+        paymentRef: selectedMethod?.provider === 'cash' ? '' : paymentRef,
+        totalPayment: totalPay,
         paidAt: now,
-        isOfflineMode: true,
-        refSyncId: '',
-        // Cross-session tracking: kalo dari saved bill pake originSyncId (session asal),
-        // kalo direct pay (no bill) pake checkoutOriginId (sama dgn paid session)
-        originSessionSyncId: CartState?.bill ? originSyncId : checkoutOriginId,
-        paidSessionSyncId: checkoutOriginId,
-        isShow: true,
-      };
+        discountCategories: discount_categories || [],
+      });
+      // Cross-session tracking for IDB
+      completedOrder.origin_session_sync_id = CartState?.bill ? originSyncId : checkoutOriginId;
+      completedOrder.paid_session_sync_id = checkoutOriginId;
+      completedOrder.status = 'completed';
 
-      console.log(
-        '[PAYNOW] completedOrder keys:',
-        Object.keys(completedOrder).join(','),
-        'paidSessionSyncId:',
-        completedOrder.paidSessionSyncId,
-        'originSessionSyncId:',
-        completedOrder.originSessionSyncId,
-        'paymentMethodId:',
-        completedOrder.paymentMethodId,
-        'paymentMethodName:',
-        completedOrder.paymentMethodName
-      );
       try {
         await createOrderPayment(completedOrder, session?.user?.id);
-        console.log('[PAYNOW] createOrderPayment success');
       } catch (err) {
         dispatch($failure(err));
         return;
@@ -387,57 +367,14 @@ const CheckoutScreen = () => {
       // Inject history cache
       const HISTORY_CACHE_KEY = 'cache_order_history';
       const existing = getCache(HISTORY_CACHE_KEY) || [];
-      const histItemsTotal = orderItems.reduce((s, i) => {
-        const itemTotal = (i.unit_price || 0) * (i.quantity || 0);
-        const addonsTotal = (i.addons || []).reduce(
-          (asum, a) => asum + (a.unit_price || 0) * (a.quantity || 0),
-          0
-        );
-        return s + itemTotal + addonsTotal;
-      }, 0);
-      const historyEntry = {
-        id: orderId,
-        code: completedOrder.code,
-        total_charges:
-          completedOrder.totalPayment ||
-          histItemsTotal + (CartState?.meta?.service_charge_value || 0),
-        bill_name: completedOrder.billName,
-        created_at: now,
-        status: 'completed',
-        payment_method: selectedMethod
-          ? { id: selectedMethod.id, name: selectedMethod.name }
-          : null,
-        total_payment: completedOrder.totalPayment,
-        payment_ref: selectedMethod?.provider === 'cash' ? '' : paymentRef,
-        items: orderItems.map(i => {
-          const ci = allItems.find(ci => ci.catalog_id === i.catalog_id);
-          return {
-            catalog: {
-              name: i.catalog_name || '',
-              category_id: ci?.category?.id || ci?.category_id || 0,
-            },
-            catalog_name: i.catalog_name || '',
-            quantity: i.quantity || 0,
-            unit_nett: i.unit_price || 0,
-            discount_value: ci?.discount_amount || 0,
-            addons: (i.addons || []).map(a => ({
-              catalog_name: a.catalog_name || '',
-              unit_nett: a.unit_price || 0,
-              quantity: a.quantity || 1,
-            })),
-          };
-        }),
-        membership: null,
-        discount_value: completedOrder.discountValue,
-        service_charge_value: CartState?.meta?.service_charge_value || 0,
-        subtotal_nett: histItemsTotal,
-        session: { cashier: { name: session?.user?.name || '' } },
-        from_queue: true,
-        is_offline_mode: true,
-        needs_sync: true,
-        category_discounts: discount_categories || [],
-        offline_meta: { order_sync_id: orderId },
-      };
+      const historyEntry = completedOrder;
+      historyEntry.bill_name = completedOrder.bill_name;
+      historyEntry.is_synced = false;
+      historyEntry.payment_method = selectedMethod
+        ? { id: selectedMethod.id, name: selectedMethod.name }
+        : null;
+      historyEntry.payment_ref = selectedMethod?.provider === 'cash' ? '' : paymentRef;
+      delete historyEntry.new_items;
       setCache(HISTORY_CACHE_KEY, [historyEntry, ...existing]);
 
       dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
@@ -447,14 +384,13 @@ const CheckoutScreen = () => {
         type: 'payment',
         sync_id: orderId,
         items: orderItems,
-        billName: completedOrder.billName || billName,
-        totalPayment: completedOrder.totalPayment,
-        discountValue: completedOrder.discountValue,
-        serviceChargeValue: completedOrder.serviceChargeValue,
-        paymentMethodId: selectedMethod?.id,
-        paymentMethodName: selectedMethod?.name || selectedMethod?.provider || 'Cash',
+        bill_name: completedOrder.bill_name || billName,
+        total_payment: completedOrder.total_payment,
+        discount_value: completedOrder.discount_value,
+        service_charge_value: completedOrder.service_charge_value,
+        payment_method_id: selectedMethod?.id,
+        payment_method_name: selectedMethod?.name || selectedMethod?.provider || 'Cash',
       });
-      console.log('[PAYMENT] sessionSummary updated');
 
       // Receipt items: semua items (bill + list)
       const receiptItems = orderItems.map(i => {
@@ -466,11 +402,11 @@ const CheckoutScreen = () => {
           },
           catalog_name: i.catalog_name || '',
           quantity: i.quantity || 0,
-          unit_nett: i.unit_price || 0,
+          unit_nett: i.unit_nett || 0,
           discount_value: ci?.discount_amount || 0,
           addons: (i.addons || []).map(a => ({
             catalog_name: a.catalog_name || '',
-            unit_nett: a.unit_price || 0,
+            unit_nett: a.unit_nett || 0,
             quantity: a.quantity || 1,
           })),
         };
@@ -480,40 +416,31 @@ const CheckoutScreen = () => {
         catalog: { name: i.name || '' },
         catalog_name: i.name || '',
         quantity: i.quantity || 0,
-        unit_nett: i.unit_price || 0,
+        unit_nett: i.unit_nett || 0,
         discount_value: i?.discount_amount || 0,
         addons: (i.additionals_flat || []).map(a => ({
           catalog_name: a.name || '',
-          unit_nett: a.unit_price || 0,
+          unit_nett: a.unit_nett || 0,
           quantity: Number(a.quantity || 1) * Number(i.quantity),
         })),
       }));
       // Build receipt-ready shape
-      const paySuccessData = {
-        ...completedOrder,
-        total_charges:
-          completedOrder.totalPayment ||
-          histItemsTotal + (CartState?.meta?.service_charge_value || 0),
-        total_payment: completedOrder.totalPayment,
+      const paySuccessData = makeSuccessData({
+        orderId,
         code: completedOrder.code,
-        paid_at: now,
-        bill_name: completedOrder.billName,
-        category_discounts: discount_categories || [],
-        sales_channel: Channel?.selectedChannel?.name
-          ? { name: Channel.selectedChannel.name }
-          : null,
-        payment_ref: '',
-        payment_method: selectedMethod
-          ? { id: selectedMethod.id, name: selectedMethod.name }
-          : null,
-        payment_ref: selectedMethod?.provider === 'cash' ? '' : paymentRef,
-        session: { cashier: { name: session?.user?.name || '' } },
-        items: receiptItems,
-        new_items: payNewItems,
-        subtotal_nett: histItemsTotal,
-        service_charge_value: CartState?.meta?.service_charge_value || 0,
-        discount_value: completedOrder.discountValue,
-      };
+        billName: completedOrder.bill_name,
+        items: orderItems,
+        cartState: CartState,
+        channel: Channel?.selectedChannel,
+        session,
+        paymentMethod: selectedMethod,
+        paymentRef: selectedMethod?.provider === 'cash' ? '' : paymentRef,
+        totalPayment: completedOrder.total_payment,
+        paidAt: now,
+        discountCategories: discount_categories || [],
+        isPayment: true,
+      });
+      paySuccessData.new_items = payNewItems;
 
       dispatch(setWarning('Payment saved offline. It will sync when online.'));
       dispatch(resetCart());
@@ -530,11 +457,11 @@ const CheckoutScreen = () => {
       catalog: { name: i.name || '' },
       catalog_name: i.name || '',
       quantity: i.quantity || 0,
-      unit_nett: i.unit_price || 0,
+      unit_nett: i.unit_nett || 0,
       discount_value: i?.discount_amount || 0,
       addons: (i.additionals_flat || []).map(a => ({
         catalog_name: a.name || '',
-        unit_nett: a.unit_price || 0,
+        unit_nett: a.unit_nett || 0,
         quantity: Number(a.quantity || 1) * Number(i.quantity),
       })),
     }));
@@ -641,7 +568,7 @@ const CheckoutScreen = () => {
       }
       if (item?.is_custom) {
         base.catalog_name = item?.name;
-        base.unit_price = item?.unit_price;
+        base.unit_nett = item?.unit_nett;
       }
       return base;
     });
@@ -694,13 +621,15 @@ const CheckoutScreen = () => {
       catalog_id: item.catalog_id,
       catalog_name: item.name || '',
       quantity: item.quantity,
-      unit_price: Number(item.unit_price) || Number(item.unit_nett) || 0,
+      unit_nett: Number(item.unit_nett) || 0,
       addons: (item.additionals_flat || []).map(a => ({
         addon_group: a.addon_group || { id: a.addon_group?.id },
-        addon_item_id: a.addon_item_id || a.id,
+        addon_item_id: a.addon_item_id,
         catalog_name: a.name || '',
-        unit_price: a.unit_price || 0,
-        ...(a?.addon_group?.type === 'quantity' ? { quantity: Number(a.quantity || 1) * Number(item.quantity) } : {}),
+        unit_nett: a.unit_nett || 0,
+        ...(a?.addon_group?.type === 'quantity'
+          ? { quantity: Number(a.quantity || 1) * Number(item.quantity) }
+          : {}),
       })),
       ...(item.is_custom ? { is_custom: true } : {}),
     }));
@@ -710,7 +639,6 @@ const CheckoutScreen = () => {
     billName = billName || '';
     const { payload, discount_categories, allItems } = buildBillPayload(billName);
     payload.bill_name = billName;
-    console.log('[DBG] handleCreateBill: set isSaveBillFlow true');
     setIsSaveBillFlow(true);
     isSaveBillFlowRef.current = true;
 
@@ -724,11 +652,11 @@ const CheckoutScreen = () => {
       catalog: { name: i.name || '' },
       catalog_name: i.name || '',
       quantity: i.quantity || 0,
-      unit_nett: i.unit_price || 0,
+      unit_nett: i.unit_nett || 0,
       discount_value: i?.discount_amount || 0,
       addons: (i.additionals_flat || []).map(a => ({
         catalog_name: a.name || '',
-        unit_nett: a.unit_price || 0,
+        unit_nett: a.unit_nett || 0,
         quantity: Number(a.quantity || 1) * Number(i.quantity),
       })),
     }));
@@ -760,8 +688,6 @@ const CheckoutScreen = () => {
     billName = billName || CartState?.bill?.bill_name || '';
     const { payload, discount_categories, allItems } = buildBillPayload(billName);
     payload.bill_name = billName;
-    console.log('[SAVE BILL] CartState bill items:', CartState?.items?.bill?.map(i => ({ name: i.name, qty: i.quantity })));
-    console.log('[SAVE BILL] allItems qty:', allItems.map(i => ({ name: i.name, qty: i.quantity })));
 
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     if (isOffline) {
@@ -773,11 +699,11 @@ const CheckoutScreen = () => {
       catalog: { name: i.name || '' },
       catalog_name: i.name || '',
       quantity: i.quantity || 0,
-      unit_nett: i.unit_price || 0,
+      unit_nett: i.unit_nett || 0,
       discount_value: i?.discount_amount || 0,
       addons: (i.additionals_flat || []).map(a => ({
         catalog_name: a.name || '',
-        unit_nett: a.unit_price || 0,
+        unit_nett: a.unit_nett || 0,
         quantity: Number(a.quantity || 1) * Number(i.quantity),
       })),
     }));
@@ -807,11 +733,11 @@ const CheckoutScreen = () => {
         catalog: { name: i.name || '' },
         catalog_name: i.name || '',
         quantity: i.quantity || 0,
-        unit_nett: i.unit_price || 0,
+        unit_nett: i.unit_nett || 0,
         discount_value: i?.discount_amount || 0,
         addons: (i.additionals_flat || []).map(a => ({
           catalog_name: a.name || '',
-          unit_nett: a.unit_price || 0,
+          unit_nett: a.unit_nett || 0,
           quantity: Number(a.quantity || 1) * Number(i.quantity),
         })),
       }));
@@ -824,7 +750,10 @@ const CheckoutScreen = () => {
       // Compute total dari captured items (client-side, akurat)
       const itemsTotal = orderItems.reduce((s, i) => {
         const it = (i.unit_nett || 0) * (i.quantity || 0);
-        const at = (i.addons || []).reduce((a, ad) => a + (ad.unit_nett || 0) * (ad.quantity || 0), 0);
+        const at = (i.addons || []).reduce(
+          (a, ad) => a + (ad.unit_nett || 0) * (ad.quantity || 0),
+          0
+        );
         return s + it + at;
       }, 0);
 
@@ -848,11 +777,8 @@ const CheckoutScreen = () => {
             paid_at: metaRef?.created_at || new Date().toISOString(),
             sales_channel:
               serverData?.sales_channel ||
-              (Channel?.selectedChannel?.name
-                ? { name: Channel.selectedChannel.name }
-                : null),
-            session:
-              serverData?.session || { cashier: { name: session?.user?.name || '' } },
+              (Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null),
+            session: serverData?.session || { cashier: { name: session?.user?.name || '-' } },
           }}
           backToMenu
           isPayment={false}
@@ -885,40 +811,21 @@ const CheckoutScreen = () => {
     const orderCode = `${new Date().toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
 
     try {
-      const orderData = {
-        sync_id: orderId,
+      const orderData = makeIdbBillData({
+        orderId,
         code: orderCode,
+        billName,
+        items: orderItems,
+        cartState: CartState,
+        channel: Channel?.selectedChannel,
+        session,
+        discountCategories: discount_categories || [],
         originSessionSyncId: saveBillOriginId,
         paidSessionSyncId: null,
-        isShow: true,
-        originalItems: orderItems,
-        salesChannelId: Channel?.selectedChannel?.id,
-        salesChannelName: Channel?.selectedChannel?.name,
-        paymentMethodId: null,
-        membershipId: CartState?.meta?.customer?.id || null,
-        paymentRef: '',
-        billName: billName,
-        cashierName: session?.user?.name || '',
-        serviceChargeValue: CartState?.meta?.service_charge_value || 0,
-        serviceChargePercentage: CartState?.meta?.service_charge_percentage || 0,
-        ...(CartState?.discount?.cart?.type === 'percentage'
-          ? { discountPercentage: CartState?.discount?.cart?.value }
-          : {}),
-        ...(CartState?.discount?.cart?.type === 'nominal'
-          ? { discountValue: CartState?.discount?.cart?.amount }
-          : {}),
-        categoryDiscounts: discount_categories || [],
-        items: orderItems,
-        status: 'pending',
-        totalPayment: 0,
-        paidAt: null,
-        isOfflineMode: true,
-        is_offline_mode: true,
-        refSyncId: '',
-      };
+      });
+      orderData.status = 'pending';
 
       await createOrderBill(orderData, session?.user?.id);
-      console.log('[OFFLINE CREATE BILL] success:', orderId);
     } catch (err) {
       dispatch($failure(err));
       return;
@@ -942,39 +849,22 @@ const CheckoutScreen = () => {
       CartState?.bill?.code ||
       `${new Date().toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
 
-    const orderData = {
+    const orderData = makeIdbBillData({
+      orderId,
+      code: orderCode,
+      billName,
+      items: orderItems,
+      cartState: CartState,
+      channel: Channel?.selectedChannel,
+      session,
+      discountCategories: discount_categories || [],
       originSessionSyncId: syncId,
       paidSessionSyncId: null,
-      isShow: true,
-      originalItems: orderItems,
-      salesChannelId: Channel?.selectedChannel?.id,
-      salesChannelName: Channel?.selectedChannel?.name,
-      paymentMethodId: null,
-      membershipId: CartState?.meta?.customer?.id || null,
-      paymentRef: '',
-      billName: billName,
-      cashierName: session?.user?.name || '',
-      serviceChargeValue: CartState?.meta?.service_charge_value || 0,
-      serviceChargePercentage: CartState?.meta?.service_charge_percentage || 0,
-      ...(CartState?.discount?.cart?.type === 'percentage'
-        ? { discountPercentage: CartState?.discount?.cart?.value }
-        : {}),
-      ...(CartState?.discount?.cart?.type === 'nominal'
-        ? { discountValue: CartState?.discount?.cart?.amount }
-        : {}),
-      categoryDiscounts: discount_categories || [],
-      items: orderItems,
-      status: 'pending',
-      totalPayment: 0,
-      paidAt: null,
-      isOfflineMode: true,
-      is_offline_mode: true,
-      refSyncId: '',
-    };
+    });
+    orderData.status = 'pending';
 
     try {
       await updateOrderBill(orderId, orderData, session?.user?.id);
-      console.log('[OFFLINE UPDATE BILL] success:', orderId);
     } catch (err) {
       dispatch($failure(err));
       return;
@@ -997,171 +887,50 @@ const CheckoutScreen = () => {
     try {
       const BILLS_CACHE_KEY = 'cache_openbills';
       const existing = getCache(BILLS_CACHE_KEY) || [];
-      const itemsTotalCache = orderItems.reduce((s, i) => {
-        const itemTotal = (i.unit_price || 0) * (i.quantity || 0);
-        const addonsTotal = (i.addons || []).reduce(
-          (asum, a) => asum + (a.unit_price || 0) * (a.quantity || 0),
-          0
-        );
-        return s + itemTotal + addonsTotal;
-      }, 0);
-      existing.unshift({
-        id: '',
-        sync_id: orderId,
-        ref_id: '',
-        session_id: '',
-        sales_channel_id: Channel?.selectedChannel?.id || '',
-        payment_method_id: String(paymentMethodId || ''),
-        membership_id: CartState?.meta?.customer?.id || '',
+      const cacheEntry = makePendingBill({
+        orderId,
         code: orderCode,
-        payment_ref: '',
-        bill_name: billName,
-        subtotal_tax: 0,
-        subtotal_taxed: 0,
-        subtotal_gross: itemsTotalCache,
-        subtotal_nett: itemsTotalCache,
-        total_bill: itemsTotalCache + (Number(CartState?.meta?.service_charge_value) || 0),
-        discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
-        discount_value: CartState?.discount?.cart?.type === 'nominal' ? CartState?.discount?.cart?.value : 0,
-        service_charge_percentage: CartState?.meta?.service_charge_percentage || 0,
-        service_charge_value: CartState?.meta?.service_charge_value || 0,
-        total_charges: itemsTotalCache + (Number(CartState?.meta?.service_charge_value) || 0),
-        total_payment: totalPayment || 0,
-        cost_goods: 0,
-        status: 'completed',
-        is_discount_percentage: CartState?.discount?.cart?.type === 'percentage',
-        cancelled_reason: '',
-        cancelled_by: '',
-        cancelled_at: null,
-        paid_at: new Date().toISOString(),
-        paid_session_id: '',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        is_category_discount: false,
-        is_offline_mode: true,
-        needs_sync: true,
-        session: {
-          id: '',
-          cashier: { name: session?.user?.name || '' },
-          outlet: session?.sales_session?.outlet ? {
-            id: session.sales_session.outlet.id,
-            name: session.sales_session.outlet.name,
-          } : null,
-        },
-        sales_channel: Channel?.selectedChannel
-          ? {
-              id: Channel.selectedChannel.id,
-              name: Channel.selectedChannel.name,
-            }
-          : null,
-        items: orderItems.map(i => {
-          const ci = allItems.find(ci => ci.catalog_id === i.catalog_id);
-          return {
-            id: '',
-            order_id: orderId,
-            additional_id: '',
-            addon_group_id: '',
-            catalog_id: i.catalog_id || '',
-            catalog_name: i.catalog_name || '',
-            category_name: '',
-            unit_base: i.unit_price || 0,
-            unit_gross: i.unit_price || 0,
-            discount_percentage: 0,
-            discount_value: ci?.discount_amount || 0,
-            is_discount_percentage: false,
-            unit_nett: i.unit_price || 0,
-            unit_tax: 0,
-            unit_taxed: 0,
-            unit_bill: i.unit_price || 0,
-            quantity: i.quantity || 0,
-            catalog: {
-              name: i.catalog_name || '',
-              category_id: ci?.category?.id || ci?.category_id || 0,
-            },
-            addons: (i.addons || []).map(a => ({
-              id: '',
-              order_id: orderId,
-              additional_id: '',
-              addon_group_id: a.addon_group_id || '',
-              catalog_id: '',
-              catalog_name: a.catalog_name || '',
-              unit_base: a.unit_price || 0,
-              unit_gross: a.unit_price || 0,
-              discount_percentage: 0,
-              discount_value: 0,
-              is_discount_percentage: false,
-              unit_nett: a.unit_price || 0,
-              unit_tax: 0,
-              unit_taxed: 0,
-              unit_bill: a.unit_price || 0,
-              quantity: a.quantity || 1,
-            })),
-          };
-        }),
+        billName,
+        items: orderItems,
+        cartState: CartState,
+        channel: Channel?.selectedChannel,
+        session,
+        discountCategories: discount_categories || [],
       });
+      existing.unshift(cacheEntry);
       setCache(BILLS_CACHE_KEY, existing);
     } catch {}
 
     dispatch(setWarning('Bill saved offline.'));
 
-    const itemsTotalReceipt = orderItems.reduce((s, i) => {
-      const itemTotal = (i.unit_price || 0) * (i.quantity || 0);
-      const addonsTotal = (i.addons || []).reduce(
-        (asum, a) => asum + (a.unit_price || 0) * (a.quantity || 0),
-        0
-      );
-      return s + itemTotal + addonsTotal;
-    }, 0);
     const saveNewItems = (CartState?.items?.list || []).map(i => ({
       catalog: { name: i.name || '' },
       catalog_name: i.name || '',
       quantity: i.quantity || 0,
-      unit_nett: i.unit_price || 0,
+      unit_nett: i.unit_nett || 0,
       discount_value: i?.discount_amount || 0,
       addons: (i.additionals_flat || []).map(a => ({
         catalog_name: a.name || '',
-        unit_nett: a.unit_price || 0,
+        unit_nett: a.unit_nett || 0,
         quantity: Number(a.quantity || 1) * Number(i.quantity),
       })),
     }));
-    const successData = {
-      sync_id: orderId,
+    const successData = makeSuccessData({
+      orderId,
       code: orderCode,
-      originSessionSyncId: syncId,
-      paidSessionSyncId: null,
-      total_charges:
-        CartState?.meta?.grand_total ||
-        itemsTotalReceipt + (Number(CartState?.meta?.service_charge_value) || 0),
-      total_payment: 0,
-      paid_at: new Date().toISOString(),
-      bill_name: billName,
-      sales_channel: Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null,
-      payment_ref: '',
-      payment_method: null,
-      session: { cashier: { name: session?.user?.name || '' } },
-      items: orderItems.map(i => {
-        const ci = allItems.find(ci => ci.catalog_id === i.catalog_id);
-        return {
-          catalog: {
-            name: i.catalog_name || '',
-            category_id: ci?.category?.id || ci?.category_id || 0,
-          },
-          catalog_name: i.catalog_name || '',
-          quantity: i.quantity || 0,
-          unit_nett: i.unit_price || 0,
-          discount_value: ci?.discount_amount || 0,
-          addons: (i.addons || []).map(a => ({
-            catalog_name: a.catalog_name || '',
-            unit_nett: a.unit_price || 0,
-            quantity: a.quantity || 1,
-          })),
-        };
-      }),
-      new_items: saveNewItems,
-      subtotal_nett: itemsTotalReceipt,
-      service_charge_value: CartState?.meta?.service_charge_value || 0,
-      discount_value: 0,
-    };
+      billName,
+      items: orderItems,
+      cartState: CartState,
+      channel: Channel?.selectedChannel,
+      session,
+      paymentMethod: null,
+      paymentRef: '',
+      totalPayment: 0,
+      paidAt: null,
+      discountCategories: discount_categories || [],
+      isPayment: false,
+    });
+    successData.new_items = saveNewItems;
 
     isOfflineSaveRef.current = true;
     dispatch(resetCart());
@@ -1264,7 +1033,7 @@ const CheckoutScreen = () => {
             sales_channel:
               serverData?.sales_channel ||
               (Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null),
-            session: serverData?.session || { cashier: { name: session?.user?.name || '' } },
+            session: serverData?.session || { cashier: { name: session?.user?.name || '-' } },
           }}
           backToMenu
           isPayment={!isSaveBillFlowRef.current}
@@ -1366,16 +1135,16 @@ const CheckoutScreen = () => {
                         <div>{item?.name}</div>
                         <div className="text-base-300 text-xs">
                           {currencyFormat(
-                            item?.quantity * (item?.unit_price - item?.discount_amount)
+                            item?.quantity * (item?.unit_nett - item?.discount_amount)
                           )}
                         </div>
                       </div>
                       <div className="pb-2 text-xs">
                         {item?.quantity} x{' '}
-                        {currencyFormat(item?.unit_price - item?.discount_amount)}
+                        {currencyFormat(item?.unit_nett - item?.discount_amount)}
                         {item?.discount_amount > 0 && (
                           <span className="text-base-300 ms-2 line-through">
-                            {currencyFormat(item?.unit_price)}
+                            {currencyFormat(item?.unit_nett)}
                           </span>
                         )}
                       </div>
@@ -1427,8 +1196,8 @@ const CheckoutScreen = () => {
                     <div>{item?.name}</div>
                     <div className="text-base-300 text-xs">
                       {currencyFormat(
-                        item?.quantity * (item?.unit_price - item?.discount_amount) > 0
-                          ? item?.unit_price - item?.discount_amount
+                        item?.quantity * (item?.unit_nett - item?.discount_amount) > 0
+                          ? item?.unit_nett - item?.discount_amount
                           : 0
                       )}
                     </div>
@@ -1436,13 +1205,13 @@ const CheckoutScreen = () => {
                   <div className="pb-2 text-xs">
                     {item?.quantity} x{' '}
                     {currencyFormat(
-                      item?.unit_price - item?.discount_amount > 0
-                        ? item?.unit_price - item?.discount_amount
+                      item?.unit_nett - item?.discount_amount > 0
+                        ? item?.unit_nett - item?.discount_amount
                         : 0
                     )}
                     {item?.discount_amount > 0 && (
                       <span className="text-base-300 ms-2 line-through">
-                        {currencyFormat(item?.unit_price)}
+                        {currencyFormat(item?.unit_nett)}
                       </span>
                     )}
                   </div>

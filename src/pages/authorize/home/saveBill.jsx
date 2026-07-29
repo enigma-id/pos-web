@@ -58,11 +58,11 @@ const BillModal = ({ mode, count, onBillCreate }) => {
                   <div>
                     <div className="font-semibold">
                       {bill?.bill_name || "-"}
-                      {bill?.needs_sync && (
+                      {bill?.is_synced === false && (
                         <span className="badge badge-warning badge-xs ms-1">pending sync</span>
                       )}
                     </div>
-                    <div className="text-xs">{dateFormat(bill?.ordered_at || bill?.created_at)}</div>
+                    <div className="text-xs">{dateFormat(bill?.created_at)}</div>
                   </div>
                   <div className="font-semibold">{currencyFormat(bill?.total_charges)}</div>
                 </div>

@@ -195,7 +195,7 @@ const CatalogScreen = () => {
                       </div>
                       <div className="text-primary text-center text-[16px] font-semibold">
                         {currencyFormat(
-                          cat?.unit_price,
+                          cat?.unit_nett,
                           undefined,
                           cat?.is_custom ? '{custom price}' : 'Free'
                         )}

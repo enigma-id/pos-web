@@ -11,7 +11,7 @@ const UpdateTicket = ({ data, onSubmit, isLoading, onClose }) => {
   const [billName, setBillName] = React.useState('');
 
   useEffect(() => {
-    setBillName(data?.billName || data?.bill_name || '');
+    setBillName(data?.bill_name || '');
   }, [data]);
 
   return (

@@ -1,3 +1,5 @@
+import { UUID_ZERO, DATE_ZERO } from './constants';
+
 const toIsoNow = () => new Date().toISOString();
 
 const toNumber = value => {
@@ -16,8 +18,8 @@ const buildCatalogFromItem = item => ({
   brand_id: item?.brand_id ?? '',
   ref_id: item?.ref_id ?? item?.catalog_id ?? item?.id ?? '',
   code: item?.code || '',
-  name: item?.name || item?.description || 'Item',
-  base_price: toNumber(item?.base_price ?? item?.unit_price),
+  name: item?.name || '',
+  base_price: toNumber(item?.base_price ?? item?.unit_nett),
   image: item?.image || '',
   is_custom: item?.is_custom ?? false,
   is_vatable: item?.is_vatable ?? false,
@@ -43,7 +45,7 @@ const buildAdditionalsFromItem = item => {
         addon_group_id: group?.id ?? null,
         addon_item_id: child?.catalog_id ?? child?.id ?? null,
         quantity: childQty * itemQty,
-        unit_nett: toNumber(child?.unit_price),
+        unit_nett: toNumber(child?.unit_nett),
         addon: {
           id: group?.id ?? null,
           name: group?.name || '',
@@ -52,7 +54,7 @@ const buildAdditionalsFromItem = item => {
         catalog: {
           id: child?.catalog_id ?? child?.id ?? null,
           name: child?.name || '',
-          unit_price: toNumber(child?.unit_price),
+          unit_nett: toNumber(child?.unit_nett),
         },
       });
     });
@@ -78,15 +80,14 @@ const normalizeRequestItem = requestItem => ({
   catalog_id: requestItem?.catalog_id ?? requestItem?.id ?? '',
   id: requestItem?.id,
   quantity: requestItem?.quantity ?? 1,
-  unit_price: requestItem?.unit_price ?? requestItem?.unit_nett ?? requestItem?.unit_bill ?? 0,
-  description: requestItem?.description || '',
+  unit_nett: requestItem?.unit_nett ?? requestItem?.unit_bill ?? 0,
   additionals_flat: Array.isArray(requestItem?.addons) ? requestItem.addons : [],
   addons: Array.isArray(requestItem?.addons) ? requestItem.addons : [],
   additionals_catalog_map: Array.isArray(requestItem?.additionals_catalog_map)
     ? requestItem.additionals_catalog_map
     : [],
   is_custom: requestItem?.is_custom ?? false,
-  name: requestItem?.name || requestItem?.description || 'Item',
+  name: requestItem?.name || '',
 });
 
 const buildAdditionalsCatalogMapFromCartItem = cartItem => {
@@ -113,7 +114,7 @@ const buildAdditionalsCatalogMapFromCartItem = cartItem => {
         catalog: {
           id: child?.catalog_id ?? child?.id ?? null,
           name: child?.name || '',
-          unit_price: toNumber(child?.unit_price),
+          unit_nett: toNumber(child?.unit_nett),
         },
       });
     });
@@ -176,17 +177,16 @@ const enrichRequestItemsFromCartSnapshot = (requestItems, snapshotItems) => {
 };
 
 const buildOrderItem = (item, index, orderId) => {
-  const unitNett = toNumber(item?.unit_nett ?? item?.unit_price ?? item?.price);
+  const unitNett = toNumber(item?.unit_nett ?? item?.price);
   const qty = toNumber(item?.quantity) || 1;
   const discountValue = toNumber(item?.discount_value ?? item?.discount_amount);
   const unitBill = Math.max(0, unitNett - discountValue);
 
   return {
-    id: Date.now() + index,
+    id: UUID_ZERO,
     order_id: orderId,
     catalog: buildCatalogFromItem(item),
     additional_id: null,
-    description: item?.description || '',
     quantity: qty,
     unit_base: toNumber(item?.base_price ?? unitNett),
     unit_gross: unitBill,
@@ -263,11 +263,10 @@ export const buildOfflineTransactionPayload = ({
 
   const category_discounts = cartState?.discount?.category?.map(d => ({
     category_id: d?.id,
-    is_discount_percentage: d?.discount_type === 'nominal' ? false : true,
-    discount_percentage: d?.discount_type === 'nominal' ? 0 : d?.discount_value,
-    discount_value: d?.discount_type === 'nominal' ? d?.discount_value : 0,
-    id: '',
-    order_id: '',
+    is_discount_percentage: d?.discount_type === 'percentage',
+    discount_percentage: d?.discount_type === 'percentage' ? (d?.discount_value || 0) : 0,
+    discount_value: d?.discount_type === 'nominal' ? (d?.discount_value || 0) : 0,
+    category: { name: d?.name || '' },
   }));
 
   // category_id: 'f391ae77-c393-4170-bde0-1707fbd79e91';
@@ -286,7 +285,13 @@ export const buildOfflineTransactionPayload = ({
     payment_ref: paymentRef || '',
     payment_method: paymentMethod || { id: 0, name: 'Cash', is_nfc: 0 },
     membership: cartState?.membership || null,
-    category_discounts,
+    category_discounts: (category_discounts || []).map(d => ({
+      category_id: d.category_id || d.id || '',
+      is_discount_percentage: d.is_discount_percentage ?? (d.discount_type === 'percentage'),
+      discount_percentage: d.discount_percentage || (d.discount_type === 'percentage' ? toNumber(d.discount_value) : 0),
+      discount_value: d.discount_value || (d.discount_type === 'nominal' ? toNumber(d.discount_value) : 0),
+      category: d.category || { name: '' },
+    })),
     bill_name:
       queueMeta?.requestBody?.bill_name ||
       cartState?.meta?.bill_name ||
@@ -300,8 +305,8 @@ export const buildOfflineTransactionPayload = ({
     total_bill: totalBill,
     discount_percentage: cartState?.discount?.cart?.type === 'percentage' ? discountValue : 0,
     discount_value: cartState?.discount?.cart?.type === 'nominal' ? discountValue : 0,
-    is_discount_percentage: cartState?.discount?.cart?.type === 'percentage' ? true : false,
-    is_category_discount: category_discounts?.length > 0 ? true : false,
+    is_discount_percentage: cartState?.discount?.cart?.type === 'percentage',
+    is_category_discount: (category_discounts || []).length > 0,
     service_charge: toNumber(cartState?.meta?.service_charge_percentage),
     service_charge_value: serviceChargeValue,
     total_charges: totalCharges,
@@ -312,10 +317,6 @@ export const buildOfflineTransactionPayload = ({
     paid_at: now,
     items: normalizedItems,
     is_offline_mode: true,
-    offline_meta: {
-      sync_id: queueMeta?.id || null,
-      local_created_at: now,
-      sync_status: 'pending',
-    },
+    is_synced: false,
   };
 };

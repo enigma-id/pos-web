@@ -278,12 +278,12 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
             const code = preview?.code || item?.code || `OFF-${item?.sync_id?.slice(0, 8) || item?.id}`;
             const channelName = preview?.channel?.name || item?.sales_channel_name || item?.sales_channel_id || '-';
             const paymentName = preview?.payment_method?.name || item?.payment_method_name || (item?.payment_method_id === 0 || item?.payment_method_id === null ? 'Cash' : '#' + item?.payment_method_id);
-            const cashierName = preview?.cashier?.name || preview?.session?.cashier?.name || '-';
+            const cashierName = preview?.cashier?.name || '-';
             const itemCount = Number(preview?.item_count) || preview?.items?.length || item?.items?.length || 0;
             const totalCharges = Number(preview?.total_charges || preview?.total_bill) || item?.total_payment || 0;
             const itemsTotal = (item?.items || []).reduce((sum, p) =>
-              sum + (Number(p.unit_nett || p.unit_price || 0) * Number(p.quantity || 0))
-                + (p.addons || []).reduce((asum, a) => asum + (Number(a.unit_nett || a.unit_price || 0) * Number(a.quantity || 0)), 0),
+              sum + (Number(p.unit_nett || 0) * Number(p.quantity || 0))
+                + (p.addons || []).reduce((asum, a) => asum + (Number(a.unit_nett || 0) * Number(a.quantity || 0)), 0),
             0);
             const displayTotal = totalCharges || itemsTotal + (Number(item?.service_charge_value) || 0);
             const createdAt = preview?.created_at || item?.paid_at || item?.createdAt;
@@ -409,7 +409,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                     </span>
                   </div>
                   <div className="flex items-center gap-1 text-[10px] text-base-content/50 flex-wrap">
-                    <span className="truncate max-w-24">{preview?.bill_name || item?.bill_name || cashierName}</span>
+                    <span className="truncate max-w-24">{preview?.bill_name || '-'}</span>
                     <span>·</span>
                     <span className="truncate">{channelName}</span>
                     <span>·</span>
@@ -436,18 +436,18 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                               <div className="flex gap-1.5 items-start flex-1 min-w-0">
                                 <span className="bg-base-content/80 rounded px-1.5 py-0.5 text-[13px] text-white font-bold leading-none mt-0.5">{product.quantity}</span>
                                 <span className="text-[13px] font-bold uppercase truncate leading-tight">
-                                  {product.catalog?.name || product.catalog_name || product.description || 'Unknown Item'}
+                                  {product.catalog_name || product.catalog?.name || '-'} {/* catalog_name langsung, catalog?.name fallback struktural */}
                                 </span>
                               </div>
                               <span className="text-[13px] text-base-content/60 font-medium whitespace-nowrap">
-                                {currencyFormat(Number(product.unit_nett || product.unit_price || 0) * Number(product.quantity || 0))}
+                                {currencyFormat(Number(product.unit_nett || 0) * Number(product.quantity || 0))}
                               </span>
                             </div>
                             {product.addons?.length > 0 && (
                               <div className="ml-5 border-l border-base-content/10 pl-2 flex flex-col gap-0.5">
                                 {product.addons?.map((add, aIdx) => {
-                                  const addonName = add.catalog_name || add.catalog?.name || add.name || '';
-                                  const addonPrice = Number(add.unit_price || add.unit_nett || 0);
+                                  const addonName = add.catalog_name || '-';
+                                  const addonPrice = Number(add.unit_nett || 0);
                                   const addonQty = Number(add.quantity || 1);
                                   return (
                                     <div key={aIdx} className="flex justify-between text-[11px] text-base-content/40 italic">

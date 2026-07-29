@@ -20,7 +20,7 @@ function flattenAdditionals(additionals = []) {
           addon_group: { id: addonGroupId, name: addonGroupName || '', type: type || '' },
           addon_item_id: child.catalog_id ?? child.addon_item_id ?? child.id,
           name: child.catalog_name ?? child.name,
-          unit_price: Number(child.unit_price) || 0,
+          unit_nett: Number(child.unit_nett ?? 0) || 0,
         };
 
         if (child.addon_item_id) {
@@ -84,11 +84,11 @@ function getCategoryDiscount(item, itemCategories) {
   if (!discount_type || !discount_value) return 0;
 
   if (discount_type === 'percentage') {
-    return Math.ceil(item.unit_price * (discount_value / 100));
+    return Math.ceil(item.unit_nett * (discount_value / 100));
   }
 
   if (discount_type === 'nominal') {
-    return Math.ceil(discount_value > item?.unit_price ? item?.unit_price : discount_value);
+    return Math.ceil(discount_value > item?.unit_nett ? item?.unit_nett : discount_value);
   }
 
   return 0;
@@ -156,11 +156,9 @@ function convertApiOrderToCartItem(item) {
   const groupedAdditionals = {};
 
   for (const add of item.addons || []) {
-    // Prefer addon_group (API), fallback addon (legacy / offline synthetic)
-    const group = add.addon_group || add.addon || {};
-    const addonId = group.id || add.addon_group_id;
+    const group = add.addon_group || {};
+    const addonId = group.id;
 
-    // Flat order response (no group metadata) → group under shared sentinel
     if (!addonId) {
       if (!groupedAdditionals._flat_addons_) {
         groupedAdditionals._flat_addons_ = {
@@ -170,38 +168,33 @@ function convertApiOrderToCartItem(item) {
           items: [],
         };
       }
-      const itemQty = add.quantity > 0 ? add.quantity / item.quantity : 1;
-      const flatEntry = {
-        id: add.id || add.catalog_id,
+      groupedAdditionals._flat_addons_.items.push({
+        id: add.catalog_id,
         catalog_id: add.catalog_id,
-        name: add.catalog_name || '',
-        unit_price: add.unit_nett || add.unit_price || 0,
+        name: add.catalog_name || add.catalog?.name || '',
+        unit_nett: add.unit_nett || 0,
         selected: true,
-      };
-      // Flat addons have no group type — assume options (no quantity)
-      groupedAdditionals._flat_addons_.items.push(flatEntry);
+      });
       continue;
     }
 
     if (!groupedAdditionals[addonId]) {
       groupedAdditionals[addonId] = {
         id: addonId,
-        name: group.name || add.name || '',
-        type: group.type || add.addon_type || '',
+        name: group.name || '',
+        type: group.type || '',
         items: [],
       };
     }
 
-    const addCatalog = add.catalog || {};
-    const groupedType = group.type || add.addon_type || '';
     const grpEntry = {
       id: add.id,
-      catalog_id: addCatalog.id || add.catalog_id,
-      name: addCatalog.name || add.name || add.catalog_name || '',
-      unit_price: addCatalog.unit_price || add.unit_nett || add.unit_price || 0,
+      catalog_id: add.catalog?.id || add.catalog_id,
+      name: add.catalog_name || add.catalog?.name || '',
+      unit_nett: add.unit_nett || 0,
       selected: true,
     };
-    if (groupedType === 'quantity') {
+    if (group.type === 'quantity') {
       grpEntry.quantity = add.quantity > 0 ? add.quantity / item.quantity : 0;
     }
     groupedAdditionals[addonId].items.push(grpEntry);
@@ -210,18 +203,18 @@ function convertApiOrderToCartItem(item) {
   const additionalsGrouped = Object.values(groupedAdditionals);
 
   const additionalsFlat = (item.addons || []).map(add => {
-    const addonGroup = add.addon_group || add.addon || {};
-    const grpType = addonGroup.type || add.addon_type || '';
+    const addonGroup = add.addon_group || {};
+    const grpType = addonGroup.type || '';
     const entry = {
       id: add.id,
       addon_group: {
-        id: addonGroup.id || add.addon_group_id || add.id,
-        name: addonGroup.name || add.name || '',
+        id: addonGroup.id || add.addon_group_id,
+        name: addonGroup.name || '',
         type: grpType,
       },
-      addon_item_id: add.catalog?.id || add.catalog_id || add.addon_item_id,
-      name: add.catalog?.name || add.name || add.catalog_name || '',
-      unit_price: Number(add.catalog?.unit_price) || Number(add.unit_price) || 0,
+      addon_item_id: add.catalog?.id || add.catalog_id,
+      name: add.catalog_name || add.catalog?.name || '',
+      unit_nett: Number(add.unit_nett ?? 0) || 0,
     };
     if (grpType === 'quantity') {
       entry.quantity = add.quantity > 0 ? add.quantity / item.quantity : 1;
@@ -234,30 +227,30 @@ function convertApiOrderToCartItem(item) {
 
   return {
     id: item.id,
-    category_id: item.catalog?.category_id || item.category_id,
-    category_name: item?.category_name,
+    category_id: item.catalog?.category_id,
+    category_name: item.category_name,
     brand_id: item.catalog?.brand_id,
     ref_id: item.catalog?.ref_id,
     code: item.catalog?.code,
-    name: item.catalog?.name || item.catalog_name || '',
+    name: item.catalog_name || item.catalog?.name || '',
     base_price: item.catalog?.base_price,
     image: item.catalog?.image,
-    is_custom: item.catalog?.is_custom || item?.is_custom,
-    is_vatable: item.catalog?.is_vatable || item?.is_vatable,
+    is_custom: !!item.catalog?.is_custom,
+    is_vatable: !!item.catalog?.is_vatable,
     is_active: item.catalog?.is_active,
     is_additional: item.catalog?.is_additional,
     is_deleted: item.catalog?.is_deleted,
-    unit_price: item.unit_nett ?? item.unit_price ?? 0,
+    unit_nett: item.unit_nett || 0,
     quantity: item.quantity,
     subtotal,
-    catalog_id: item.catalog?.id || item.catalog_id,
+    catalog_id: item.catalog?.id,
     addons: additionalsGrouped,
     additionals_flat: additionalsFlat,
     discount_amount: item.discount_value || 0,
     discount_percentage: item.discount || 0,
     final_total: item.unit_bill ? item.unit_bill * item.quantity : subtotal,
     from_bill: true,
-    is_discount_percentage: item.is_discount_percentage,
+    is_discount_percentage: !!item.is_discount_percentage,
   };
 }
 
@@ -268,7 +261,7 @@ function calculateAdditionalsPerItem(additionals = []) {
     return (
       total +
       items.reduce((sum, child) => {
-        return sum + (child.unit_price || 0) * (child.quantity || 0);
+        return sum + (child.unit_nett || 0) * (child.quantity || 0);
       }, 0)
     );
   }, 0);
@@ -336,7 +329,7 @@ const cartSlice = createSlice({
             !item.from_bill &&
             item.is_custom === true &&
             item.name?.trim().toLowerCase() === catalog.name?.trim().toLowerCase() &&
-            item.unit_price === catalog.unit_price
+            item.unit_nett === catalog.unit_nett
         );
       } else {
         existingIndex = state.items.list.findIndex(
@@ -380,7 +373,7 @@ const cartSlice = createSlice({
           ...state.items.list[key],
           name: catalog.name,
           quantity: catalog.quantity,
-          unit_price: catalog.unit_price,
+          unit_nett: catalog.unit_nett,
           addons: catalog.addons,
           additionals_flat: flattenAdditionals(catalog.addons),
           subtotal: catalog.subtotal,
@@ -504,7 +497,7 @@ const cartSlice = createSlice({
           ...state.items.bill[key],
           name: catalog.name,
           quantity: catalog.quantity,
-          unit_price: catalog.unit_price,
+          unit_nett: catalog.unit_nett,
           addons: catalog.addons,
           additionals_flat: flattenAdditionals(catalog.addons),
           subtotal: catalog.subtotal,
@@ -541,15 +534,15 @@ const cartSlice = createSlice({
         order.total_payment ||
         order.totalPayment ||
         (order.items || []).reduce((sum, item) => {
-          const it = Number(item.unit_price || 0) * Number(item.quantity || 0);
-          const at = (item.addons || []).reduce((a, ad) => a + Number(ad.unit_price || 0) * Number(ad.quantity || 0), 0);
+          const it = Number(item.unit_nett || 0) * Number(item.quantity || 0);
+          const at = (item.addons || []).reduce((a, ad) => a + Number(ad.unit_nett || 0) * Number(ad.quantity || 0), 0);
           return sum + it + at;
         }, 0) + Number(order.service_charge_value || order.serviceChargeValue || 0);
 
       const previewItems = (order.items || []).map(item => ({
         ...item,
         catalog: { name: item.catalog_name || '', id: item.catalog_id },
-        unit_nett: item.unit_price,
+        unit_nett: item.unit_nett,
         discount_value: 0,
         addons: (item.addons || []).map((a, idx) => {
           const grpType = a.addon_group?.type || '';
@@ -559,7 +552,7 @@ const cartSlice = createSlice({
               name: a.addon_group?.name || 'Add-ons',
               type: grpType,
             },
-            catalog: { id: a.addon_item_id, name: a.catalog_name || '', unit_price: a.unit_price || 0 },
+            catalog: { id: a.addon_item_id, name: a.catalog_name || '', unit_nett: a.unit_nett || 0 },
             selected: true,
           };
           if (grpType === 'quantity') ae.quantity = a.quantity / item.quantity || 1;
@@ -568,14 +561,14 @@ const cartSlice = createSlice({
       }));
 
       state.bill = {
-        id: order?.sync_id || order?.id,
-        bill_name: order.bill_name || order.billName || '',
+        id: order?.sync_id || UUID_ZERO,
+        bill_name: order.bill_name || '',
         total_bill: totalCharges,
-        membership: order.membership_id || order.membershipId ? { id: order.membership_id || order.membershipId } : null,
+        membership: order.membership_id ? { id: order.membership_id } : null,
         is_offline_mode: true,
-        sync_id: order?.sync_id || order?.id,
-        origin_session_sync_id: order.origin_session_sync_id || order.originSessionSyncId || null,
-        originalItems: order.original_items || order.originalItems || null,
+        sync_id: order?.sync_id || UUID_ZERO,
+        origin_session_sync_id: order.origin_session_sync_id || null,
+        originalItems: order.original_items || null,
         itemSnapshot: (order.items || []).map(i => ({ catalog_id: i.catalog_id || i.catalog?.id, quantity: i.quantity || 0 })),
       };
 
@@ -584,12 +577,12 @@ const cartSlice = createSlice({
       state.bill.items = order.items || [];
       state.items.count = 0;
 
-      if (order.membership_id || order.membershipId) {
-        state.meta.customer = { id: order.membership_id || order.membershipId };
+      if (order.membership_id) {
+        state.meta.customer = { id: order.membership_id };
       }
 
-      const isPer = !!(order.discount_percentage || order.discountPercentage || 0);
-      const dVal = order.discount_value || order.discountValue || 0;
+      const isPer = !!(order.discount_percentage || 0);
+      const dVal = order.discount_value || 0;
       if (dVal > 0) {
         state.discount.cart = { type: isPer ? 'percentage' : 'nominal', value: dVal, amount: 0 };
       }

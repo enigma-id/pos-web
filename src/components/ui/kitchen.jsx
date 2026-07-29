@@ -42,7 +42,7 @@ const Kitchen = ({ data }) => {
         >
           <p style={{ marginBlock: 2, fontSize: 12 }}>Cashier</p>
           <p style={{ marginBlock: 2, fontSize: 11 }}>
-            {data?.session?.cashier?.name || data?.session?.name}
+            {data?.session?.cashier?.name || '-'}
           </p>
         </div>
         {data?.note && (
@@ -108,7 +108,7 @@ const Kitchen = ({ data }) => {
           <div style={{ display: 'flex', alignItems: '', justifyContent: 'space-between' }}>
             <div>
               <p style={{ marginBlock: 2, fontSize: 12, textTransform: 'capitalize' }}>
-                {item?.catalog?.name || item?.catalog_name || item?.description}
+                {item?.catalog_name || item?.catalog?.name || '-'} {/* catalog_name langsung, catalog?.name fallback struktural */}
               </p>
             </div>
             <p style={{ marginBlock: 2, fontSize: 12 }}>{item?.quantity}</p>
@@ -116,7 +116,7 @@ const Kitchen = ({ data }) => {
           {item?.addons?.map((addon, idx) => (
             <div key={idx}>
               <p style={{ marginBlock: 2, fontSize: 11, textTransform: 'capitalize' }}>
-                + {addon?.catalog_name}{' '}
+                + {addon?.catalog_name || '-'}{' '}
                 {/* {addon?.addon?.type === 'quantity' || addon?.addon?.type === 'checkbox'
                   ? `(${addon?.quantity / item?.quantity})`
                   : ''} */}

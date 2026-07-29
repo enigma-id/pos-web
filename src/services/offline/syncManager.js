@@ -1,9 +1,5 @@
 import { baseQuery } from '../baseQuery';
-import {
-  ensureDB,
-  STORES,
-  setLastSyncTime as setLastSyncTimeMeta,
-} from './queue';
+import { ensureDB, STORES, setLastSyncTime as setLastSyncTimeMeta } from './queue';
 import {
   setApiReachable,
   setFailedCount,
@@ -52,18 +48,18 @@ const BILLS_CACHE_KEY = 'cache_openbills';
 
 const mapOrderToSync = (order, sessionSyncId) => ({
   sync_id: order.sync_id || '',
-  sales_channel_id: order.sales_channel_id || order.salesChannelId || null,
-  sales_channel_name: order.sales_channel_name || order.salesChannelName || '',
-  payment_method_id: order.payment_method_id || order.paymentMethodId || null,
-  membership_id: order.membership_id || order.membershipId || null,
-  payment_ref: order.payment_ref || order.paymentRef || '',
-  bill_name: order.bill_name || order.billName || '',
-  cashier_name: order.cashier_name || order.cashierName || '',
-  service_charge_value: order.service_charge_value || order.serviceChargeValue || 0,
-  service_charge_percentage: order.service_charge_percentage || order.serviceChargePercentage || 0,
-  discount_percentage: order.discount_percentage || order.discountPercentage || 0,
-  discount_value: order.discount_value || order.discountValue || 0,
-  category_discounts: (order.category_discounts || order.categoryDiscounts || []).map(cd => ({
+  sales_channel_id: order.sales_channel_id || null,
+  sales_channel_name: order.sales_channel_name || '',
+  payment_method_id: order.payment_method_id || null,
+  membership_id: order.membership_id || null,
+  payment_ref: order.payment_ref || '',
+  bill_name: order.bill_name || '',
+  cashier_name: order.cashier_name || '',
+  service_charge_value: order.service_charge_value || 0,
+  service_charge_percentage: order.service_charge_percentage || 0,
+  discount_percentage: order.discount_percentage || 0,
+  discount_value: order.discount_value || 0,
+  category_discounts: (order.category_discounts || []).map(cd => ({
     category_id: cd.category_id || cd.id,
     discount_percentage: cd.discount_percentage,
     discount_value: cd.discount_value,
@@ -71,71 +67,75 @@ const mapOrderToSync = (order, sessionSyncId) => ({
   items: mapItemsToSync(order),
   code: order.code || '',
   status: order.status || 'pending',
-  total_payment: order.total_payment || order.totalPayment || 0,
-  paid_at: order.paid_at || order.paidAt || null,
+  total_payment: order.total_payment || 0,
+  paid_at: order.paid_at || null,
   is_offline_mode: true,
-  ref_sync_id: order.ref_sync_id || order.refSyncId || '',
+  ref_sync_id: order.ref_sync_id || '',
   session_sync_id: sessionSyncId,
-  origin_session_sync_id: order.origin_session_sync_id || order.originSessionSyncId || '',
-  paid_session_sync_id: order.paid_session_sync_id || order.paidSessionSyncId || '',
+  origin_session_sync_id: order.origin_session_sync_id || '',
+  paid_session_sync_id: order.paid_session_sync_id || '',
   is_show: order.is_show !== false,
-  original_items: (order.original_items || order.originalItems || []).map(oi => ({
+  original_items: (order.original_items || []).map(oi => ({
     catalog_id: oi.catalog_id,
     catalog_name: oi.catalog_name || '',
     quantity: oi.quantity || 0,
-    unit_price: oi.unit_price || 0,
-    ...(oi.addons?.length > 0 ? {
-      addons: oi.addons.map(a => ({
-        addon_group_id: a.addon_group_id,
-        addon_item_id: a.addon_item_id,
-        catalog_name: a.catalog_name || '',
-        unit_price: a.unit_price || 0,
-        quantity: a.quantity || 1,
-      })),
-    } : {}),
+    unit_nett: oi.unit_nett || 0,
+    ...(oi.addons?.length > 0
+      ? {
+          addons: oi.addons.map(a => ({
+            addon_group_id: a.addon_group_id,
+            addon_item_id: a.addon_item_id,
+            catalog_name: a.catalog_name || '',
+            unit_nett: a.unit_nett || 0,
+            quantity: a.quantity || 1,
+          })),
+        }
+      : {}),
     ...(oi.is_custom ? { is_custom: true } : {}),
   })),
 });
 
 const mapItemsToSync = order => {
-  const sourceItems = (order.status === 'pending' && (order.original_items || order.originalItems)?.length > 0)
-    ? (order.original_items || order.originalItems)
-    : (order.items || []);
+  const sourceItems =
+    order.status === 'pending' && (order.original_items || [])?.length > 0
+      ? order.original_items || []
+      : order.items || [];
 
   return sourceItems.map(item => ({
     catalog_id: item.catalog_id,
     catalog_name: item.catalog_name || '',
     quantity: item.quantity || 0,
-    unit_price: item.unit_price || 0,
+    unit_nett: item.unit_nett || 0,
     addons: (item.addons || []).map(a => ({
       addon_group_id: a.addon_group_id,
       addon_item_id: a.addon_item_id,
       catalog_name: a.catalog_name || '',
-      unit_price: a.unit_price || 0,
+      unit_nett: a.unit_nett || 0,
       quantity: a.quantity || 1,
     })),
   }));
 };
 
-const mapTopupsToSync = (topups, sessionSyncId) => topups.map(t => ({
-  session_sync_id: sessionSyncId,
-  membership_id: t.membership_id || t.membershipId || null,
-  membership_sync_id: t.membership_sync_id || t.membershipSyncId || null,
-  nominal: t.nominal || 0,
-  payment_type: t.payment_type || t.paymentType || 'cash',
-  card_id: t.card_id || t.cardId || '',
-  member_name: t.member_name || t.memberName || '',
-  member_code: t.member_code || t.memberCode || '',
-  created_at: t.created_at || t.createdAt,
-}));
+const mapTopupsToSync = (topups, sessionSyncId) =>
+  topups.map(t => ({
+    session_sync_id: sessionSyncId,
+    membership_id: t.membership_id || null,
+    membership_sync_id: t.membership_sync_id || null,
+    nominal: t.nominal || 0,
+    payment_type: t.payment_type || 'cash',
+    card_id: t.card_id || '',
+    member_name: t.member_name || '',
+    member_code: t.member_code || '',
+    created_at: t.created_at,
+  }));
 
 const cleanupLocalStorageCache = () => {
   try {
     for (const key of [HISTORY_CACHE_KEY, BILLS_CACHE_KEY]) {
       const existing = getCache(key) || [];
       const updated = existing.map(e => {
-        if (e?.needs_sync) {
-          return { ...e, needs_sync: false };
+        if (e?.is_synced === undefined || e?.is_synced === false) {
+          return { ...e, is_synced: e?.needs_sync ? false : true, needs_sync: undefined };
         }
         return e;
       });
@@ -149,16 +149,23 @@ const cleanupLocalStorageCache = () => {
 // ===== MAIN SYNC FUNCTION =====
 
 export const syncPendingSessions = async () => {
-  if (!storeRef) { console.log('[SYNC] no storeRef'); return; }
-  if (isSyncingInternal) { console.log("[SYNC] already syncing — resetting"); isSyncingInternal = false; }
-  if (typeof navigator !== 'undefined' && !navigator.onLine) { console.log('[SYNC] offline'); return; }
+  if (!storeRef) {
+    return;
+  }
+  if (isSyncingInternal) {
+    isSyncingInternal = false;
+  }
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return;
+  }
 
   const userId = getCurrentUserId();
-  if (!userId) { console.log('[SYNC] no userId'); return; }
+  if (!userId) {
+    return;
+  }
 
-  console.log("[SYNC] start!"); isSyncingInternal = true;
+  isSyncingInternal = true;
   storeRef.dispatch(setSyncing(true));
-  console.log("[SYNC] step: ensureDB");
   storeRef.dispatch(setOfflineError(null));
 
   const fakeApi = {
@@ -169,12 +176,10 @@ export const syncPendingSessions = async () => {
 
   try {
     const db = await ensureDB(userId);
-    console.log("[SYNC] step: got db, checking memberships");
     const now = new Date().toISOString();
 
     // ===== 1. MEMBERSHIPS → POST /membership/sync =====
     const memberships = await db.getAll(STORES.memberships);
-    console.log("[SYNC] memberships count:", memberships.length);
     if (memberships.length > 0) {
       const payload = {
         members: memberships.map(m => ({
@@ -212,7 +217,6 @@ export const syncPendingSessions = async () => {
     const allBills = await db.getAll(STORES.orderBills);
     const allPayments = await db.getAll(STORES.orderPayments);
     const allTopups = await db.getAll(STORES.topups);
-    console.log("[SYNC] allSessions:", allSessions.length, "allBills:", allBills.length, "allPayments:", allPayments.length, "allTopups:", allTopups.length);
 
     // Group by session ID (origin_session_id / paid_session_id / session_sync_id / sessions.sync_id)
     const grouped = {};
@@ -233,7 +237,6 @@ export const syncPendingSessions = async () => {
       grouped[sid].orders.push({ ...bill, _store: STORES.orderBills });
     }
     for (const pay of allPayments) {
-      console.log("[SYNC] payment:", pay.sync_id, "paid_session_sync_id:", pay.paid_session_sync_id);
       const sid = pay.paid_session_sync_id;
       if (!sid) continue;
       if (!grouped[sid]) grouped[sid] = { session: null, orders: [], topups: [] };
@@ -245,8 +248,6 @@ export const syncPendingSessions = async () => {
       if (!grouped[sid]) grouped[sid] = { session: null, orders: [], topups: [] };
       grouped[sid].topups.push({ ...topup, _store: STORES.topups });
     }
-
-    console.log("[SYNC] grouped sessions:", Object.keys(grouped).length);
 
     for (const [sessionSyncId, group] of Object.entries(grouped)) {
       let success = false;
@@ -297,12 +298,10 @@ export const syncPendingSessions = async () => {
 
           const status = getStatusCode(result.error);
           if (status === 401) {
-            console.log('[SYNC] 401 session expired');
             break;
           }
 
           if (!shouldRetry(result.error)) {
-            console.log('[SYNC] client error, not retried');
             break;
           }
 
@@ -316,7 +315,6 @@ export const syncPendingSessions = async () => {
     // Update last sync time
     await setLastSyncTimeMeta(now, userId);
     storeRef.dispatch(setLastSyncTime(now));
-
   } catch (error) {
     if (storeRef) {
       storeRef.dispatch(setOfflineError(error?.message || 'Sync manager error'));
@@ -358,12 +356,10 @@ export const initSyncManager = async store => {
   if (typeof window !== 'undefined') {
     const onOnline = () => {
       const userId = getCurrentUserId();
-      console.log('[SYNC] online event fired, userId:', userId);
       if (!userId) return;
 
       if (reconnectTimer) clearTimeout(reconnectTimer);
       reconnectTimer = setTimeout(() => {
-        console.log('[SYNC] calling syncPendingSessions after reconnect delay');
         syncPendingSessions();
       }, RECONNECT_DELAY);
     };
@@ -400,7 +396,7 @@ export const syncNow = async () => {
   await syncPendingSessions();
 };
 
-export const retryFailedItem = async (itemId) => {
+export const retryFailedItem = async itemId => {
   if (!storeRef || !itemId) return false;
   const userId = getCurrentUserId();
   if (!userId) return false;
@@ -448,7 +444,7 @@ export const retryFailedItem = async (itemId) => {
   return false;
 };
 
-export const removeFailedItem = async (itemId) => {
+export const removeFailedItem = async itemId => {
   const userId = storeRef?.getState()?.Auth?.session?.user?.id;
   if (!userId || !itemId) return false;
 
@@ -461,7 +457,11 @@ export const removeFailedItem = async (itemId) => {
       // Cascade hapus semua yg terkait
       const bills = await db.getAllFromIndex(STORES.orderBills, 'origin_session_sync_id', itemId);
       for (const b of bills) await db.delete(STORES.orderBills, b.sync_id);
-      const payments = await db.getAllFromIndex(STORES.orderPayments, 'paid_session_sync_id', itemId);
+      const payments = await db.getAllFromIndex(
+        STORES.orderPayments,
+        'paid_session_sync_id',
+        itemId
+      );
       for (const p of payments) await db.delete(STORES.orderPayments, p.sync_id);
       const topups = await db.getAllFromIndex(STORES.topups, 'session_sync_id', itemId);
       for (const t of topups) await db.delete(STORES.topups, t.sync_id);
@@ -502,8 +502,4 @@ export const removeFailedItem = async (itemId) => {
   return false;
 };
 
-export {
-  getSyncingState,
-  startHeartbeat,
-  stopHeartbeat,
-};
+export { getSyncingState, startHeartbeat, stopHeartbeat };

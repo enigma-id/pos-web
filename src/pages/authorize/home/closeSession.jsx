@@ -46,7 +46,6 @@ const CloseSection = () => {
 
   const doEndSession = () => {
     const payload = { cash_finished: Number(cash) };
-    console.log('[CLOSE SESSION] end payload:', payload, 'sessionSummary:', sessionSummary);
     end(payload);
   };
 
@@ -187,7 +186,6 @@ const CloseSection = () => {
   };
 
   const data = sessionSummary;
-  console.log('[CLOSE SESSION] data:', data);
 
   return (
     <div className="border-base-200 bg-base-100 flex h-screen flex-col border-l">

@@ -25,10 +25,7 @@ import { resetCart } from '../../cart/slice';
 import { store } from '../../store';
 import useCatalog from '../../catalog/hooks';
 import { $failure } from '../../form/action';
-import {
-  createOfflineSession,
-  closeSession,
-} from '../../offline/queue';
+import { createOfflineSession, closeSession } from '../../offline/queue';
 import { syncPendingSessions } from '../../offline/syncManager';
 import { getCache, setCache } from '../../../utils/cache';
 
@@ -38,7 +35,7 @@ import { getCache, setCache } from '../../../utils/cache';
  * Update sessionSummary di Redux secara incremental.
  * Panggil abis save bill, pay, topup — gausah query IndexedDB.
  */
-export const updateSessionSummary = (newData) => {
+export const updateSessionSummary = newData => {
   const state = store.getState();
   const existing = state?.Offline?.sessionSummary || {};
 
@@ -56,9 +53,11 @@ export const updateSessionSummary = (newData) => {
   };
 
   const itemsTotal = (newData.items || []).reduce((s, i) => {
-    const itemTotal = Number(i.unit_price || 0) * Number(i.quantity || 0);
-    const addonsTotal = (i.addons || []).reduce((asum, a) =>
-      asum + Number(a.unit_price || 0) * Number(a.quantity || 0), 0);
+    const itemTotal = Number(i.unit_nett ?? 0) * Number(i.quantity || 0);
+    const addonsTotal = (i.addons || []).reduce(
+      (asum, a) => asum + Number(a.unit_nett ?? 0) * Number(a.quantity || 0),
+      0
+    );
     return s + itemTotal + addonsTotal;
   }, 0);
 
@@ -66,27 +65,30 @@ export const updateSessionSummary = (newData) => {
     const serviceCharge = newData.serviceChargeValue || newData.service_charge_value || 0;
     const discount = newData.discountValue || newData.discount_value || 0;
     const totalBill = itemsTotal - discount + serviceCharge;
-    summary.summary.sales.outstanding_bill = (summary.summary.sales.outstanding_bill || 0) + totalBill;
+    summary.summary.sales.outstanding_bill =
+      (summary.summary.sales.outstanding_bill || 0) + totalBill;
     summary.orders.push({
       sync_id: newData.sync_id,
       status: 'pending',
       items: newData.items,
-      bill_name: newData.billName || newData.bill_name,
-      totalPayment: 0,
+      bill_name: newData.bill_name,
+      total_payment: 0,
     });
   } else if (newData.type === 'payment') {
-    const totalPayment = newData.totalPayment || newData.total_payment || 0;
-    const serviceCharge = newData.serviceChargeValue || newData.service_charge_value || 0;
-    const discount = newData.discountValue || newData.discount_value || 0;
+    const totalPayment = newData.total_payment || 0;
+    const serviceCharge = newData.service_charge_value || 0;
+    const discount = newData.discount_value || 0;
     const itemsTotal = totalPayment - serviceCharge + discount;
     summary.summary.sales.total_sales = (summary.summary.sales.total_sales || 0) + itemsTotal;
-    summary.summary.sales.total_discount = (summary.summary.sales.total_discount || 0) + (newData.discountValue || newData.discount_value || 0);
-    summary.summary.sales.total_service = (summary.summary.sales.total_service || 0) + serviceCharge;
+    summary.summary.sales.total_discount = (summary.summary.sales.total_discount || 0) + discount;
+    summary.summary.sales.total_service =
+      (summary.summary.sales.total_service || 0) + serviceCharge;
     summary.summary.sales.grand_total = (summary.summary.sales.grand_total || 0) + totalPayment;
-    summary.summary.sales.total_after_discount = (summary.summary.sales.total_after_discount || 0) + (totalPayment - serviceCharge);
+    summary.summary.sales.total_after_discount =
+      (summary.summary.sales.total_after_discount || 0) + (totalPayment - serviceCharge);
     summary.summary.cash.expected_cash = (summary.summary.cash.expected_cash || 0) + totalPayment;
 
-    const pmId = newData.paymentMethodId || newData.payment_method_id || 0;
+    const pmId = newData.payment_method_id || 0;
     const pmIdx = summary.summary.payment_methods.findIndex(p => p.payment_method_id === pmId);
     if (pmIdx >= 0) {
       summary.summary.payment_methods[pmIdx] = {
@@ -99,7 +101,7 @@ export const updateSessionSummary = (newData) => {
         payment_method_id: pmId,
         total_paid: totalPayment,
         count: 1,
-        name: newData.paymentMethodName || newData.payment_method_name || (pmId === 0 ? 'Cash' : `#${pmId}`),
+        name: newData.payment_method_name || (pmId === 0 ? 'Cash' : `#${pmId}`),
       });
     }
 
@@ -107,8 +109,8 @@ export const updateSessionSummary = (newData) => {
       sync_id: newData.sync_id,
       status: 'completed',
       items: newData.items,
-      bill_name: newData.billName || newData.bill_name,
-      totalPayment,
+      bill_name: newData.bill_name,
+      total_payment: totalPayment,
     });
   } else if (newData.type === 'topup') {
     const nominal = newData.nominal || 0;
@@ -193,19 +195,28 @@ const useSession = () => {
       dispatch(resetCart());
 
       // Set sessionSummary biar bisa dipake close session nanti
-      dispatch(setSessionSummary({
-        id: doc.sync_id,
-        started_at: doc.open_at || doc.createdAt,
-        cash_started: doc.cash_started,
-        cashier: { name: authUser?.name || '-' },
-        summary: {
-          sales: { total_sales: 0, total_discount: 0, total_service: 0, grand_total: 0, outstanding_bill: 0, outstanding_bill_payment: 0 },
-          cash: { expected_cash: doc.cash_started || 0, topup_cash: 0 },
-          payment_methods: [],
-          topups: [],
-        },
-        orders: [],
-      }));
+      dispatch(
+        setSessionSummary({
+          id: doc.sync_id,
+          started_at: doc.open_at || doc.createdAt,
+          cash_started: doc.cash_started,
+          cashier: { name: authUser?.name || '-' },
+          summary: {
+            sales: {
+              total_sales: 0,
+              total_discount: 0,
+              total_service: 0,
+              grand_total: 0,
+              outstanding_bill: 0,
+              outstanding_bill_payment: 0,
+            },
+            cash: { expected_cash: doc.cash_started || 0, topup_cash: 0 },
+            payment_methods: [],
+            topups: [],
+          },
+          orders: [],
+        })
+      );
 
       // Set pendingCount incremental
       dispatch(setPendingCount(1));
@@ -248,7 +259,6 @@ const useSession = () => {
   };
 
   const end = async data => {
-
     if (!networkOk) {
       // ===== OFFLINE END =====
       const sessionId = store.getState()?.Offline?.sessionSummary?.id || null;
@@ -327,7 +337,6 @@ const useSession = () => {
       return;
     }
 
-    console.log('[FETCH SUMMARY] calling /sales/session/summary');
     try {
       const res = await triggerSummary().unwrap();
       if (res?.data) {

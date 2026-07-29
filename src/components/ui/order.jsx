@@ -19,9 +19,9 @@ const OrderDetails = ({ data }) => {
       </div>
 
       <div className="border-base-200 border-b py-4">
-        {(data?.bill_name || data?.note) && (
+        {(data?.bill_name) && (
           <div className="mb-2 text-sm">
-            <span className="font-semibold">Bills name :</span> {data?.bill_name || data?.note}
+            <span className="font-semibold">Bills name :</span> {data?.bill_name || '-'}
           </div>
         )}
         <div className="mb-2 text-sm">
@@ -43,7 +43,7 @@ const OrderDetails = ({ data }) => {
         {data?.items?.map((item, i) => (
           <div key={i} className="pb-2">
             <div className="flex place-content-between place-items-center text-base">
-              <div>{item?.catalog?.name || item?.catalog_name || item?.description}</div>
+              <div>{item?.catalog_name || item?.catalog?.name || '-'} {/* catalog_name langsung, catalog?.name fallback struktural */}</div>
               <div>
                 {/* {item?.discount_value > 0 && (
                   <span className="text-base-300 me-2 text-xs line-through">
@@ -66,7 +66,7 @@ const OrderDetails = ({ data }) => {
                 <div key={i} className="flex place-content-between place-items-center text-base">
                   <div className="text-xs font-thin">
                     <span>
-                      + {addon?.catalog_name}{' '}
+                      + {addon?.catalog_name || '-'}{' '}
                       {addon?.quantity > 0 ? `(${addon?.quantity} x ${currencyFormat(addon?.unit_nett || 0)})` : ""}
                     </span>
                   </div>
@@ -98,7 +98,7 @@ const OrderDetails = ({ data }) => {
           <>
             {data?.category_discounts?.map((d, i) => (
               <div key={i} className="flex place-content-between place-items-center text-base">
-                <div>Discount Category {catNames[d?.category_id] || d?.category?.name || d?.name || ''}</div>
+                <div>Discount Category {catNames[d?.category_id] || d?.category?.name || '-'}</div>
                 <div>-{currencyFormat(d?.total_discount || d?.discount_value)}</div>
               </div>
             ))}

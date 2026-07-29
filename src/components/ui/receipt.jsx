@@ -5,8 +5,6 @@ import { currencyFormat, dateFormat } from '../../utils/common';
 const Receipt = ({ data }) => {
   if (!data) return;
 
-  console.log(data, '=============================');
-
   return (
     <div className="sheet page-break" style={{ padding: '10px' }}>
       <div
@@ -22,8 +20,12 @@ const Receipt = ({ data }) => {
 
       <div style={{ paddingBottom: 5, marginBottom: 5 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>{dateFormat(data?.paid_at || data?.ordered_at || data?.created_at, 'DD-MM-YYYY')}</p>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>{dateFormat(data?.paid_at || data?.ordered_at || data?.created_at, 'HH:mm')}</p>
+          <p style={{ marginBlock: 2, fontSize: 11 }}>
+            {dateFormat(data?.paid_at || data?.created_at, 'DD-MM-YYYY')}
+          </p>
+          <p style={{ marginBlock: 2, fontSize: 11 }}>
+            {dateFormat(data?.paid_at || data?.created_at, 'HH:mm')}
+          </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p style={{ marginBlock: 2, fontSize: 11 }}>Transaction</p>
@@ -35,9 +37,7 @@ const Receipt = ({ data }) => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p style={{ marginBlock: 2, fontSize: 11 }}>Cashier</p>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>
-            {data?.session?.cashier?.name || data?.session?.name}
-          </p>
+          <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.session?.cashier?.name || '-'}</p>
         </div>
 
         {data?.bill_name && (
@@ -76,7 +76,8 @@ const Receipt = ({ data }) => {
           <div style={{ display: 'flex', alignItems: '', justifyContent: 'space-between' }}>
             <div>
               <p style={{ marginBlock: 2, fontSize: 11, textTransform: 'capitalize' }}>
-                {item?.catalog?.name || item?.catalog_name}
+                {item?.catalog_name || item?.catalog?.name || '-'}{' '}
+                {/* catalog_name langsung, catalog?.name fallback struktural */}
               </p>
               <p style={{ marginBlock: 2, fontSize: 9 }}>
                 {item?.quantity} x {currencyFormat(item?.unit_nett, false)}
@@ -92,18 +93,14 @@ const Receipt = ({ data }) => {
               style={{ display: 'flex', alignItems: '', justifyContent: 'space-between' }}
             >
               <p style={{ marginBlock: 2, fontSize: 9, textTransform: 'capitalize' }}>
-                + {addon?.catalog?.name || addon?.catalog_name}{' '}
+                + {addon?.catalog_name || '-'}{' '}
+                {/* catalog_name langsung, catalog?.name fallback struktural */}{' '}
                 {addon?.addon_group?.type === 'options'
                   ? ''
                   : `${addon?.quantity > 0 ? `(${addon?.quantity} x ${currencyFormat(addon?.unit_nett)})` : ''}`}
               </p>
               <p style={{ marginBlock: 2, fontSize: 9 }}>
-                {currencyFormat(
-                  addon?.quantity > 0
-                    ? addon?.quantity * addon?.unit_nett
-                    : item?.quantity * addon?.unit_nett,
-                  false
-                )}
+                {currencyFormat(addon?.quantity * addon?.unit_nett, false)}
               </p>
             </div>
           ))}
@@ -133,11 +130,9 @@ const Receipt = ({ data }) => {
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
             >
               <p style={{ marginBlock: 2, fontSize: 11 }}>
-                Discount Category {d?.category?.name || d?.name || ''}
+                Discount Category {d?.category?.name || '-'}
               </p>
-              <p style={{ marginBlock: 2, fontSize: 11 }}>
-                -{currencyFormat(d?.total_discount || d?.discount_value)}
-              </p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>-{currencyFormat(d?.total_discount)}</p>
             </div>
           ))}
         {data?.discount_value > 0 && (

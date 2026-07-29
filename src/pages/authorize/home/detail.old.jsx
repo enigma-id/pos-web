@@ -21,7 +21,7 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
     setCatalogData({
       ...catalogDetail,
       name: catalogDetail.name || catalog?.name || '',
-      unit_price: catalogDetail.unit_price || catalog?.unit_price || 0,
+      unit_nett: catalogDetail.unit_nett || catalog?.unit_nett || 0,
     });
 
     if (isEditMode && existingItem) {
@@ -134,16 +134,16 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
   };
 
   const calculateSubtotal = () => {
-    let total = quantity * (catalogData?.unit_price || 0);
+    let total = quantity * (catalogData?.unit_nett || 0);
 
     additionals.forEach(add => {
       add.childs?.forEach(child => {
         if (add.type === 'quantity' && child?.quantity > 0) {
-          total += quantity * child?.quantity * (child?.unit_price || 0);
+          total += quantity * child?.quantity * (child?.unit_nett || 0);
         }
 
         if (add.type !== 'quantity' && child.selected) {
-          total += quantity * (child.unit_price || 0);
+          total += quantity * (child.unit_nett || 0);
         }
       });
     });
@@ -160,7 +160,7 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
               <>
                 <h2 className="card-title !text-xl">{catalogData?.name}</h2>
                 <p className="text-primary text-end text-xl font-semibold">
-                  {currencyFormat(catalogData?.unit_price)}
+                  {currencyFormat(catalogData?.unit_nett)}
                 </p>
               </>
             )}
@@ -179,12 +179,12 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
                 <div className="mb-3">
                   <Input
                     label="Catalog Price"
-                    value={currencyFormat(catalogData?.unit_price)}
+                    value={currencyFormat(catalogData?.unit_nett)}
                     onChange={e => {
                       const raw = e.target.value.replace(/[^0-9]/g, '');
                       setCatalogData(prev => ({
                         ...prev,
-                        unit_price: raw,
+                        unit_nett: raw,
                       }));
                     }}
                   />
@@ -226,8 +226,8 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
 
                               <div className="flex items-center">
                                 <span className="text-primary me-3 text-sm">
-                                  {child?.unit_price
-                                    ? `@ ${currencyFormat(child?.unit_price)}`
+                                  {child?.unit_nett
+                                    ? `@ ${currencyFormat(child?.unit_nett)}`
                                     : 'Free'}
                                 </span>
                                 <QuantityStepper
@@ -253,8 +253,8 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
 
                                 <div>
                                   <span className="text-primary me-3 text-sm">
-                                    {child?.unit_price
-                                      ? `@ ${currencyFormat(child?.unit_price)}`
+                                    {child?.unit_nett
+                                      ? `@ ${currencyFormat(child?.unit_nett)}`
                                       : 'Free'}
                                   </span>
                                   <input
@@ -283,8 +283,8 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
                                 <span>{child?.name}</span>
                                 <div>
                                   <span className="text-primary me-3 text-sm">
-                                    {child?.unit_price
-                                      ? `@ ${currencyFormat(child?.unit_price)}`
+                                    {child?.unit_nett
+                                      ? `@ ${currencyFormat(child?.unit_nett)}`
                                       : 'Free'}
                                   </span>
                                   <input
@@ -322,8 +322,8 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
 
                                   <div className="flex items-center">
                                     <span className="text-primary me-3 text-sm">
-                                      {child?.unit_price
-                                        ? `@ ${currencyFormat(child?.unit_price)}`
+                                      {child?.unit_nett
+                                        ? `@ ${currencyFormat(child?.unit_nett)}`
                                         : 'Free'}
                                     </span>
 
@@ -349,8 +349,8 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
 
                                 <div>
                                   <span className="text-primary me-3 text-sm">
-                                    {child?.unit_price
-                                      ? `@ ${currencyFormat(child?.unit_price)}`
+                                    {child?.unit_nett
+                                      ? `@ ${currencyFormat(child?.unit_nett)}`
                                       : 'Free'}
                                   </span>
                                 </div>
@@ -373,8 +373,8 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
                                 <span>{child?.name}</span>
                                 <div>
                                   <span className="text-primary me-3 text-sm">
-                                    {child?.unit_price
-                                      ? `@ ${currencyFormat(child?.unit_price)}`
+                                    {child?.unit_nett
+                                      ? `@ ${currencyFormat(child?.unit_nett)}`
                                       : 'Free'}
                                   </span>
                                 </div>
