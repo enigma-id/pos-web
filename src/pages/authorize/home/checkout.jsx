@@ -437,6 +437,7 @@ const CheckoutScreen = () => {
         paymentRef: selectedMethod?.provider === 'cash' ? '' : paymentRef,
         totalPayment: completedOrder.total_payment,
         paidAt: now,
+        created_at: now,
         discountCategories: discount_categories || [],
         isPayment: true,
       });
@@ -1020,7 +1021,7 @@ const CheckoutScreen = () => {
     ) {
       const serverData = showResult?.data?.data || {};
       const metaRef = billPayloadMetaRef.current;
-      const paidAt = metaRef?.created_at || new Date().toISOString();
+      const paidAt = new Date().toISOString();
       openModal(
         <SuccessModal
           data={{
@@ -1032,6 +1033,7 @@ const CheckoutScreen = () => {
               serverData?.service_charge_value || metaRef?.service_charge_value || 0,
             discount_value: serverData?.discount_value || metaRef?.discount_value || 0,
             paid_at: paidAt,
+            created_at: paidAt,
             sales_channel:
               serverData?.sales_channel ||
               (Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null),
