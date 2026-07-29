@@ -286,8 +286,9 @@ const Cart = ({ onUpdate }) => {
           data={{
             bill_name: billName,
             code: billData.code || savedCode || '',
-            paid_at: billData.created_at || savedTotals.created_at || new Date().toISOString(),
-            created_at: billData.created_at || savedTotals.created_at || new Date().toISOString(),
+            // created_at dan paid_at kenapa ini now - karena kebutuhan print last update print
+            paid_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
             total_charges:
               billData.total_charges || itemsTotal + (CartState?.meta?.service_charge_value || 0),
             total_payment: 0,

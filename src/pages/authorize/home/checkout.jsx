@@ -774,7 +774,9 @@ const CheckoutScreen = () => {
             total_charges: itemsTotal + metaSvc - metaDisc,
             service_charge_value: metaSvc,
             discount_value: metaDisc,
-            paid_at: metaRef?.created_at || new Date().toISOString(),
+            // created_at dan paid_at kenapa ini now - karena kebutuhan print last update print
+            created_at: new Date().toDateString(),
+            paid_at: new Date().toISOString(),
             sales_channel:
               serverData?.sales_channel ||
               (Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null),
@@ -1140,8 +1142,7 @@ const CheckoutScreen = () => {
                         </div>
                       </div>
                       <div className="pb-2 text-xs">
-                        {item?.quantity} x{' '}
-                        {currencyFormat(item?.unit_nett - item?.discount_amount)}
+                        {item?.quantity} x {currencyFormat(item?.unit_nett - item?.discount_amount)}
                         {item?.discount_amount > 0 && (
                           <span className="text-base-300 ms-2 line-through">
                             {currencyFormat(item?.unit_nett)}
