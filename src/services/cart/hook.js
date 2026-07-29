@@ -307,13 +307,6 @@ const useCart = catalog_id => {
     try {
       const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
       if (isOffline || apiReachable === false) {
-        console.log('[SELECTED BILL OFFLINE] data:', JSON.stringify(data, null, 2));
-        console.log('[SELECTED BILL OFFLINE] items:', JSON.stringify(data?.items, null, 2));
-        if (data?.items) {
-          data.items.forEach((item, idx) => {
-            console.log('[SELECTED BILL OFFLINE] item[' + idx + '] addons:', JSON.stringify(item.addons));
-          });
-        }
         billItems({ items: data?.items, category_discounts: data?.category_discounts });
         dispatch(selectedBill(data));
         showSetDiscount(data);
@@ -322,13 +315,6 @@ const useCart = catalog_id => {
 
       const res = await showOrder({ id: data?.id }).unwrap();
       if (res?.message === 'success') {
-        console.log('[SELECTED BILL ONLINE] res.data:', JSON.stringify(res?.data, null, 2));
-        console.log('[SELECTED BILL ONLINE] items:', JSON.stringify(res?.data?.items, null, 2));
-        if (res?.data?.items) {
-          res.data.items.forEach((item, idx) => {
-            console.log('[SELECTED BILL ONLINE] item[' + idx + '] addons:', JSON.stringify(item.addons));
-          });
-        }
         billItems({ items: res?.data?.items, category_discounts: res?.data?.category_discounts });
 
         dispatch(selectedBill(res?.data));
