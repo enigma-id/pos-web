@@ -193,10 +193,11 @@ function convertApiOrderToCartItem(item) {
       name: add.catalog_name || add.catalog?.name || '',
       unit_nett: add.unit_nett || 0,
       selected: true,
+      // options/checkbox → qty=1, quantity → add.quantity / item.quantity
+      quantity: group.type === 'quantity' && add.quantity > 0
+        ? (item.quantity > 0 ? add.quantity / item.quantity : 0)
+        : 1,
     };
-    if (group.type === 'quantity') {
-      grpEntry.quantity = add.quantity > 0 ? add.quantity / item.quantity : 0;
-    }
     groupedAdditionals[addonId].items.push(grpEntry);
   }
 
