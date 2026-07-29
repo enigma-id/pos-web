@@ -105,11 +105,11 @@ const Cart = ({ onUpdate }) => {
       quantity: item.quantity,
       unit_price: Number(item.unit_price) || Number(item.unit_nett) || 0,
       addons: (item.additionals_flat || []).map(a => ({
-        addon_group_id: a.addon_group_id,
+        addon_group_id: a.addon_group?.id,
         addon_item_id: a.addon_item_id,
         catalog_name: a.name || '',
         unit_price: a.unit_price || 0,
-        quantity: Number(a.quantity || 1) * Number(item.quantity),
+        ...(a?.addon_group?.type === 'quantity' ? { quantity: Number(a.quantity || 1) * Number(item.quantity) } : {}),
       })),
       ...(item.is_custom ? { is_custom: true } : {}),
     }));
@@ -306,28 +306,29 @@ const Cart = ({ onUpdate }) => {
     const userId = session?.user?.id;
 
     if (isOffline) {
+      const allItems = [...(CartState?.items?.list || []), ...(CartState?.items?.bill || [])];
+      const orderItems = allItems.map(item => ({
+        catalog_id: item.catalog_id || item.id,
+        catalog_name: item.name || '',
+        quantity: item.quantity,
+        unit_price: Number(item.unit_price) || Number(item.unit_nett) || 0,
+        addons: (item.additionals_flat || []).map(a => ({
+          addon_group_id: a.addon_group?.id,
+          addon_item_id: a.addon_item_id,
+          catalog_name: a.name || '',
+          unit_price: a.unit_price || 0,
+          ...(a?.addon_group?.type === 'quantity' ? { quantity: a.quantity ?? 1 } : {}),
+        })),
+        ...(item.is_custom ? { is_custom: true } : {}),
+      }));
+
+      const orderId = uuidv4();
+      const now = new Date();
+      const code = `${now.toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
+
       // Re-save existing offline bill
+      const originId = CartState?.bill?.sync_id || null;
       if (CartState?.bill?.sync_id) {
-        const allItems = [...(CartState?.items?.list || []), ...(CartState?.items?.bill || [])];
-        const orderItems = allItems.map(item => ({
-          catalog_id: item.catalog_id || item.id,
-          catalog_name: item.name || '',
-          quantity: item.quantity,
-          unit_price: Number(item.unit_price) || Number(item.unit_nett) || 0,
-          addons: (item.additionals_flat || []).map(a => ({
-            addon_group_id: a.addon_group_id,
-            addon_item_id: a.addon_item_id,
-            catalog_name: a.name || '',
-            unit_price: a.unit_price || 0,
-            quantity: Number(a.quantity || 1) * Number(item.quantity),
-          })),
-          ...(item.is_custom ? { is_custom: true } : {}),
-        }));
-
-        const orderId = uuidv4();
-        const now = new Date();
-        const code = `${now.toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
-
         try {
           await createOrderBill(
             {
@@ -368,7 +369,7 @@ const Cart = ({ onUpdate }) => {
         }
       }
 
-      dispatch(setPendingCount((offlineState?.pendingCount || 0) + 1));
+      dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
       dispatch(setWarning('Bill saved offline.'));
 
       // Push ke localStorage bills cache (pake setCache biar format {data: [...]})
@@ -406,7 +407,6 @@ const Cart = ({ onUpdate }) => {
             : null,
           payment_ref: '',
           session: { cashier: { name: session?.user?.name || '' } },
-          is_offline_mode: true,
           is_offline_mode: true,
           needs_sync: true,
         });

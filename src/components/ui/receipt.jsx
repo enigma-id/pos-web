@@ -76,7 +76,7 @@ const Receipt = ({ data }) => {
           <div style={{ display: 'flex', alignItems: '', justifyContent: 'space-between' }}>
             <div>
               <p style={{ marginBlock: 2, fontSize: 11, textTransform: 'capitalize' }}>
-                {item?.catalog?.name || item?.catalog_name || item?.description}
+                {item?.catalog?.name || item?.catalog_name}
               </p>
               <p style={{ marginBlock: 2, fontSize: 9 }}>
                 {item?.quantity} x {currencyFormat(item?.unit_nett, false)}
@@ -92,8 +92,8 @@ const Receipt = ({ data }) => {
               style={{ display: 'flex', alignItems: '', justifyContent: 'space-between' }}
             >
               <p style={{ marginBlock: 2, fontSize: 9, textTransform: 'capitalize' }}>
-                + {addon?.catalog_name}{' '}
-                {addon?.addon?.type === 'options'
+                + {addon?.catalog?.name || addon?.catalog_name}{' '}
+                {addon?.addon_group?.type === 'options'
                   ? ''
                   : `${addon?.quantity > 0 ? `(${addon?.quantity} x ${currencyFormat(addon?.unit_nett)})` : ''}`}
               </p>

@@ -10,16 +10,14 @@ function flattenAdditionals(additionals = []) {
   const result = [];
 
   additionals.forEach(add => {
-    const { id: addon_group_id, type, name: addon_group_name, items = [] } = add;
+    const { id: addonGroupId, type, name: addonGroupName, items = [] } = add;
 
     items.forEach(child => {
       const isSelected = type === 'quantity' ? (child.quantity || 0) > 0 : !!child.selected;
 
       if (isSelected) {
         const entry = {
-          addon_group_id,
-          addon_group_name: addon_group_name || '',
-          addon_group_type: type || '',
+          addon_group: { id: addonGroupId, name: addonGroupName || '', type: type || '' },
           addon_item_id: child.catalog_id ?? child.addon_item_id ?? child.id,
           name: child.catalog_name ?? child.name,
           unit_price: Number(child.unit_price) || 0,
@@ -172,15 +170,16 @@ function convertApiOrderToCartItem(item) {
           items: [],
         };
       }
-      const qty = add.quantity > 0 ? add.quantity / item.quantity : 1;
-      groupedAdditionals._flat_addons_.items.push({
+      const itemQty = add.quantity > 0 ? add.quantity / item.quantity : 1;
+      const flatEntry = {
         id: add.id || add.catalog_id,
         catalog_id: add.catalog_id,
         name: add.catalog_name || '',
         unit_price: add.unit_nett || add.unit_price || 0,
-        quantity: qty,
         selected: true,
-      });
+      };
+      // Flat addons have no group type — assume options (no quantity)
+      groupedAdditionals._flat_addons_.items.push(flatEntry);
       continue;
     }
 
@@ -193,29 +192,42 @@ function convertApiOrderToCartItem(item) {
       };
     }
 
-    const qty = add.quantity > 0 ? add.quantity / item.quantity : 0;
     const addCatalog = add.catalog || {};
-
-    groupedAdditionals[addonId].items.push({
+    const groupedType = group.type || add.addon_type || '';
+    const grpEntry = {
       id: add.id,
       catalog_id: addCatalog.id || add.catalog_id,
       name: addCatalog.name || add.name || add.catalog_name || '',
       unit_price: addCatalog.unit_price || add.unit_nett || add.unit_price || 0,
-      quantity: qty,
       selected: true,
-    });
+    };
+    if (groupedType === 'quantity') {
+      grpEntry.quantity = add.quantity > 0 ? add.quantity / item.quantity : 0;
+    }
+    groupedAdditionals[addonId].items.push(grpEntry);
   }
 
   const additionalsGrouped = Object.values(groupedAdditionals);
 
-  const additionalsFlat = (item.addons || []).map(add => ({
-    id: add.id,
-    addon_group_id: add.addon?.id || add.addon_group_id || add.id,
-    addon_item_id: add.catalog?.id || add.catalog_id || add.addon_item_id,
-    name: add.catalog?.name || add.name || add.catalog_name || '',
-    unit_price: Number(add.catalog?.unit_price) || Number(add.unit_price) || 0,
-    quantity: add.quantity > 0 ? add.quantity / item.quantity : 1,
-  }));
+  const additionalsFlat = (item.addons || []).map(add => {
+    const addonGroup = add.addon_group || add.addon || {};
+    const grpType = addonGroup.type || add.addon_type || '';
+    const entry = {
+      id: add.id,
+      addon_group: {
+        id: addonGroup.id || add.addon_group_id || add.id,
+        name: addonGroup.name || add.name || '',
+        type: grpType,
+      },
+      addon_item_id: add.catalog?.id || add.catalog_id || add.addon_item_id,
+      name: add.catalog?.name || add.name || add.catalog_name || '',
+      unit_price: Number(add.catalog?.unit_price) || Number(add.unit_price) || 0,
+    };
+    if (grpType === 'quantity') {
+      entry.quantity = add.quantity > 0 ? add.quantity / item.quantity : 1;
+    }
+    return entry;
+  });
 
   const additionalPerItem = calculateAdditionalsPerItem(additionalsGrouped);
   const subtotal = (item.unit_nett + additionalPerItem) * item.quantity;
@@ -278,73 +290,6 @@ function recalculateGrandTotalWithServiceCharge(state) {
   }
 
   state.meta.grand_total = baseGrandTotal + state.meta.service_charge_value;
-}
-
-// Convert offline queue item (open-bill) to cart item format
-function convertOfflineQueueItemToCartItem(item) {
-  const additionalsGrouped = {};
-  const rawAdditionals = Array.isArray(item?.addons) ? item.addons : [];
-
-  rawAdditionals.forEach(add => {
-    const addon = add.addon || {};
-    const addonId = addon.id || add.addon_group_id;
-    if (!addonId) return;
-
-    if (!additionalsGrouped[addonId]) {
-      additionalsGrouped[addonId] = {
-        id: addonId,
-        name: add.addon_group_name || addon.name || add.name || 'Add-ons',
-        type: add.addon_group_type || addon.type || add.addon_type || 'checkbox',
-        items: [],
-      };
-    }
-
-    const addCatalog = add.catalog || {};
-    additionalsGrouped[addonId].items.push({
-      id: add?.id,
-      catalog_id: addCatalog.id || add?.catalog_id,
-      name: addCatalog.name || add?.name || '',
-      unit_price: addCatalog.unit_price || add?.unit_nett || 0,
-      quantity: add?.quantity || 1,
-      selected: true,
-    });
-  });
-
-  const additionalsFlat = rawAdditionals.map(add => ({
-    addon_group_id: add.addon?.id || add?.addon_group_id,
-    addon_group_name: add.addon_group_name || add.addon?.name || add.name || '',
-    addon_group_type: add.addon_group_type || add.addon?.type || add.addon_type || '',
-    addon_item_id: add.catalog?.id || add?.addon_item_id,
-    name: add.catalog?.name || add.name || add.catalog_name || '',
-    unit_price: Number(add.catalog?.unit_price) || Number(add.unit_price) || 0,
-    quantity: add?.quantity || 1,
-  }));
-
-  const unitPrice = Number(item?.unit_price ?? item?.unit_nett) || 0;
-  const qty = Number(item?.quantity) || 1;
-
-  const additionalsGroupedArray = Object.values(additionalsGrouped);
-  const additionalPerItem = calculateAdditionalsPerItem(additionalsGroupedArray);
-  const subtotal = (unitPrice + additionalPerItem) * qty;
-
-  return {
-    id: item?.id || Date.now(),
-    catalog_id: item?.catalog_id,
-    category: item?.category || { id: item?.category_id || 0 },
-    name: item?.catalog_name || item?.name || 'Item',
-    unit_price: unitPrice,
-    quantity: qty,
-    subtotal,
-    final_total: subtotal,
-    is_custom: item?.is_custom || false,
-    is_vatable: item?.is_vatable || false,
-    addons: additionalsGroupedArray,
-    additionals_flat: additionalsFlat,
-    discount_amount: 0,
-    discount_percentage: 0,
-    from_bill: true,
-    is_offline_mode: true,
-  };
 }
 
 // Initial State
@@ -592,142 +537,64 @@ const cartSlice = createSlice({
 
     loadOfflineBill: (state, action) => {
       const order = action.payload;
-      // New shape: flat order from session blob (no wrapper)
-      // Old shape: { transaction_preview, body }
-      const isFlatOrder = order?.sync_id && !order?.transaction_preview && !order?.body;
+      const totalCharges =
+        order.total_payment ||
+        order.totalPayment ||
+        (order.items || []).reduce((sum, item) => {
+          const it = Number(item.unit_price || 0) * Number(item.quantity || 0);
+          const at = (item.addons || []).reduce((a, ad) => a + Number(ad.unit_price || 0) * Number(ad.quantity || 0), 0);
+          return sum + it + at;
+        }, 0) + Number(order.service_charge_value || order.serviceChargeValue || 0);
 
-      let preview, body;
-      if (isFlatOrder) {
-        // Compute total from items (since totalPayment = 0 for pending save-bills)
-        const computedTotal = (order.items || []).reduce((sum, item) => {
-          const itemTotal = Number(item.unit_price || 0) * Number(item.quantity || 0);
-          const addonsTotal = (item.addons || []).reduce(
-            (asum, a) => asum + Number(a.unit_price || 0) * Number(a.quantity || 0),
-            0
-          );
-          return sum + itemTotal + addonsTotal;
-        }, 0);
-        const totalCharges =
-          order.total_payment ||
-          order.totalPayment ||
-          computedTotal + Number(order.service_charge_value || order.serviceChargeValue || 0);
+      const previewItems = (order.items || []).map(item => ({
+        ...item,
+        catalog: { name: item.catalog_name || '', id: item.catalog_id },
+        unit_nett: item.unit_price,
+        discount_value: 0,
+        addons: (item.addons || []).map((a, idx) => {
+          const grpType = a.addon_group?.type || '';
+          const ae = {
+            addon_group: {
+              id: a.addon_group?.id || `oad-${idx}`,
+              name: a.addon_group?.name || 'Add-ons',
+              type: grpType,
+            },
+            catalog: { id: a.addon_item_id, name: a.catalog_name || '', unit_price: a.unit_price || 0 },
+            selected: true,
+          };
+          if (grpType === 'quantity') ae.quantity = a.quantity / item.quantity || 1;
+          return ae;
+        }),
+      }));
 
-        // Build preview directly from order fields
-        preview = {
-          id: order.sync_id,
-          bill_name: order.bill_name || order.billName || '',
-          total_charges: totalCharges,
-          total_bill: totalCharges,
-          discount_value: order.discount_value || order.discountValue || 0,
-          is_discount_percentage: (order.discount_percentage || order.discountPercentage || 0) > 0,
-          items: (order.items || []).map(item => ({
-            ...item,
-            catalog: { name: item.catalog_name || '', id: item.catalog_id },
-            unit_nett: item.unit_price,
-            discount_value: 0,
-            // Wrap flat addons so convertApiOrderToCartItem groups them with type 'checkbox'
-            addons: (item.addons || []).map((a, idx) => ({
-              addon_group_name: a.addon_group_name || '',
-              addon_group_type: a.addon_group_type || '',
-              addon: {
-                id: `oad-${idx}`,
-                name: a.addon_group_name || 'Add-ons',
-                type: a.addon_group_type || 'checkbox',
-              },
-              catalog: {
-                id: a.addon_item_id,
-                name: a.catalog_name || '',
-                unit_price: a.unit_price || 0,
-              },
-              quantity: a.quantity || 1,
-              selected: true,
-            })),
-          })),
-          membership:
-            order.membership_id || order.membershipId
-              ? { id: order.membership_id || order.membershipId }
-              : null,
-        };
-        body = { ...order, bill_name: order.bill_name || order.billName };
-      } else {
-        preview = order?.transaction_preview || {};
-        body = order?.body || {};
-      }
-
-      // Set bill metadata from preview, falling back to body
       state.bill = {
-        id: order?.sync_id || preview?.id,
-        bill_name: preview?.bill_name || body?.bill_name || '',
-        total_bill: preview?.total_charges || preview?.total_bill || 0,
-        membership:
-          preview?.membership || (body?.membership_id ? { id: body.membership_id } : null),
+        id: order?.sync_id || order?.id,
+        bill_name: order.bill_name || order.billName || '',
+        total_bill: totalCharges,
+        membership: order.membership_id || order.membershipId ? { id: order.membership_id || order.membershipId } : null,
         is_offline_mode: true,
         sync_id: order?.sync_id || order?.id,
-        // BARU: untuk deteksi cross-session & hitung sisa split
-        origin_session_sync_id:
-          order.origin_session_sync_id ||
-          order.originSessionSyncId ||
-          body?.origin_session_sync_id ||
-          body?.originSessionSyncId ||
-          order._sessionData?.sync_id ||
-          null,
-        originalItems:
-          order.original_items ||
-          order.originalItems ||
-          body?.original_items ||
-          body?.originalItems ||
-          null,
-        itemSnapshot: (order.items || body?.items || preview?.items || []).map(i => ({
-          catalog_id: i.catalog_id || i.catalog?.id,
-          quantity: i.quantity || 0,
-        })),
+        origin_session_sync_id: order.origin_session_sync_id || order.originSessionSyncId || null,
+        originalItems: order.original_items || order.originalItems || null,
+        itemSnapshot: (order.items || []).map(i => ({ catalog_id: i.catalog_id || i.catalog?.id, quantity: i.quantity || 0 })),
       };
 
-      // Reset cart items
       state.items.list = [];
-      state.items.bill = [];
+      state.items.bill = previewItems.map(item => convertApiOrderToCartItem(item));
+      state.bill.items = order.items || [];
+      state.items.count = 0;
 
-      let parsedBillItems = [];
-
-      // Use items from transaction_preview if available (they are in Order Item format)
-      if (Array.isArray(preview?.items) && preview.items.length > 0) {
-        parsedBillItems = preview.items.map(item => convertApiOrderToCartItem(item));
-        state.items.bill = parsedBillItems;
-      } else {
-        // Fallback to body items (raw format)
-        const rawItems = Array.isArray(body?.items) ? body.items : [];
-        parsedBillItems = rawItems.map(item => convertOfflineQueueItemToCartItem(item));
-        state.items.bill = parsedBillItems;
+      if (order.membership_id || order.membershipId) {
+        state.meta.customer = { id: order.membership_id || order.membershipId };
       }
 
-      // Save source items so Reset/restore works
-      state.bill.items = preview?.items || body?.items || [];
-
-      state.items.count = 0; // bill items don't count as new items
-
-      // Set customer
-      if (preview?.membership) {
-        state.meta.customer = preview.membership;
-      } else if (body?.membership_id) {
-        state.meta.customer = { id: body.membership_id };
+      const isPer = !!(order.discount_percentage || order.discountPercentage || 0);
+      const dVal = order.discount_value || order.discountValue || 0;
+      if (dVal > 0) {
+        state.discount.cart = { type: isPer ? 'percentage' : 'nominal', value: dVal, amount: 0 };
       }
 
-      // Apply cart discount
-      const isPercentage = preview?.is_discount_percentage || body?.discount_percentage > 0;
-      const discountVal =
-        preview?.discount_value || body?.discount_percentage || body?.discount_value || 0;
-
-      if (discountVal > 0) {
-        state.discount.cart = {
-          type: isPercentage ? 'percentage' : 'nominal',
-          value: discountVal,
-          amount: 0,
-        };
-      }
-
-      // Extract categories and recalculate
-      const allItems = [...state.items.list, ...state.items.bill];
-      state.discount.category = extractUniqueCategories(allItems);
+      state.discount.category = extractUniqueCategories([...state.items.list, ...state.items.bill]);
       recalculateTotals(state);
     },
   },

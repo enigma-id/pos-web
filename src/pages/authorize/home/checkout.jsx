@@ -167,9 +167,10 @@ const CheckoutScreen = () => {
 
       if (item?.additionals_flat?.length > 0) {
         base.addons = item?.additionals_flat?.map(add => ({
-          addon_group_id: add?.addon_group_id,
+          addon_group_id: add?.addon_group?.id,
           addon_item_id: add?.addon_item_id,
-          ...(add?.quantity ? { quantity: add.quantity } : {}),
+          // Only send quantity for type=quantity; addon_group.type set by slice
+          ...(add?.addon_group?.type === 'quantity' ? { quantity: add?.quantity ?? 1 } : {}),
         }));
       }
 
@@ -276,13 +277,11 @@ const CheckoutScreen = () => {
         quantity: item.quantity,
         unit_price: Number(item.unit_price) || Number(item.unit_nett) || 0,
         addons: (item.additionals_flat || []).map(a => ({
-          addon_group_id: a.addon_group_id,
-          addon_group_name: a.addon_group_name || '',
-          addon_group_type: a.addon_group_type || '',
-          addon_item_id: a.addon_item_id,
+          addon_group: a.addon_group || { id: a.addon_group?.id },
+          addon_item_id: a.addon_item_id || a.id,
           catalog_name: a.name || '',
           unit_price: a.unit_price || 0,
-          quantity: Number(a.quantity || 1) * Number(item.quantity),
+          ...(a?.addon_group?.type === 'quantity' ? { quantity: Number(a.quantity || 1) * Number(item.quantity) } : {}),
         })),
         ...(item.is_custom ? { is_custom: true } : {}),
       }));
@@ -634,9 +633,10 @@ const CheckoutScreen = () => {
       }
       if (item?.additionals_flat?.length > 0) {
         base.addons = item?.additionals_flat?.map(add => ({
-          addon_group_id: add?.addon_group_id,
+          addon_group_id: add?.addon_group?.id,
           addon_item_id: add?.addon_item_id,
-          ...(add?.quantity ? { quantity: add.quantity } : {}),
+          // Only send quantity for type=quantity; addon_group.type set by slice
+          ...(add?.addon_group?.type === 'quantity' ? { quantity: add?.quantity ?? 1 } : {}),
         }));
       }
       if (item?.is_custom) {
@@ -696,13 +696,11 @@ const CheckoutScreen = () => {
       quantity: item.quantity,
       unit_price: Number(item.unit_price) || Number(item.unit_nett) || 0,
       addons: (item.additionals_flat || []).map(a => ({
-        addon_group_id: a.addon_group_id,
-        addon_group_name: a.addon_group_name || '',
-        addon_group_type: a.addon_group_type || '',
-        addon_item_id: a.addon_item_id,
+        addon_group: a.addon_group || { id: a.addon_group?.id },
+        addon_item_id: a.addon_item_id || a.id,
         catalog_name: a.name || '',
         unit_price: a.unit_price || 0,
-        quantity: Number(a.quantity || 1) * Number(item.quantity),
+        ...(a?.addon_group?.type === 'quantity' ? { quantity: Number(a.quantity || 1) * Number(item.quantity) } : {}),
       })),
       ...(item.is_custom ? { is_custom: true } : {}),
     }));
@@ -822,20 +820,31 @@ const CheckoutScreen = () => {
 
       // ⛔️ Skip stale effect triggers (showResult masih dari GET sebelumnya)
       isOfflineSaveRef.current = true;
+
+      // Compute total dari captured items (client-side, akurat)
+      const itemsTotal = orderItems.reduce((s, i) => {
+        const it = (i.unit_nett || 0) * (i.quantity || 0);
+        const at = (i.addons || []).reduce((a, ad) => a + (ad.unit_nett || 0) * (ad.quantity || 0), 0);
+        return s + it + at;
+      }, 0);
+
       const serverData = res?.data || res || {};
+      // metaRef captured BEFORE update()/reset() — masih akurat
       const metaRef = billPayloadMetaRef.current;
+      const metaSvc = metaRef?.service_charge_value || 0;
+      const metaDisc = metaRef?.discount_value || 0;
 
       openModal(
         <SuccessModal
           data={{
             ...serverData,
             items: orderItems,
+            subtotal_nett: itemsTotal,
             new_items: kitchenNewItemsRef.current || undefined,
             code: serverData?.code || metaRef?.code || '',
-            total_charges: serverData?.total_charges || metaRef?.total_charges || 0,
-            service_charge_value:
-              serverData?.service_charge_value || metaRef?.service_charge_value || 0,
-            discount_value: serverData?.discount_value || metaRef?.discount_value || 0,
+            total_charges: itemsTotal + metaSvc - metaDisc,
+            service_charge_value: metaSvc,
+            discount_value: metaDisc,
             paid_at: metaRef?.created_at || new Date().toISOString(),
             sales_channel:
               serverData?.sales_channel ||
