@@ -59,11 +59,25 @@ const BillScreen = () => {
     bill(search);
   }, [lastSyncTime]);
 
-  // Re-read cache when offline pending count changes
+  // Re-read cache ketika queue berubah (remove/sync dari PendingDrawer)
+  const isOnlineRef = React.useRef(isOnline);
+  const apiReachableRef = React.useRef(apiReachable);
+  isOnlineRef.current = isOnline;
+  apiReachableRef.current = apiReachable;
+
   React.useEffect(() => {
     if (isOnline && apiReachable !== false) return;
     bill();
   }, [offlinePendingCount]);
+
+  React.useEffect(() => {
+    const handler = () => {
+      if (isOnlineRef.current && apiReachableRef.current !== false) return;
+      bill();
+    };
+    window.addEventListener('pending-queue-changed', handler);
+    return () => window.removeEventListener('pending-queue-changed', handler);
+  }, []);
 
   // Search online → fetch; kosong → baca cache (online/offline sama)
   React.useEffect(() => {
@@ -91,7 +105,7 @@ const BillScreen = () => {
     if (!selected) return;
 
     // Offline → render from list data (already has items from /openbill)
-    if (selected?.from_queue || !isOnline || apiReachable === false) {
+    if (selected?.is_offline_mode || !isOnline || apiReachable === false) {
       setDetail(selected);
       return;
     }
@@ -169,7 +183,7 @@ const BillScreen = () => {
                   </div>
                   <div className="flex flex-col place-content-between">
                     <div className="text-base-300 text-end text-sm">
-                      {item?.needs_sync && (
+                      {item?.is_synced === false && (
                         <span className="badge badge-warning badge-xs me-1">pending sync</span>
                       )}
                       {item?.code}

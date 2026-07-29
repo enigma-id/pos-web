@@ -19,8 +19,8 @@ import {
   clearSessionSummary,
   setOfflineSessionEnded,
   clearOfflineSessionEnded,
-  setPendingCount,
 } from '../../offline/slice';
+import { triggerQueueRefresh } from '../../offline/usePendingQueueCount';
 import { resetCart } from '../../cart/slice';
 import { store } from '../../store';
 import useCatalog from '../../catalog/hooks';
@@ -219,7 +219,7 @@ const useSession = () => {
       );
 
       // Set pendingCount incremental
-      dispatch(setPendingCount(1));
+      triggerQueueRefresh();
 
       // Push ke shifts cache biar muncul di list offline
       try {
@@ -297,7 +297,7 @@ const useSession = () => {
       dispatch(invalidateSession());
       refreshCatalog();
       dispatch(resetCart());
-      dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
+      triggerQueueRefresh();
 
       // Push ke shifts cache
       try {

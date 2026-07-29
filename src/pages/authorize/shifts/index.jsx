@@ -96,12 +96,34 @@ const ShiftScreen = () => {
   }, [lastSyncTime]);
 
   // Data source: offline baca localStorage cache (kayak history)
+  const [offlineData, setOfflineData] = React.useState([]);
   const data = React.useMemo(() => {
     if (isOffline) {
-      return getCache('cache_shifts') || [];
+      return offlineData;
     }
     return sessionResult?.data?.data || [];
-  }, [isOffline, sessionResult, offlinePendingCount]);
+  }, [isOffline, sessionResult, offlineData]);
+
+  React.useEffect(() => {
+    if (isOffline) {
+      setOfflineData(getCache('cache_shifts') || []);
+    }
+  }, [isOffline, offlinePendingCount]);
+
+  // Re-read cache when queue changed (remove from PendingDrawer)
+  const isOnlineRef = React.useRef(isOnline);
+  const apiReachableRef = React.useRef(apiReachable);
+  isOnlineRef.current = isOnline;
+  apiReachableRef.current = apiReachable;
+  React.useEffect(() => {
+    const handler = () => {
+      if (!isOnlineRef.current || apiReachableRef.current === false) {
+        setOfflineData(getCache('cache_shifts') || []);
+      }
+    };
+    window.addEventListener('pending-queue-changed', handler);
+    return () => window.removeEventListener('pending-queue-changed', handler);
+  }, []);
 
   React.useEffect(() => {
     setCurrentPage(1);

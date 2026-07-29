@@ -8,8 +8,8 @@ import { Input } from '../../../components/ui';
 import { BackIcon, PlusIcon } from '../../../components/ui/icon';
 import useMembership from '../../../services/membership/hook';
 import { createMembership } from '../../../services/offline/queue';
-import { setPendingCount, setWarning } from '../../../services/offline/slice';
-import { store } from '../../../services/store';
+import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
+import { setWarning } from '../../../services/offline/slice';
 import { getCache, setCache, setMemberCache } from '../../../utils/cache';
 
 const CreateManual = () => {
@@ -66,7 +66,7 @@ const CreateManual = () => {
           data: [{ card_id: cardId.trim(), name, reff_code: phone, saldo: 0 }, ...tableData],
         });
 
-        dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
+        triggerQueueRefresh();
 
         dispatch(setWarning('Member created offline. Will sync when online.'));
         navigate('/membership');

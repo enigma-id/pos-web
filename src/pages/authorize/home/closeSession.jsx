@@ -11,13 +11,14 @@ import useAuth from '../../../services/auth/hook';
 import useSession from '../../../services/sales/session/hook';
 import { syncPendingSessions } from '../../../services/offline/syncManager';
 import { clearOfflineSessionEnded, clearSessionSummary } from '../../../services/offline/slice';
+import usePendingQueueCount, { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
 
 const CloseSection = () => {
   const dispatch = useDispatch();
   const { summary, summaryResult, end, endResult } = useSession();
-  const pendingCount = useSelector(state => state?.Offline?.pendingCount || 0);
+  const { count: pendingCount, refresh: refreshQueueCount } = usePendingQueueCount();
   const isOnline = useSelector(state => state?.Offline?.isOnline !== false);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable !== false);
   const sessionSummary = useSelector(state => state?.Offline?.sessionSummary);
@@ -76,7 +77,7 @@ const CloseSection = () => {
                   setSyncing(false);
 
                   // Re-check pending count after sync attempt
-                  const remaining = store.getState()?.Offline?.pendingCount || 0;
+                  const remaining = await refreshQueueCount();
                   if (remaining > 0) {
                     showFailoverModal(remaining);
                   } else {

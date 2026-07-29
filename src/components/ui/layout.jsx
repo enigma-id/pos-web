@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -8,8 +8,9 @@ import { OfflineBanner, PendingDrawer, SyncIndicator } from './offline';
 import useSidebar from './sidebar/hook';
 import { loadOfflineBill } from '../../services/cart/slice';
 import { removeFailedItem, retryFailedItem, syncNow } from '../../services/offline';
-import { setNetworkState, setPendingCount } from '../../services/offline/slice';
+import { setNetworkState } from '../../services/offline/slice';
 import useNetworkStatus from '../../services/offline/useNetworkStatus';
+import usePendingQueueCount from '../../services/offline/usePendingQueueCount';
 import useSession from '../../services/sales/session/hook';
 import { isActive } from '../../utils/common';
 
@@ -18,6 +19,7 @@ const Layout = ({ children }) => {
   const Offline = useSelector(state => state?.Offline);
   const authUser = useSelector(state => state?.Auth?.user);
   const { isOnline, wasOffline } = useNetworkStatus();
+  const { count: queueCount, refresh: refreshQueueCount } = usePendingQueueCount();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [showBanner, setShowBanner] = useState(true);
   const [backOnline, setBackOnline] = useState(false);
@@ -79,9 +81,13 @@ const Layout = ({ children }) => {
     dispatch(loadOfflineBill(queueItem));
   };
 
-  const refreshQueue = async () => {
-    // Gausah re-read IndexedDB — pendingCount update incremental via dispatch
-  };
+  const refreshQueue = useCallback(async () => {
+    await refreshQueueCount();
+  }, [refreshQueueCount]);
+
+  useEffect(() => {
+    refreshQueue();
+  }, []);
 
   const banner = (() => {
     if (!showBanner) return null;
@@ -111,7 +117,7 @@ const Layout = ({ children }) => {
       return {
         variant: 'syncing',
         message: 'Syncing queued transactions...',
-        pendingCount: Offline?.pendingCount || 0,
+        pendingCount: queueCount,
       };
     }
 
@@ -132,7 +138,7 @@ const Layout = ({ children }) => {
         <OfflineBanner
           variant={banner.variant}
           message={banner.message}
-          pendingCount={banner.pendingCount}
+          pendingCount={queueCount}
           onRetry={() => syncNow()}
           onDismiss={() => {
             setShowBanner(false);
@@ -160,6 +166,7 @@ const Navbar = () => {
 
   const { summary } = useSession();
   const { showSummary } = useSidebar();
+  const { count: queueCount } = usePendingQueueCount();
 
   const location = useLocation();
   const { pathname } = location;
@@ -234,7 +241,7 @@ const Navbar = () => {
       <div className="mb-5">
         <div className="px-2 pb-2">
           <SyncIndicator
-            pendingCount={Offline?.pendingCount || 0}
+            pendingCount={queueCount}
             failedCount={Offline?.failedCount || 0}
             onClick={() => setDrawerOpen(true)}
           />

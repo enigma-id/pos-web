@@ -8,7 +8,8 @@ import { PaypassIcon } from '../../../components/ui/icon';
 import TopupReceipt from '../../../components/ui/topup-receipt';
 import useMembership from '../../../services/membership/hook';
 import { createTopup } from '../../../services/offline/queue';
-import { setPendingCount, setWarning } from '../../../services/offline/slice';
+import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
+import { setWarning } from '../../../services/offline/slice';
 import { updateMemberCacheSaldo, getCache, setCache } from '../../../utils/cache';
 import { currencyFormat } from '../../../utils/common';
 import { store } from '../../../services/store';
@@ -89,7 +90,7 @@ const CardContent = ({ data, onClose }) => {
           />
         );
 
-        dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
+        triggerQueueRefresh();
 
         topupSubmitted.current = false;
         onClose?.();

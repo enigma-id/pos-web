@@ -8,8 +8,8 @@ import { PlusIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useMembership from '../../../services/membership/hook';
 import { createMembership } from '../../../services/offline/queue';
-import { setPendingCount, setWarning } from '../../../services/offline/slice';
-import { store } from '../../../services/store';
+import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
+import { setWarning } from '../../../services/offline/slice';
 import { setMemberCache, getCache, setCache } from '../../../utils/cache';
 
 const CreateSection = ({ onClose }) => {
@@ -55,7 +55,7 @@ const CreateSection = ({ onClose }) => {
           data: [{ card_id: uid, name, reff_code: phone, saldo: 0 }, ...tableData],
         });
 
-        dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
+        triggerQueueRefresh();
 
         closeModal();
         onClose();

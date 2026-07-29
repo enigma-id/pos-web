@@ -262,7 +262,7 @@ const useCart = catalog_id => {
         serverData = res?.data || [];
         // Merge: server data + offline pending bills (yang ada di cache tp belum di server)
         const existingCache = getCache(BILLS_CACHE_KEY) || [];
-        const offlineBills = existingCache.filter(c => c.needs_sync);
+        const offlineBills = existingCache.filter(c => c.is_synced === false);
         const merged = [...serverData];
         for (const ob of offlineBills) {
           // Jangan duplikat kalo server udah punya (by sync_id)

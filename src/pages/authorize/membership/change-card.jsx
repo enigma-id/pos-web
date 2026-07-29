@@ -7,8 +7,8 @@ import { Input } from '../../../components/ui';
 import { BackIcon } from '../../../components/ui/icon';
 import { useUpdateMutation, useLazyCheckSaldoQuery } from '../../../services/membership/action';
 import { updateMembership } from '../../../services/offline/queue';
-import { setPendingCount, setWarning } from '../../../services/offline/slice';
-import { store } from '../../../services/store';
+import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
+import { setWarning } from '../../../services/offline/slice';
 import { setMemberCache, getCache, setCache } from '../../../utils/cache';
 
 const ChangeCardManual = () => {
@@ -117,7 +117,7 @@ const ChangeCardManual = () => {
       );
       setCache(TABLE_CACHE_KEY, { ...existing, data: updated });
 
-      dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
+      triggerQueueRefresh();
 
       dispatch(setWarning('Card changed offline. Will sync when online.'));
       setLoading(false);

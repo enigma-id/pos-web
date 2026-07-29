@@ -70,6 +70,20 @@ const HistoryScreen = () => {
     history();
   }, [offlinePendingCount]);
 
+  // Re-read cache when queue changed (remove from PendingDrawer)
+  const isOnlineRef = React.useRef(isOnline);
+  const apiReachableRef = React.useRef(apiReachable);
+  isOnlineRef.current = isOnline;
+  apiReachableRef.current = apiReachable;
+  React.useEffect(() => {
+    const handler = () => {
+      if (isOnlineRef.current && apiReachableRef.current !== false) return;
+      history();
+    };
+    window.addEventListener('pending-queue-changed', handler);
+    return () => window.removeEventListener('pending-queue-changed', handler);
+  }, []);
+
   // Sync historyData from hook into local state
   React.useEffect(() => {
     if (historyData || historyResult?.isSuccess) {

@@ -18,7 +18,7 @@ import {
   createOrderPayment,
   updateOrderBill,
 } from '../../../services/offline/queue';
-import { setPendingCount } from '../../../services/offline/slice';
+import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
 import { resetCart, selectedBill } from '../../../services/cart/slice';
 import { v4 as uuidv4 } from 'uuid';
 import { store } from '../../../services/store';
@@ -114,9 +114,7 @@ const Cart = ({ onUpdate }) => {
         addon_item_id: a.addon_item_id,
         catalog_name: a.name || '',
         unit_nett: a.unit_nett || 0,
-        ...(a?.addon_group?.type === 'quantity'
-          ? { quantity: Number(a.quantity || 1) * Number(item.quantity) }
-          : {}),
+        quantity: a.quantity,
       })),
       ...(item.is_custom ? { is_custom: true } : {}),
     }));
@@ -207,6 +205,7 @@ const Cart = ({ onUpdate }) => {
       const offlineId = CartState?.bill?.id || CartState?.bill?.sync_id;
       if (offlineId) {
         try {
+          const originSessionSyncId = store.getState()?.Offline?.sessionSummary?.id || null;
           const idbData = makeIdbBillData({
             orderId: offlineId,
             code: CartState?.bill?.code || '',
@@ -216,7 +215,7 @@ const Cart = ({ onUpdate }) => {
             channel: Channel?.selectedChannel,
             session,
             discountCategories: discountCats || [],
-            originSessionSyncId: null,
+            originSessionSyncId,
             paidSessionSyncId: null,
           });
           await updateOrderBill(offlineId, idbData, userId);
@@ -226,7 +225,7 @@ const Cart = ({ onUpdate }) => {
         }
       }
       dispatch(selectedBill({ ...CartState?.bill, bill_name: billName }));
-      dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
+      triggerQueueRefresh();
       bill();
       setUpdateBillName(false);
       closeModal();
@@ -351,31 +350,27 @@ const Cart = ({ onUpdate }) => {
       const now = new Date();
       const code = `${now.toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
 
-      // Re-save existing offline bill
       const discountCatList = [];
-      const originId = CartState?.bill?.sync_id || null;
-      if (CartState?.bill?.sync_id) {
-        try {
-          const idbData = makeIdbBillData({
-            orderId,
-            code,
-            billName,
-            items: orderItems,
-            cartState: CartState,
-            channel: Channel?.selectedChannel,
-            session,
-            discountCategories: discountCatList,
-            originSessionSyncId: originId,
-            paidSessionSyncId: null,
-          });
-          await createOrderBill(idbData, userId);
-        } catch (err) {
-          dispatch($failure(err));
-          return;
-        }
+      const originSessionSyncId = store.getState()?.Offline?.sessionSummary?.id || null;
+      try {
+        const idbData = makeIdbBillData({
+          orderId,
+          code,
+          billName,
+          items: orderItems,
+          cartState: CartState,
+          channel: Channel?.selectedChannel,
+          session,
+          discountCategories: discountCatList,
+          originSessionSyncId,
+          paidSessionSyncId: null,
+        });
+        await createOrderBill(idbData, userId);
+      } catch (err) {
+        dispatch($failure(err));
+        return;
       }
-
-      dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
+      triggerQueueRefresh();
       dispatch(setWarning('Bill saved offline.'));
 
       // Push ke localStorage bills cache

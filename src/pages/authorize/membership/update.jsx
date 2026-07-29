@@ -9,8 +9,8 @@ import Input from '../../../components/ui/input';
 import useModal from '../../../components/ui/modal/hook';
 import useMembership from '../../../services/membership/hook';
 import { createMembership, updateMembership } from '../../../services/offline/queue';
-import { setPendingCount, setWarning } from '../../../services/offline/slice';
-import { store } from '../../../services/store';
+import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
+import { setWarning } from '../../../services/offline/slice';
 import { setMemberCache, getCache, setCache } from '../../../utils/cache';
 import { currencyFormat } from '../../../utils/common';
 
@@ -61,7 +61,7 @@ const UpdateSession = ({ id, onClose, isOpen, reboot, membership }) => {
           } catch {}
         }
 
-        dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
+        triggerQueueRefresh();
 
         dispatch(setWarning('Card changed offline. Will sync when online.'));
         closeModal();
@@ -117,7 +117,7 @@ const UpdateSession = ({ id, onClose, isOpen, reboot, membership }) => {
 
         // Update in-place di IndexedDB
         await updateMembership(data.card_id, { name, reff_code: phone }, userId);
-        dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
+        triggerQueueRefresh();
       }
 
       dispatch(setWarning('Member updated offline.'));

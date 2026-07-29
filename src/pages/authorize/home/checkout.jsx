@@ -30,7 +30,7 @@ import {
   ensureDB,
   STORES,
 } from '../../../services/offline/queue';
-import { setPendingCount } from '../../../services/offline/slice';
+import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
 import { updateSessionSummary } from '../../../services/sales/session/hook';
 import { $failure } from '../../../services/form/action';
 import { v4 as uuidv4 } from 'uuid';
@@ -377,7 +377,7 @@ const CheckoutScreen = () => {
       delete historyEntry.new_items;
       setCache(HISTORY_CACHE_KEY, [historyEntry, ...existing]);
 
-      dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
+      triggerQueueRefresh();
 
       // 🔁 Update sessionSummary incremental
       updateSessionSummary({
@@ -885,7 +885,7 @@ const CheckoutScreen = () => {
     allItems,
     discount_categories
   ) => {
-    dispatch(setPendingCount((store.getState()?.Offline?.pendingCount || 0) + 1));
+    triggerQueueRefresh();
 
     try {
       const BILLS_CACHE_KEY = 'cache_openbills';

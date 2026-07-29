@@ -194,9 +194,7 @@ function convertApiOrderToCartItem(item) {
       unit_nett: add.unit_nett || 0,
       selected: true,
       // options/checkbox → qty=1, quantity → add.quantity / item.quantity
-      quantity: group.type === 'quantity' && add.quantity > 0
-        ? (item.quantity > 0 ? add.quantity / item.quantity : 0)
-        : 1,
+      quantity: add.quantity / item.quantity,
     };
     groupedAdditionals[addonId].items.push(grpEntry);
   }
@@ -216,10 +214,8 @@ function convertApiOrderToCartItem(item) {
       addon_item_id: add.catalog?.id || add.catalog_id,
       name: add.catalog_name || add.catalog?.name || '',
       unit_nett: Number(add.unit_nett ?? 0) || 0,
+      quantity: add.quantity / item.quantity,
     };
-    if (grpType === 'quantity') {
-      entry.quantity = add.quantity > 0 ? add.quantity / item.quantity : 1;
-    }
     return entry;
   });
 
@@ -536,7 +532,10 @@ const cartSlice = createSlice({
         order.totalPayment ||
         (order.items || []).reduce((sum, item) => {
           const it = Number(item.unit_nett || 0) * Number(item.quantity || 0);
-          const at = (item.addons || []).reduce((a, ad) => a + Number(ad.unit_nett || 0) * Number(ad.quantity || 0), 0);
+          const at = (item.addons || []).reduce(
+            (a, ad) => a + Number(ad.unit_nett || 0) * Number(ad.quantity || 0),
+            0
+          );
           return sum + it + at;
         }, 0) + Number(order.service_charge_value || order.serviceChargeValue || 0);
 
@@ -553,10 +552,14 @@ const cartSlice = createSlice({
               name: a.addon_group?.name || 'Add-ons',
               type: grpType,
             },
-            catalog: { id: a.addon_item_id, name: a.catalog_name || '', unit_nett: a.unit_nett || 0 },
+            catalog: {
+              id: a.addon_item_id,
+              name: a.catalog_name || '',
+              unit_nett: a.unit_nett || 0,
+            },
             selected: true,
+            quantity: a.quantity / item.quantity,
           };
-          if (grpType === 'quantity') ae.quantity = a.quantity / item.quantity || 1;
           return ae;
         }),
       }));
@@ -570,7 +573,10 @@ const cartSlice = createSlice({
         sync_id: order?.sync_id || UUID_ZERO,
         origin_session_sync_id: order.origin_session_sync_id || null,
         originalItems: order.original_items || null,
-        itemSnapshot: (order.items || []).map(i => ({ catalog_id: i.catalog_id || i.catalog?.id, quantity: i.quantity || 0 })),
+        itemSnapshot: (order.items || []).map(i => ({
+          catalog_id: i.catalog_id || i.catalog?.id,
+          quantity: i.quantity || 0,
+        })),
       };
 
       state.items.list = [];

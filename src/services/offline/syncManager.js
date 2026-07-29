@@ -1,11 +1,13 @@
 import { baseQuery } from '../baseQuery';
+import { getCache, setCache } from '../../utils/cache';
 import { ensureDB, STORES, setLastSyncTime as setLastSyncTimeMeta } from './queue';
+import { triggerQueueRefresh } from './usePendingQueueCount';
 import {
   setApiReachable,
   setFailedCount,
   setLastSyncTime,
   setOfflineError,
-  setPendingCount,
+  setSessionSummary,
   setSyncing,
 } from './slice';
 
@@ -291,7 +293,7 @@ export const syncPendingSessions = async () => {
               await db.delete(STORES.topups, t.sync_id);
             }
             cleanupLocalStorageCache();
-            storeRef.dispatch(setPendingCount(0));
+            triggerQueueRefresh();
             success = true;
             break;
           }
@@ -346,8 +348,8 @@ export const initSyncManager = async store => {
         syncPendingSessions();
         startHeartbeat();
       } else {
-        storeRef.dispatch(setPendingCount(0));
         storeRef.dispatch(setFailedCount(0));
+        triggerQueueRefresh();
         stopHeartbeat();
       }
     }
@@ -473,6 +475,40 @@ export const removeFailedItem = async itemId => {
     const bill = await db.get(STORES.orderBills, itemId);
     if (bill) {
       await db.delete(STORES.orderBills, itemId);
+      // Hapus juga dari cache_openbills kalo ada
+      try {
+        const BILLS_CACHE_KEY = 'cache_openbills';
+        const cached = getCache(BILLS_CACHE_KEY) || [];
+        const filtered = cached.filter(b => b.sync_id !== itemId && b.id !== itemId);
+        setCache(BILLS_CACHE_KEY, filtered);
+      } catch (_) {}
+      // Recalculate session summary — remove outstanding bill
+      try {
+        const state = storeRef.getState();
+        const existing = state?.Offline?.sessionSummary;
+        if (existing) {
+          const itemsTotal = (bill.items || []).reduce((s, i) => {
+            const it = Number(i.unit_nett ?? 0) * Number(i.quantity || 0);
+            const at = (i.addons || []).reduce((a, ad) => a + Number(ad.unit_nett ?? 0) * Number(ad.quantity || 0), 0);
+            return s + it + at;
+          }, 0);
+          const svcVal = Number(bill.service_charge_value || 0);
+          const discVal = Number(bill.discount_value || 0);
+          const totalBill = itemsTotal - discVal + svcVal;
+          storeRef.dispatch(setSessionSummary({
+            ...existing,
+            summary: {
+              ...existing.summary,
+              sales: {
+                ...existing.summary?.sales,
+                outstanding_bill: Math.max(0, (existing.summary?.sales?.outstanding_bill || 0) - totalBill),
+              },
+            },
+            orders: (existing.orders || []).filter(o => o.sync_id !== itemId),
+          }));
+        }
+      } catch (_) {}
+      triggerQueueRefresh();
       return true;
     }
 
