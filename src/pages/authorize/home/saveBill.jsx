@@ -14,7 +14,6 @@ const BillModal = ({ mode, count, onBillCreate }) => {
   const [billName, setBillName] = React.useState('');
   const { bill, billResult, billData, onBillSelected } = useCart();
 
-
   React.useEffect(() => {
     if (mode === 'create') return;
     bill();
@@ -57,7 +56,7 @@ const BillModal = ({ mode, count, onBillCreate }) => {
                 >
                   <div>
                     <div className="font-semibold">
-                      {bill?.bill_name || "-"}
+                      {bill?.bill_name || '-'}
                       {bill?.is_synced === false && (
                         <span className="badge badge-warning badge-xs ms-1">pending sync</span>
                       )}
@@ -75,7 +74,7 @@ const BillModal = ({ mode, count, onBillCreate }) => {
               label="bill name"
               value={billName}
               onChange={e => setBillName(e?.target?.value)}
-              error={FormState?.errors?.billName}
+              error={FormState?.errors?.billName || FormState?.errors?.items}
             />
           </div>
         )}

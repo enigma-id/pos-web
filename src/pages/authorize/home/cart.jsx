@@ -154,6 +154,7 @@ const Cart = ({ onUpdate }) => {
     try {
       await createOrderBill(dataOfflineToOnline, session?.user?.id);
     } catch (err) {
+      handleModalError();
       dispatch($failure(err));
       return;
     }
@@ -166,7 +167,7 @@ const Cart = ({ onUpdate }) => {
       existing.unshift(dataOfflineToOnline);
       setCache(BILLS_CACHE_KEY, existing);
     } catch (e) {
-      console.error('[SAVE BILL] cache error:', e);
+      handleModalError();
     }
 
     // 🔁 Update sessionSummary incremental
@@ -180,7 +181,7 @@ const Cart = ({ onUpdate }) => {
     // Refresh bills list biar button jadi Open Bill
     bill();
 
-    // dispatch(resetCart());
+    dispatch(resetCart());
   };
 
   // Online — API
@@ -625,14 +626,10 @@ const Cart = ({ onUpdate }) => {
     if (checkoutResult?.isSuccess && checkoutResult?.data) {
       const metaRef = dataModalSuccess.current;
 
-      console.log('============metaRef============', metaRef);
-
       const data = {
         ...checkoutResult?.data?.data,
         ...metaRef,
       };
-
-      console.log('============data============', data);
 
       dataModalSuccess.current = null;
 

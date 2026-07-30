@@ -46,6 +46,8 @@ import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
 import { getMemberCache } from '../../../utils/cache';
 
+const BILLS_CACHE_KEY = 'cache_openbills';
+
 const CheckoutScreen = () => {
   const location = useLocation();
   const isBill = location.state?.is_bill;
@@ -55,6 +57,7 @@ const CheckoutScreen = () => {
   const CartState = useSelector(state => state?.Cart);
   const Channel = useSelector(state => state?.SalesChannel);
   const session = useSelector(s => s.Auth?.session);
+  const OfflineSummary = useSelector(state => state?.Offline.sessionSummary);
 
   const dropdownRef = React.useRef(null);
 
@@ -135,6 +138,191 @@ const CheckoutScreen = () => {
 
   const onShow = (data, index = null, type) => {
     handleModal({ catalog: data, key: index, type });
+  };
+  // Offline — Cache and IDB
+  const onCreateBillOffline = async billName => {
+    if (!OfflineSummary) {
+      dispatch(setWaring('Please open session.'));
+      return;
+    }
+
+    const discount_categories = CartState?.discount?.category
+      ?.filter(
+        cat =>
+          cat && cat.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
+      )
+      ?.map(cat => ({
+        category_id: cat.id,
+        category: cat,
+        ...(cat.discount_type === 'nominal'
+          ? { discount_value: cat.discount_value }
+          : { discount_percentage: cat.discount_value }),
+      }));
+
+    const items = CartState?.items?.list?.map(item => {
+      const base = {
+        catalog_id: item.id,
+        category_id: item.category_id,
+        quantity: item.quantity,
+        unit_nett: item.unit_nett,
+        catalog_name: item.name,
+      };
+
+      if (item?.is_custom) {
+        base.catalog_name = item?.name;
+        base.unit_nett = item?.unit_nett;
+      }
+
+      if (item?.additionals_flat?.length > 0) {
+        base.addons = item?.additionals_flat;
+      }
+
+      return base;
+    });
+
+    const orderId = uuidv4();
+    const now = new Date();
+    const code = `${now.toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
+    const payload = {
+      code: code,
+      sync_id: orderId,
+      bill_name: billName,
+      membership_id: CartState?.meta?.customer?.id,
+      sales_channel_id: Channel?.selectedChannel?.id,
+      status: 'pending',
+      items,
+
+      // ini untuk kebutuhan standarisasi data Offline to Online
+      created_at: now,
+      session: OfflineSummary,
+      membership: CartState?.meta?.customer,
+      sales_channel: Channel?.selectedChannel,
+      is_discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? true : false,
+      discount_value: CartState?.discount?.cart?.amount,
+      service_charge_percentage: CartState?.meta?.service_charge_percentage,
+      service_charge_value: CartState?.meta?.service_charge_value,
+      total_charges: CartState?.meta?.grand_total,
+      created_at: new Date(),
+    };
+
+    if (CartState?.discount?.cart?.type) {
+      if (CartState?.discount?.cart?.type === 'percentage') {
+        payload.discount_percentage = CartState?.discount?.cart?.value;
+      }
+    }
+
+    if (discount_categories?.length > 0) {
+      payload.category_discounts = discount_categories;
+    }
+
+    const dataOfflineToOnline = makePendingBill(payload);
+    try {
+      await createOrderBill(dataOfflineToOnline, session?.user?.id);
+    } catch (err) {
+      dispatch($failure(err));
+      return;
+    }
+
+    triggerQueueRefresh();
+
+    // Push ke localStorage bills cache
+    try {
+      const existing = getCache(BILLS_CACHE_KEY) || [];
+      existing.unshift(dataOfflineToOnline);
+      setCache(BILLS_CACHE_KEY, existing);
+    } catch (e) {
+      console.error('[SAVE BILL] cache error:', e);
+    }
+
+    // 🔁 Update sessionSummary incremental
+    updateSessionSummary({
+      type: 'bill',
+      outstanding_bill: CartState?.meta?.grand_total,
+    });
+
+    handleModalPrint(dataOfflineToOnline);
+
+    // Refresh bills list biar button jadi Open Bill
+    bill();
+
+    // dispatch(resetCart());
+  };
+
+  // Online — API
+  const onCreateBillOnline = async billName => {
+    const discount_categories = CartState?.discount?.category
+      ?.filter(
+        cat =>
+          cat && cat.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
+      )
+      ?.map(cat => ({
+        category_id: cat.id,
+        ...(cat.discount_type === 'nominal'
+          ? { discount_value: cat.discount_value }
+          : { discount_percentage: cat.discount_value }),
+      }));
+
+    const items = CartState?.items?.list?.map(item => {
+      const base = {
+        catalog_id: item.id,
+        quantity: item.quantity,
+      };
+
+      if (item?.is_custom) {
+        base.catalog_name = item?.name;
+        base.unit_nett = item?.unit_nett;
+      }
+
+      if (item?.additionals_flat?.length > 0) {
+        base.addons = item?.additionals_flat?.map(addon => {
+          return {
+            ...addon,
+            addon_group_id: addon?.addon_group?.id,
+          };
+        });
+      }
+
+      return base;
+    });
+
+    const payload = {
+      bill_name: billName,
+      membership_id: CartState?.meta?.customer?.id,
+      sales_channel_id: Channel?.selectedChannel?.id,
+      status: 'pending',
+      items,
+    };
+
+    if (CartState?.discount?.cart?.type) {
+      if (CartState?.discount?.cart?.type === 'percentage') {
+        payload.discount_percentage = CartState?.discount?.cart?.value;
+      }
+
+      if (CartState?.discount?.cart?.type === 'nominal') {
+        payload.discount_value = CartState?.discount?.cart?.value;
+      }
+    }
+
+    if (discount_categories?.length > 0) {
+      payload.category_discounts = discount_categories;
+    }
+
+    try {
+      await checkout(payload).unwrap();
+      dispatch(setWarning('Bill saved.'));
+    } catch (err) {
+      dispatch($failure(err));
+    }
+  };
+
+  const onCreateBill = async billName => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+
+    if (isOffline) {
+      onCreateBillOffline(billName);
+    } else {
+      onCreateBillOnline(billName);
+    }
   };
 
   const handleModal = ({ catalog, key, type }) => {
@@ -511,7 +699,7 @@ const CheckoutScreen = () => {
 
   const openBillNameModal = () => {
     openModal(
-      <BillModal mode="create" onBillCreate={billName => handleCreateBill(billName)} />,
+      <BillModal mode="create" onBillCreate={billName => onCreateBill(billName)} />,
       'w-md'
     );
   };
@@ -647,55 +835,6 @@ const CheckoutScreen = () => {
       ...(item.is_custom ? { is_custom: true } : {}),
     }));
 
-  // ── Create bill (no existing bill) ──
-  const handleCreateBill = async billName => {
-    billName = billName || '';
-    const { payload, discount_categories, allItems } = buildBillPayload(billName);
-    payload.bill_name = billName;
-    setIsSaveBillFlow(true);
-    isSaveBillFlowRef.current = true;
-
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-    if (isOffline) {
-      return handleOfflineCreateBill(billName, payload, discount_categories, allItems);
-    }
-
-    // Online path
-    kitchenNewItemsRef.current = (CartState?.items?.list || []).map(i => ({
-      catalog: { name: i.name || '' },
-      catalog_name: i.name || '',
-      quantity: i.quantity || 0,
-      unit_nett: i.unit_nett || 0,
-      discount_value: i?.discount_amount || 0,
-      addons: (i.additionals_flat || []).map(a => ({
-        catalog_name: a.name || '',
-        unit_nett: a.unit_nett || 0,
-        quantity: Number(a.quantity || 1) * Number(i.quantity),
-      })),
-    }));
-    checkoutSnapshotRef.current = {
-      cartState: JSON.parse(JSON.stringify(CartState || {})),
-      selectedChannel: Channel?.selectedChannel ? { ...Channel.selectedChannel } : null,
-      paymentMethod: selectedMethod ? { ...selectedMethod } : null,
-      paymentRef: selectedMethod?.provider === 'cash' ? '' : paymentRef,
-      billName,
-      requestBody: payload,
-      authSession: session,
-    };
-    billPayloadMetaRef.current = {
-      total_charges: CartState?.meta?.grand_total || 0,
-      service_charge_value: CartState?.meta?.service_charge_value || 0,
-      discount_value: CartState?.discount?.cart?.amount || 0,
-      code: CartState?.bill?.code || '',
-      created_at: new Date().toISOString(),
-    };
-    try {
-      await checkout(payload);
-    } catch (err) {
-      dispatch($failure(err));
-    }
-  };
-
   // ── Update existing bill ──
   const handleUpdateBill = async billName => {
     billName = billName || CartState?.bill?.bill_name || '';
@@ -810,44 +949,6 @@ const CheckoutScreen = () => {
       setSaveBillError(err?.data?.message || 'Something went wrong');
       closeModal();
     }
-  };
-
-  // ── Offline: create bill ──
-  const handleOfflineCreateBill = async (billName, payload, discount_categories, allItems) => {
-    const syncId = store.getState()?.Offline?.sessionSummary?.id || '';
-    if (!syncId) {
-      dispatch(setWarning('No active session. Please start a session first.'));
-      return;
-    }
-
-    const orderItems = buildOrderItems(allItems);
-    const saveBillOriginId = syncId;
-    const orderId = uuidv4();
-    const orderCode = `${new Date().toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
-
-    try {
-      const orderData = makeIdbBillData({
-        orderId,
-        code: orderCode,
-        billName,
-        items: orderItems,
-        cartState: CartState,
-        channel: Channel?.selectedChannel,
-        session,
-        discountCategories: discount_categories || [],
-        originSessionSyncId: saveBillOriginId,
-        paidSessionSyncId: null,
-      });
-      orderData.status = 'pending';
-
-      await createOrderBill(orderData, session?.user?.id);
-    } catch (err) {
-      dispatch($failure(err));
-      return;
-    }
-
-    // Increment pending count + cache + summary + success modal
-    await offlinePostSave(billName, orderId, orderCode, orderItems, allItems, discount_categories);
   };
 
   // ── Offline: update bill ──
@@ -967,17 +1068,9 @@ const CheckoutScreen = () => {
     openModal(<SuccessModal data={successData} backToMenu />, 'w-md');
   };
 
-  // React.useEffect(() => {
-  //   if (checkoutResult?.isSuccess) {
-  //     show(checkoutResult?.data?.data?.id);
-  //   }
-  // }, [checkoutResult?.isSuccess, show]);
-
-  // useEffect(() => {
-  //   if (showResult?.isSuccess) {
-  //     openModal(<SuccessModal data={showResult?.data?.data} backToMenu />, 'w-md');
-  //   }
-  // }, [showResult?.isSuccess, showResult?.data?.data, openModal]);
+  const handleModalPrint = data => {
+    openModal(<SuccessModal data={data} />, 'w-md');
+  };
 
   const handleRead = uid => {
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
@@ -1013,75 +1106,21 @@ const CheckoutScreen = () => {
   }, [checkResult]);
 
   React.useEffect(() => {
-    // ⛔️ Skip stale mutation trigger from offline/save-bill path
-    if (isOfflineSaveRef.current) {
-      isOfflineSaveRef.current = false;
-      // Reset stale mutations so effect 2 doesn't fire with cached data
-      checkoutResult?.reset();
-      closeBillResult?.reset();
-      updateResult?.reset();
-      return;
-    }
-
-    const checkoutData = checkoutResult?.data?.data || {};
-    const closeBillData = closeBillResult?.data?.data || {};
-    const updateData = updateResult?.data?.data || {};
-
-    if (checkoutResult?.isSuccess || closeBillResult?.isSuccess || updateResult?.isSuccess) {
-      setSelectedMethod(paymentMethod[0]);
-      const id = checkoutData?.id || closeBillData?.id || updateData?.id;
-      if (id) {
-        show(id);
+    if (checkoutResult?.isSuccess && checkoutResult?.data) {
+      const data = checkoutResult?.data?.data;
+      if (data) {
+        show(data?.id);
       }
+
+      setDiscountInputs([]);
     }
-  }, [checkoutResult?.isSuccess, closeBillResult?.isSuccess, updateResult?.isSuccess]);
+  }, [checkoutResult?.isSuccess]);
 
   React.useEffect(() => {
-    // ⛔️ Skip stale mutation trigger from offline/save-bill path
-    // (handleUpdateBill & handlePay offline udah langsung open modal)
-    if (isOfflineSaveRef.current) return;
-
-    if (
-      (closeBillResult?.isSuccess || checkoutResult?.isSuccess || updateResult?.isSuccess) &&
-      showResult?.isSuccess
-    ) {
-      const serverData = showResult?.data?.data || {};
-      const metaRef = billPayloadMetaRef.current;
-      const paidAt = new Date().toISOString();
-      openModal(
-        <SuccessModal
-          data={{
-            ...serverData,
-            new_items: kitchenNewItemsRef.current || undefined,
-            code: serverData?.code || metaRef?.code || showResult?.data?.code || '',
-            total_charges: serverData?.total_charges || metaRef?.total_charges || 0,
-            service_charge_value:
-              serverData?.service_charge_value || metaRef?.service_charge_value || 0,
-            discount_value: serverData?.discount_value || metaRef?.discount_value || 0,
-            paid_at: paidAt,
-            created_at: paidAt,
-            sales_channel:
-              serverData?.sales_channel ||
-              (Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null),
-            session: serverData?.session || { cashier: { name: session?.user?.name || '-' } },
-          }}
-          backToMenu
-          isPayment={!isSaveBillFlowRef.current}
-        />,
-        'w-md'
-      );
-      kitchenNewItemsRef.current = null;
-      billPayloadMetaRef.current = null;
-      setIsSaveBillFlow(false);
-      isSaveBillFlowRef.current = false;
+    if (showResult?.isSuccess && showResult?.data) {
+      handleModalPrint(showResult?.data?.data);
     }
-  }, [
-    checkoutResult?.isSuccess,
-    closeBillResult?.isSuccess,
-    updateResult?.isSuccess,
-    showResult?.isSuccess,
-    showResult?.data?.data,
-  ]);
+  }, [showResult?.isSuccess, showResult?.data]);
 
   // Cleanup isSaveBillFlowRef on unmount
   React.useEffect(() => {
@@ -1120,12 +1159,6 @@ const CheckoutScreen = () => {
 
     setDiscountInputs(inputs);
   }, []);
-
-  React.useEffect(() => {
-    if (checkoutResult?.isSuccess || closeBillResult?.isSuccess) {
-      setDiscountInputs([]);
-    }
-  }, [checkoutResult, closeBillResult]);
 
   return (
     <div className="flex h-screen flex-col">
