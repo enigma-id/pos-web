@@ -41,6 +41,7 @@ const Cart = ({ onUpdate }) => {
   const OfflineSummary = useSelector(state => state?.Offline.sessionSummary);
 
   const dataModalSuccess = React.useRef(null);
+  const hasChangeBillName = React.useRef(false);
 
   const [updateBillName, setUpdateBillName] = React.useState(false);
   const updateBillNameRef = React.useRef(false);
@@ -81,22 +82,9 @@ const Cart = ({ onUpdate }) => {
       return;
     }
 
-    const discount_categories = CartState?.discount?.category
-      ?.filter(
-        cat =>
-          cat && cat.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
-      )
-      ?.map(cat => ({
-        category_id: cat.id,
-        category: cat,
-        ...(cat.discount_type === 'nominal'
-          ? { discount_value: cat.discount_value }
-          : { discount_percentage: cat.discount_value }),
-      }));
-
     const items = CartState?.items?.list?.map(item => {
       const base = {
-        catalog_id: item.id,
+        catalog_id: item.catalog_id,
         category_id: item.category_id,
         quantity: item.quantity,
         unit_nett: item.unit_nett,
@@ -125,6 +113,7 @@ const Cart = ({ onUpdate }) => {
       membership_id: CartState?.meta?.customer?.id,
       sales_channel_id: Channel?.selectedChannel?.id,
       status: 'pending',
+      is_offline_mode: true,
       items,
 
       // ini untuk kebutuhan standarisasi data Offline to Online
@@ -139,16 +128,6 @@ const Cart = ({ onUpdate }) => {
       total_charges: CartState?.meta?.grand_total,
       created_at: new Date(),
     };
-
-    if (CartState?.discount?.cart?.type) {
-      if (CartState?.discount?.cart?.type === 'percentage') {
-        payload.discount_percentage = CartState?.discount?.cart?.value;
-      }
-    }
-
-    if (discount_categories?.length > 0) {
-      payload.category_discounts = discount_categories;
-    }
 
     const dataOfflineToOnline = makePendingBill(payload);
     try {
@@ -186,21 +165,167 @@ const Cart = ({ onUpdate }) => {
 
   // Online — API
   const onCreateBillOnline = async billName => {
-    const discount_categories = CartState?.discount?.category
-      ?.filter(
-        cat =>
-          cat && cat.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
-      )
-      ?.map(cat => ({
-        category_id: cat.id,
-        ...(cat.discount_type === 'nominal'
-          ? { discount_value: cat.discount_value }
-          : { discount_percentage: cat.discount_value }),
-      }));
-
     const items = CartState?.items?.list?.map(item => {
       const base = {
-        catalog_id: item.id,
+        catalog_id: item.catalog_id,
+        quantity: item.quantity,
+      };
+
+      if (item?.is_custom) {
+        base.catalog_name = item?.name;
+        base.unit_nett = item?.unit_nett;
+      }
+
+      if (item?.additionals_flat?.length > 0) {
+        base.addons = item?.additionals_flat?.map(addon => {
+          return {
+            ...addon,
+            addon_group_id: addon?.addon_group?.id,
+          };
+        });
+      }
+
+      return base;
+    });
+
+    const payload = {
+      bill_name: billName,
+      membership_id: CartState?.meta?.customer?.id,
+      sales_channel_id: Channel?.selectedChannel?.id,
+      status: 'pending',
+      items,
+    };
+
+    // kenapa gua pakai ini karena kita saat sukses API tidak ambil data ulang, jadi kita perlu masukan ke data modal ini bro
+    dataModalSuccess.current = {
+      total_charges: CartState?.meta?.grand_total || 0,
+      paid_at: new Date(),
+      sales_channel: Channel?.selectedChannel,
+      membership: CartState?.meta?.customer,
+      session: session.sales_session,
+    };
+
+    try {
+      await checkout(payload).unwrap();
+      dispatch(setWarning('Bill saved.'));
+    } catch (err) {
+      dispatch($failure(err));
+    }
+  };
+
+  const onCreateBill = async billName => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+
+    if (isOffline) {
+      onCreateBillOffline(billName);
+    } else {
+      onCreateBillOnline(billName);
+    }
+  };
+
+  console.log('[DEBUG]', CartState);
+
+  // Offline — Cache and IDB
+  const onUpdateBillOffline = async billName => {
+    // kalo hanya update bill name saja tidak perlu update yang di list CartState items list bro
+    let allItems = [...(CartState?.items?.bill || []), ...(CartState?.items?.list || [])];
+    if (hasChangeBillName.current) {
+      allItems = CartState?.items?.bill;
+    }
+
+    const items = allItems?.map(item => {
+      const base = {
+        catalog_id: item.catalog_id,
+        category_id: item.category_id,
+        quantity: item.quantity,
+        unit_nett: item.unit_nett,
+        catalog_name: item.name,
+      };
+
+      if (item?.is_custom) {
+        base.catalog_name = item?.name;
+        base.unit_nett = item?.unit_nett;
+      }
+
+      if (item?.additionals_flat?.length > 0) {
+        base.addons = item?.additionals_flat;
+      }
+
+      return base;
+    });
+
+    const payload = {
+      // kenapa gua tidak pakai sync_id - karena data-nya sudah ada di server bukan lagi di IDB
+      id: CartState?.bill?.id || '',
+      // kenapa gua pakai if conditional seperti ini, karena jika sudah ada di server kita tidak butuh lagi sync_id, tapi kalo masih ada di IDB kita perlu sync_id bro
+      sync_id: CartState?.bill?.id ? '' : CartState?.bill?.sync_id,
+      code: CartState?.bill?.code,
+      bill_name: billName,
+      membership_id: CartState?.meta?.customer?.id,
+      sales_channel_id: Channel?.selectedChannel?.id,
+      status: 'pending',
+      items,
+
+      // ini untuk kebutuhan standarisasi data Offline to Online
+      created_at: now,
+      session: OfflineSummary,
+      membership: CartState?.meta?.customer,
+      sales_channel: Channel?.selectedChannel,
+      is_discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? true : false,
+      discount_value: CartState?.discount?.cart?.amount,
+      service_charge_percentage: CartState?.meta?.service_charge_percentage,
+      service_charge_value: CartState?.meta?.service_charge_value,
+      total_charges: CartState?.meta?.grand_total,
+      created_at: new Date(),
+    };
+    const dataOfflineToOnline = makePendingBill(payload);
+
+    console.log('===================dataOfflineToOnline===================', dataOfflineToOnline);
+
+    // try {
+    //   await updateOrderBill(dataOfflineToOnline, session?.user?.id);
+    // } catch (err) {
+    //   handleModalError();
+    //   dispatch($failure(err));
+    //   return;
+    // }
+
+    // triggerQueueRefresh();
+
+    // // Push ke localStorage bills cache
+    // try {
+    //   const existing = getCache(BILLS_CACHE_KEY) || [];
+    //   existing.unshift(dataOfflineToOnline);
+    //   setCache(BILLS_CACHE_KEY, existing);
+    // } catch (e) {
+    //   handleModalError();
+    // }
+
+    // // 🔁 Update sessionSummary incremental
+    // updateSessionSummary({
+    //   type: 'bill',
+    //   outstanding_bill: CartState?.meta?.grand_total,
+    // });
+
+    // handleModalPrint(dataOfflineToOnline);
+
+    // // Refresh bills list biar button jadi Open Bill
+    // bill();
+
+    // dispatch(resetCart());
+  };
+
+  // Online — API
+  const onUpdateBillOnline = async billName => {
+    // kalo hanya update bill name saja tidak perlu update yang di list CartState items list bro
+    let allItems = [...(CartState?.items?.bill || []), ...(CartState?.items?.list || [])];
+    if (hasChangeBillName.current) {
+      allItems = CartState?.items?.bill;
+    }
+
+    const items = allItems?.map(item => {
+      const base = {
+        catalog_id: item.catalog_id,
         quantity: item.quantity,
       };
 
@@ -243,6 +368,33 @@ const Cart = ({ onUpdate }) => {
       payload.category_discounts = discount_categories;
     }
 
+    // newItems ini hanya untuk tampilan print kitchen bro
+    const newItems = CartState?.items?.list?.map(item => {
+      const base = {
+        catalog_id: item.catalog_id,
+        quantity: item.quantity,
+        catalog_name: item?.name,
+      };
+
+      if (item?.is_custom) {
+        base.catalog_name = item?.name;
+        base.unit_nett = item?.unit_nett;
+      }
+
+      if (item?.additionals_flat?.length > 0) {
+        base.addons = item?.additionals_flat?.map(addon => {
+          return {
+            ...addon,
+            addon_group_id: addon?.addon_group?.id,
+            catalog_name: addon.name,
+            quantity: (addon.quantity || 1) * item.quantity,
+          };
+        });
+      }
+
+      return base;
+    });
+
     // kenapa gua pakai ini karena kita saat sukses API tidak ambil data ulang, jadi kita perlu masukan ke data modal ini bro
     dataModalSuccess.current = {
       total_charges: CartState?.meta?.grand_total || 0,
@@ -250,247 +402,25 @@ const Cart = ({ onUpdate }) => {
       sales_channel: Channel?.selectedChannel,
       membership: CartState?.meta?.customer,
       session: session.sales_session,
+      new_items: newItems,
     };
 
     try {
-      await checkout(payload).unwrap();
+      await update({ id: CartState?.bill?.id, payload }).unwrap();
       dispatch(setWarning('Bill saved.'));
     } catch (err) {
       dispatch($failure(err));
     }
   };
 
-  const onCreateBill = async billName => {
+  const onUpdateBill = async billName => {
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
 
     if (isOffline) {
-      onCreateBillOffline(billName);
+      onUpdateBillOffline(billName);
     } else {
-      onCreateBillOnline(billName);
+      onUpdateBillOnline(billName);
     }
-  };
-
-  const getOrderPayload = () => {
-    const allItems = [...(CartState?.items?.list || []), ...(CartState?.items?.bill || [])];
-    const orderItems = allItems.map(item => ({
-      catalog_id: item.catalog_id || item.id,
-      catalog_name: item.name || '',
-      quantity: item.quantity,
-      unit_nett: Number(item.unit_nett) || 0,
-      addons: (item.additionals_flat || []).map(a => ({
-        addon_group_id: a.addon_group?.id,
-        addon_item_id: a.addon_item_id,
-        catalog_name: a.name || '',
-        unit_nett: a.unit_nett || 0,
-        quantity: a.quantity,
-      })),
-      ...(item.is_custom ? { is_custom: true } : {}),
-    }));
-    const discountCats = CartState?.discount?.category
-      ?.filter(
-        cat =>
-          cat && cat.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
-      )
-      ?.map(cat => ({
-        category_id: cat.id,
-        ...(cat.discount_type === 'nominal'
-          ? { discount_value: cat.discount_value }
-          : { discount_percentage: cat.discount_value }),
-      }));
-    return { orderItems, discountCats };
-  };
-
-  const onUpdateBillName = async billName => {
-    // ⚡ Edit nama — tetep kirim items biar validasi API lolos, tp jangan reset cart
-    const { orderItems, discountCats } = getOrderPayload();
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-    if (isOffline) {
-      const userId = session?.user?.id;
-      const offlineId = CartState?.bill?.id || CartState?.bill?.sync_id;
-      if (offlineId) {
-        try {
-          const idbData = makeIdbBillData({
-            orderId: offlineId,
-            code: CartState?.bill?.code || '',
-            billName,
-            items: orderItems,
-            cartState: CartState,
-            channel: Channel?.selectedChannel,
-            session,
-            discountCategories: discountCats || [],
-            originSessionSyncId: null,
-            paidSessionSyncId: null,
-          });
-          await updateOrderBill(offlineId, idbData, userId);
-        } catch (err) {
-          dispatch($failure(err));
-          return;
-        }
-      }
-      dispatch(selectedBill({ ...CartState?.bill, bill_name: billName }));
-      setUpdateBillName(false);
-      closeModal();
-      return;
-    }
-
-    // Online
-    try {
-      const payload = {
-        bill_name: billName,
-        items: orderItems,
-        category_discounts: discountCats || [],
-        discount_percentage:
-          CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
-        discount_value:
-          CartState?.discount?.cart?.type === 'nominal' ? CartState?.discount?.cart?.value : 0,
-        sales_channel_id: Channel?.selectedChannel?.id,
-        membership_id: CartState?.meta?.customer?.id || null,
-        cashier_name: session?.user?.name || '',
-        status: 'pending',
-      };
-      const res = await updateBillNameMutation({ id: CartState?.bill?.id, payload }).unwrap();
-      if (res?.message === 'success') {
-        dispatch(selectedBill({ ...CartState?.bill, bill_name: billName }));
-        setUpdateBillName(false);
-        closeModal();
-      }
-    } catch (err) {
-      dispatch($failure(err));
-    }
-  };
-
-  const onUpdateBill = async (billName, { isEditName } = {}) => {
-    // 👇 Baru: delegasi edit name biar gak reset cart
-    if (isEditName) {
-      return onUpdateBillName(billName);
-    }
-
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-    const userId = session?.user?.id;
-    const { orderItems, discountCats } = getOrderPayload();
-
-    if (isOffline) {
-      const offlineId = CartState?.bill?.id || CartState?.bill?.sync_id;
-      if (offlineId) {
-        try {
-          const originSessionSyncId = store.getState()?.Offline?.sessionSummary?.id || null;
-          const idbData = makeIdbBillData({
-            orderId: offlineId,
-            code: CartState?.bill?.code || '',
-            billName,
-            items: orderItems,
-            cartState: CartState,
-            channel: Channel?.selectedChannel,
-            session,
-            discountCategories: discountCats || [],
-            originSessionSyncId,
-            paidSessionSyncId: null,
-          });
-          await updateOrderBill(offlineId, idbData, userId);
-        } catch (err) {
-          dispatch($failure(err));
-          return;
-        }
-      }
-      dispatch(selectedBill({ ...CartState?.bill, bill_name: billName }));
-      triggerQueueRefresh();
-      bill();
-      setUpdateBillName(false);
-      closeModal();
-      return;
-    }
-
-    // Online — API (confirm save — reset cart OK)
-    try {
-      const payload = {
-        bill_name: billName,
-        items: orderItems,
-        category_discounts: discountCats || [],
-        discount_percentage:
-          CartState?.discount?.cart?.type === 'percentage' ? CartState?.discount?.cart?.value : 0,
-        discount_value:
-          CartState?.discount?.cart?.type === 'nominal' ? CartState?.discount?.cart?.value : 0,
-        sales_channel_id: Channel?.selectedChannel?.id,
-        membership_id: CartState?.meta?.customer?.id || null,
-        cashier_name: session?.user?.name || '',
-        status: 'pending',
-      };
-
-      // Simpan meta sebelum reset
-      const savedCode = CartState?.bill?.code || '';
-      const savedTotals = {
-        total_charges: CartState?.meta?.grand_total || 0,
-        service_charge_value: CartState?.meta?.service_charge_value || 0,
-        discount_value: CartState?.discount?.cart?.amount || 0,
-        created_at: new Date().toISOString(),
-      };
-      billPayloadMetaRef.current = { ...savedTotals, code: savedCode };
-      const res = await update({ id: CartState?.bill?.id, payload });
-      // update() udah resetCart + reset bill. Langsung show success.
-      isOfflineSaveRef.current = true; // skip stale effect
-      const billData = res?.data || res || {};
-      const itemsTotal = orderItems.reduce((s, i) => {
-        const it = (i.unit_nett || 0) * (i.quantity || 0);
-        const at = (i.addons || []).reduce(
-          (a, ad) => a + (ad.unit_nett || 0) * (ad.quantity || 0),
-          0
-        );
-        return s + it + at;
-      }, 0);
-      const newItems = (CartState?.items?.list || []).map(item => ({
-        catalog: { name: item.name || '' },
-        catalog_name: item.name || '',
-        quantity: item.quantity || 0,
-        unit_nett: item.unit_nett || 0,
-        addons: (item.additionals_flat || []).map(a => ({
-          catalog_name: a.name || '',
-          unit_nett: a.unit_nett || 0,
-          quantity: Number(a.quantity || 1) * Number(item.quantity),
-        })),
-      }));
-      openModal(
-        <SuccessModal
-          data={{
-            bill_name: billName,
-            code: billData.code || savedCode || '',
-            // created_at dan paid_at kenapa ini now - karena kebutuhan print last update print
-            paid_at: new Date().toISOString(),
-            created_at: new Date().toISOString(),
-            total_charges:
-              billData.total_charges || itemsTotal + (CartState?.meta?.service_charge_value || 0),
-            total_payment: 0,
-            status: 'pending',
-            items: orderItems.map(i => ({
-              catalog: { name: i.catalog_name || '' },
-              catalog_name: i.catalog_name || '',
-              quantity: i.quantity || 0,
-              unit_nett: i.unit_nett || 0,
-              addons: (i.addons || []).map(a => ({
-                catalog_name: a.catalog_name || '',
-                unit_nett: a.unit_nett || 0,
-                unit_nett: a.unit_nett || 0,
-                quantity: a.quantity || 1,
-              })),
-            })),
-            new_items: newItems,
-            service_charge_value: CartState?.meta?.service_charge_value || 0,
-            discount_value: CartState?.discount?.cart?.amount || 0,
-            sales_channel: Channel?.selectedChannel?.name
-              ? { name: Channel.selectedChannel.name }
-              : null,
-            payment_ref: '',
-            session: { cashier: { name: session?.user?.name || '' } },
-          }}
-        />,
-        'w-md'
-      );
-    } catch (err) {
-      dispatch($failure(err));
-      handleModalError();
-      setUpdateBillName(false);
-      return;
-    }
-    setUpdateBillName(false);
   };
 
   const renderAdditionals = item => {
@@ -593,17 +523,15 @@ const Cart = ({ onUpdate }) => {
     openModal(<SuccessModal data={data} />, 'w-md');
   };
 
-  const handleModalUpdateBillName = data => {
-    setUpdateBillName(true);
-    updateBillNameRef.current = true;
+  const handleModalUpdateBillName = () => {
+    hasChangeBillName.current = true;
     openModal(
       <UpdateBillNameModal
-        data={data}
+        data={CartState?.bill}
         isLoading={billResult?.isLoading}
-        onSubmit={v => onUpdateBill(v, { isEditName: true })}
+        onSubmit={v => onUpdateBill(v)}
         onClose={() => {
-          setUpdateBillName(false);
-          updateBillNameRef.current = false;
+          hasChangeBillName.current = false;
         }}
       />,
       'w-md'
@@ -616,11 +544,11 @@ const Cart = ({ onUpdate }) => {
   };
 
   React.useEffect(() => {
-    if (checkoutResult?.isError) {
+    if (checkoutResult?.isError || updateResult?.isError) {
       handleModalError();
       checkoutResult?.reset();
     }
-  }, [checkoutResult]);
+  }, [checkoutResult, updateResult]);
 
   React.useEffect(() => {
     if (checkoutResult?.isSuccess && checkoutResult?.data) {
@@ -638,6 +566,28 @@ const Cart = ({ onUpdate }) => {
       checkoutResult?.reset();
     }
   }, [checkoutResult]);
+
+  React.useEffect(() => {
+    if (updateResult?.isSuccess && updateResult?.data) {
+      if (hasChangeBillName.current) {
+        closeModal();
+        hasChangeBillName.current = false;
+      } else {
+        const metaRef = dataModalSuccess.current;
+
+        const data = {
+          ...updateResult?.data?.data,
+          ...metaRef,
+        };
+
+        dataModalSuccess.current = null;
+
+        handleModalPrint(data);
+        dispatch(resetCart());
+        updateResult?.reset();
+      }
+    }
+  }, [updateResult]);
 
   React.useEffect(() => {
     bill();
@@ -692,7 +642,7 @@ const Cart = ({ onUpdate }) => {
 
             <div
               className="btn btn-xs btn-primary btn-circle btn-outline ms-2"
-              onClick={() => handleModalUpdateBillName(CartState?.bill)}
+              onClick={() => handleModalUpdateBillName()}
             >
               <EditIcon className="h-4 w-4" />
             </div>

@@ -190,6 +190,7 @@ const CheckoutScreen = () => {
       membership_id: CartState?.meta?.customer?.id,
       sales_channel_id: Channel?.selectedChannel?.id,
       status: 'pending',
+      is_offline_mode: true,
       items,
 
       // ini untuk kebutuhan standarisasi data Offline to Online

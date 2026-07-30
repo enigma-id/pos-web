@@ -290,9 +290,7 @@ const useCart = catalog_id => {
 
   const update = async ({ id, payload }) => {
     try {
-      const res = await updateMutation({ id, payload }).unwrap();
-      if (res?.message === 'success') reset();
-      return res;
+      await updateMutation({ id, payload }).unwrap();
     } catch (error) {
       dispatch($failure(error));
       throw error;

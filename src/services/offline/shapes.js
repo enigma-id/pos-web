@@ -58,7 +58,6 @@ export function makePendingBill(payload) {
   return {
     ...payload,
     items: cloneItems,
-    is_offline_mode: true,
     is_synced: false,
     original_items: cloneItems,
     category_discounts: recalculateDiscountCategory(payload.category_discounts, payload.items),

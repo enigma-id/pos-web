@@ -5,7 +5,7 @@ import { useSelector } from 'react-redux';
 import { Input, Modal } from '../../../components/ui';
 import useModal from '../../../components/ui/modal/hook';
 
-const UpdateTicket = ({ data, onSubmit, isLoading, onClose }) => {
+const UpdateBillName = ({ data, onSubmit, isLoading, onClose }) => {
   const FormState = useSelector(state => state?.Form);
   const { closeModal } = useModal();
   const [billName, setBillName] = React.useState('');
@@ -16,7 +16,12 @@ const UpdateTicket = ({ data, onSubmit, isLoading, onClose }) => {
 
   return (
     <>
-      <Modal.Header onClose={() => { onClose?.(); closeModal(); }}>
+      <Modal.Header
+        onClose={() => {
+          onClose?.();
+          closeModal();
+        }}
+      >
         <div className="text-lg font-semibold">Update Bill</div>
       </Modal.Header>
       <Modal.Body>
@@ -30,7 +35,13 @@ const UpdateTicket = ({ data, onSubmit, isLoading, onClose }) => {
         </div>
       </Modal.Body>
       <Modal.Footer>
-        <div className="btn btn-md px-10" onClick={() => { onClose?.(); closeModal(); }}>
+        <div
+          className="btn btn-md px-10"
+          onClick={() => {
+            onClose?.();
+            closeModal();
+          }}
+        >
           Cancel
         </div>
         <div
@@ -45,4 +56,4 @@ const UpdateTicket = ({ data, onSubmit, isLoading, onClose }) => {
   );
 };
 
-export default UpdateTicket;
+export default UpdateBillName;
