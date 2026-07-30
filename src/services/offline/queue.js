@@ -211,24 +211,21 @@ export const createOrderBill = async (data, userId) => {
   return doc;
 };
 
-export const updateOrderBill = async (idOrSyncId, data, userId) => {
+export const updateOrderBill = async (syncId, data, userId) => {
   const db = await ensureDB(userId);
-  // Cari by sync_id dulu, kalo gak ketemu coba by id (server ID)
-  let existing = await db.get(STORES.orderBills, idOrSyncId);
+  // Cari by sync_id — indexed lookup
+  let existing = syncId ? await db.get(STORES.orderBills, syncId) : null;
   if (!existing) {
-    const all = await db.getAll(STORES.orderBills);
-    existing = all.find(b => b.id === idOrSyncId);
-  }
-  if (!existing) {
-    // Bill dari server — belum ada di IndexedDB, insert sebagai data baru
+    // Bill dari server — insert sebagai referensi
+    if (!syncId) throw new Error('updateOrderBill: no syncId provided');
     const doc = {
-      id: idOrSyncId,
+      id: syncId,
       bill_name: data.bill_name || '',
       items: data.items || [],
       code: data.code || '',
-      status: 'completed',
-      is_offline_mode: true,
-      is_synced: true,
+      status: 'pending',
+      is_offline_mode: false,
+      is_synced: false,
       createdAt: new Date().toISOString(),
     };
     await db.add(STORES.orderBills, doc);

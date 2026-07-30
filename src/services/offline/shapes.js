@@ -1,4 +1,4 @@
-import { UUID_ZERO, DATE_ZERO } from './constants';
+import { DATE_ZERO } from './constants';
 
 // ── Numbers ──
 const toNum = v => (v && !Number.isNaN(Number(v)) ? Number(v) : 0);
@@ -18,11 +18,11 @@ export function makeBillItem(item, orderId, index) {
   const isDiscPct = !!(item.is_discount_percentage ?? false);
 
   return {
-    id: item.id || UUID_ZERO,
-    order_id: orderId || UUID_ZERO,
+    id: item.id || '',
+    order_id: orderId || '',
     additional_id: item.additional_id || null,
     addon_group_id: item.addon_group_id || null,
-    catalog_id: item.catalog_id || item.catalog?.id || UUID_ZERO,
+    catalog_id: item.catalog_id || item.catalog?.id || '',
     catalog_name: item.catalog_name || '',
     category_name: item.category_name || '',
     unit_base: unitBase,
@@ -36,7 +36,7 @@ export function makeBillItem(item, orderId, index) {
     unit_bill: unitBill,
     quantity: qty,
     catalog: item.catalog || {
-      id: item.catalog_id || UUID_ZERO,
+      id: item.catalog_id || '',
       name: item.catalog_name || '',
       category_id: item.category_id || 0,
     },
@@ -49,14 +49,14 @@ export function makeBillAddons(addons, orderId, itemQty) {
   return addons.map(a => {
     const qty = toNum(a.quantity) || 1;
     return {
-      order_id: orderId || UUID_ZERO,
-      addon_group: a.addon_group || { id: a.addon_group_id || UUID_ZERO, name: '', type: '' },
-      addon_group_id: a.addon_group_id || a.addon_group?.id || UUID_ZERO,
+      order_id: orderId || '',
+      addon_group: a.addon_group || { id: a.addon_group_id || '', name: '', type: '' },
+      addon_group_id: a.addon_group_id || a.addon_group?.id || '',
       quantity: qty,
       unit_nett: toNum(a.unit_nett ?? 0),
       unit_bill: toNum(a.unit_bill ?? a.unit_nett ?? 0),
       catalog_name: a.catalog?.name || a.catalog_name || '',
-      catalog_id: a.catalog_id || a.catalog?.id || UUID_ZERO,
+      catalog_id: a.catalog_id || a.catalog?.id || '',
     };
   });
 }
@@ -73,10 +73,10 @@ export function makeCategoryDiscount(d) {
 
 export function makeSessionStub(sesh) {
   return {
-    id: sesh?.id || UUID_ZERO,
-    sync_id: sesh?.sync_id || UUID_ZERO,
-    outlet_id: sesh?.outlet_id || sesh?.outlet?.id || UUID_ZERO,
-    cashier_id: sesh?.cashier_id || sesh?.cashier?.id || UUID_ZERO,
+    id: sesh?.id || '',
+    sync_id: sesh?.sync_id || '',
+    outlet_id: sesh?.outlet_id || sesh?.outlet?.id || '',
+    cashier_id: sesh?.cashier_id || sesh?.cashier?.id || '',
     transaction_date: sesh?.transaction_date || '',
     started_at: sesh?.started_at || '',
     finished_at: sesh?.finished_at || null,
@@ -90,14 +90,14 @@ export function makeSessionStub(sesh) {
     created_at: sesh?.created_at || '',
     updated_at: sesh?.updated_at || DATE_ZERO,
     outlet: sesh?.outlet || null,
-    cashier: sesh?.cashier || { id: UUID_ZERO, name: '' },
+    cashier: sesh?.cashier || { id: '', name: '' },
   };
 }
 
 export function makeSalesChannelStub(ch) {
   return ch
-    ? { id: ch.id || UUID_ZERO, name: ch.name || '' }
-    : { id: UUID_ZERO, name: '' };
+    ? { id: ch.id || '', name: ch.name || '' }
+    : { id: '', name: '' };
 }
 
 // ── Pending bill for cache_openbills ──
@@ -121,13 +121,13 @@ export function makePendingBill({ orderId, code, billName, items, cartState, cha
   const hasCatDisc = Array.isArray(discountCategories) && discountCategories.length > 0;
 
   return {
-    id: UUID_ZERO,
+    id: '',
     sync_id: orderId,
-    ref_id: UUID_ZERO,
-    session_id: UUID_ZERO,
-    sales_channel_id: channel?.id || UUID_ZERO,
-    payment_method_id: UUID_ZERO,
-    membership_id: cartState?.meta?.customer?.id || UUID_ZERO,
+    ref_id: '',
+    session_id: '',
+    sales_channel_id: channel?.id || '',
+    payment_method_id: '',
+    membership_id: cartState?.meta?.customer?.id || '',
     code: code || '',
     payment_ref: '',
     bill_name: billName || '',
@@ -149,16 +149,16 @@ export function makePendingBill({ orderId, code, billName, items, cartState, cha
     cancelled_by: '',
     cancelled_at: DATE_ZERO,
     paid_at: DATE_ZERO,
-    paid_session_id: UUID_ZERO,
+    paid_session_id: '',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     is_category_discount: hasCatDisc,
     is_offline_mode: true,
     is_synced: false,
     session: {
-      id: UUID_ZERO,
-      sync_id: UUID_ZERO,
-      cashier: { id: UUID_ZERO, name: session?.user?.name || '' },
+      id: '',
+      sync_id: '',
+      cashier: { id: '', name: session?.user?.name || '' },
       outlet: session?.sales_session?.outlet
         ? { id: session.sales_session.outlet.id, name: session.sales_session.outlet.name }
         : null,
@@ -176,15 +176,15 @@ export function makeCompletedOrder({ orderId, code, billName, items, cartState, 
   return {
     ...billing,
     status: 'completed',
-    payment_method_id: paymentMethod?.id || UUID_ZERO,
+    payment_method_id: paymentMethod?.id || '',
     payment_ref: paymentRef || '',
     total_payment: toNum(totalPayment) || billing.total_charges,
     paid_at: paidAt || new Date().toISOString(),
-    paid_session_id: session?.sales_session?.id || UUID_ZERO,
+    paid_session_id: session?.sales_session?.id || '',
     is_synced: false,
     payment_method: paymentMethod ? { id: paymentMethod.id, name: paymentMethod.name } : null,
     payment: {
-      id: UUID_ZERO,
+      id: '',
       transaction_id: orderId,
       amount: toNum(totalPayment) || billing.total_charges,
       status: 'settlement',
@@ -257,7 +257,7 @@ export function makeSuccessData({ orderId, code, billName, items, cartState, cha
     payment_ref: paymentRef || '',
     payment_method: paymentMethod ? { id: paymentMethod.id, name: paymentMethod.name, provider: paymentMethod.provider } : null,
     sales_channel: channel?.name ? { id: channel.id, name: channel.name } : null,
-    session: { id: UUID_ZERO, cashier: { name: session?.user?.name || '' } },
+    session: { id: '', cashier: { name: session?.user?.name || '' } },
     items: orderItems.map(i => ({
       catalog: { name: i.catalog_name || '', category_id: i.catalog?.category_id || 0 },
       catalog_name: i.catalog_name || '',

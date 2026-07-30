@@ -361,6 +361,14 @@ const CheckoutScreen = () => {
           } else {
             await updateOrderBill(pendingSyncId, { items: remainingItems }, session?.user?.id);
           }
+          // Sync cache_openbills
+          var _cache = getCache('cache_openbills') || [];
+          var _idx = _cache.findIndex(function(b) { return b.sync_id === pendingSyncId || b.id === pendingSyncId; });
+          if (_idx >= 0) {
+            if (isFullPayment) { _cache[_idx].is_show = false; }
+            else { _cache[_idx].items = remainingItems; }
+            setCache('cache_openbills', _cache);
+          }
         } catch {}
       }
 
@@ -411,6 +419,7 @@ const CheckoutScreen = () => {
           })),
         };
       });
+      // Build receipt-ready shape
       // Kitchen items: cuma tambahan baru (list-only, bukan bill)
       const payNewItems = (CartState?.items?.list || []).map(i => ({
         catalog: { name: i.name || '' },
@@ -424,7 +433,6 @@ const CheckoutScreen = () => {
           quantity: Number(a.quantity || 1) * Number(i.quantity),
         })),
       }));
-      // Build receipt-ready shape
       const paySuccessData = makeSuccessData({
         orderId,
         code: completedOrder.code,
@@ -770,9 +778,9 @@ const CheckoutScreen = () => {
             ...serverData,
             items: orderItems,
             subtotal_nett: itemsTotal,
-            new_items: kitchenNewItemsRef.current || undefined,
             code: serverData?.code || metaRef?.code || '',
             total_charges: itemsTotal + metaSvc - metaDisc,
+            new_items: kitchenNewItemsRef.current || undefined,
             service_charge_value: metaSvc,
             discount_value: metaDisc,
             // created_at dan paid_at kenapa ini now - karena kebutuhan print last update print
@@ -872,6 +880,20 @@ const CheckoutScreen = () => {
       dispatch($failure(err));
       return;
     }
+    // Sync cache_openbills — new bill
+    var _cacheBills = getCache('cache_openbills') || [];
+    var _newEntry = makePendingBill({
+      orderId,
+      code: orderCode,
+      billName,
+      items: orderItems,
+      cartState: CartState,
+      channel: Channel?.selectedChannel,
+      session,
+      discountCategories: discount_categories || [],
+    });
+    _cacheBills.unshift(_newEntry);
+    setCache('cache_openbills', _cacheBills);
 
     await offlinePostSave(billName, orderId, orderCode, orderItems, allItems, discount_categories);
   };

@@ -565,12 +565,12 @@ const cartSlice = createSlice({
       }));
 
       state.bill = {
-        id: order?.sync_id || UUID_ZERO,
+        id: order?.sync_id || '',
         bill_name: order.bill_name || '',
         total_bill: totalCharges,
         membership: order.membership_id ? { id: order.membership_id } : null,
         is_offline_mode: true,
-        sync_id: order?.sync_id || UUID_ZERO,
+        sync_id: order?.sync_id || '',
         origin_session_sync_id: order.origin_session_sync_id || null,
         originalItems: order.original_items || null,
         itemSnapshot: (order.items || []).map(i => ({

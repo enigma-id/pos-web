@@ -1,4 +1,4 @@
-import { UUID_ZERO, DATE_ZERO } from './constants';
+import { DATE_ZERO } from './constants';
 
 const toIsoNow = () => new Date().toISOString();
 
@@ -183,7 +183,7 @@ const buildOrderItem = (item, index, orderId) => {
   const unitBill = Math.max(0, unitNett - discountValue);
 
   return {
-    id: UUID_ZERO,
+    id: '',
     order_id: orderId,
     catalog: buildCatalogFromItem(item),
     additional_id: null,
