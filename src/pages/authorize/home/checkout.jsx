@@ -38,7 +38,6 @@ import { store } from '../../../services/store';
 import {
   makePendingBill,
   makeCompletedOrder,
-  makeSuccessData,
   makeIdbBillData,
 } from '../../../services/offline/shapes';
 import { getCache, setCache } from '../../../utils/cache';
@@ -363,10 +362,15 @@ const CheckoutScreen = () => {
           }
           // Sync cache_openbills
           var _cache = getCache('cache_openbills') || [];
-          var _idx = _cache.findIndex(function(b) { return b.sync_id === pendingSyncId || b.id === pendingSyncId; });
+          var _idx = _cache.findIndex(function (b) {
+            return b.sync_id === pendingSyncId || b.id === pendingSyncId;
+          });
           if (_idx >= 0) {
-            if (isFullPayment) { _cache[_idx].is_show = false; }
-            else { _cache[_idx].items = remainingItems; }
+            if (isFullPayment) {
+              _cache[_idx].is_show = false;
+            } else {
+              _cache[_idx].items = remainingItems;
+            }
             setCache('cache_openbills', _cache);
           }
         } catch {}
@@ -433,22 +437,22 @@ const CheckoutScreen = () => {
           quantity: Number(a.quantity || 1) * Number(i.quantity),
         })),
       }));
-      const paySuccessData = makeSuccessData({
-        orderId,
-        code: completedOrder.code,
-        billName: completedOrder.bill_name,
-        items: orderItems,
-        cartState: CartState,
-        channel: Channel?.selectedChannel,
-        session,
-        paymentMethod: selectedMethod,
-        paymentRef: selectedMethod?.provider === 'cash' ? '' : paymentRef,
-        totalPayment: completedOrder.total_payment,
-        paidAt: now,
-        created_at: now,
-        discountCategories: discount_categories || [],
-        isPayment: true,
-      });
+      // const paySuccessData = makeSuccessData({
+      //   orderId,
+      //   code: completedOrder.code,
+      //   billName: completedOrder.bill_name,
+      //   items: orderItems,
+      //   cartState: CartState,
+      //   channel: Channel?.selectedChannel,
+      //   session,
+      //   paymentMethod: selectedMethod,
+      //   paymentRef: selectedMethod?.provider === 'cash' ? '' : paymentRef,
+      //   totalPayment: completedOrder.total_payment,
+      //   paidAt: now,
+      //   created_at: now,
+      //   discountCategories: discount_categories || [],
+      //   isPayment: true,
+      // });
       paySuccessData.new_items = payNewItems;
 
       dispatch(setWarning('Payment saved offline. It will sync when online.'));
@@ -456,7 +460,7 @@ const CheckoutScreen = () => {
       setSelectedMethod(paymentMethod[0]);
 
       // Show success modal
-      openModal(<SuccessModal data={paySuccessData} backToMenu />, 'w-md');
+      // openModal(<SuccessModal data={paySuccessData} backToMenu />, 'w-md');
       return; // ⛔️ skip mutation API
     }
 

@@ -22,16 +22,14 @@ import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCo
 import { resetCart, selectedBill } from '../../../services/cart/slice';
 import { v4 as uuidv4 } from 'uuid';
 import { store } from '../../../services/store';
-import {
-  makePendingBill,
-  makeSuccessData,
-  makeIdbBillData,
-} from '../../../services/offline/shapes';
+import { makePendingBill, makeIdbBillData } from '../../../services/offline/shapes';
 import { $failure } from '../../../services/form/action';
 import { useUpdateMutation } from '../../../services/sales/order/action';
 import { getCache, setCache } from '../../../utils/cache';
 // import useOutlet from '../../../services/outlet/hooks';
 import { currencyFormat } from '../../../utils/common';
+
+const BILLS_CACHE_KEY = 'cache_openbills';
 
 const Cart = ({ onUpdate }) => {
   const navigate = useNavigate();
@@ -40,10 +38,12 @@ const Cart = ({ onUpdate }) => {
   const FormState = useSelector(state => state?.Form);
   const Channel = useSelector(state => state?.SalesChannel);
   const session = useSelector(s => s.Auth?.session);
+  const OfflineSummary = useSelector(state => state?.Offline.sessionSummary);
+
+  const dataModalSuccess = React.useRef(null);
 
   const [updateBillName, setUpdateBillName] = React.useState(false);
   const updateBillNameRef = React.useRef(false);
-  const saveBillOfflineDataRef = React.useRef(null);
   const isOfflineSaveRef = React.useRef(false);
   const billPayloadMetaRef = React.useRef(null);
   const { showCustomer } = useSidebar();
@@ -74,32 +74,199 @@ const Cart = ({ onUpdate }) => {
     return isOpen ? 'open' : 'create';
   };
 
-  const flattenAdditionals = (additionals = []) => {
-    const result = [];
+  // Offline — Cache and IDB
+  const onCreateBillOffline = async billName => {
+    if (!OfflineSummary) {
+      dispatch(setWaring('Please open session.'));
+      return;
+    }
 
-    additionals.forEach(add => {
-      const { id: addon_group_id, type, items = [] } = add;
+    const discount_categories = CartState?.discount?.category
+      ?.filter(
+        cat =>
+          cat && cat.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
+      )
+      ?.map(cat => ({
+        category_id: cat.id,
+        category: cat,
+        ...(cat.discount_type === 'nominal'
+          ? { discount_value: cat.discount_value }
+          : { discount_percentage: cat.discount_value }),
+      }));
 
-      items.forEach(child => {
-        const isSelected = type === 'quantity' ? (child.quantity || 0) > 0 : !!child.selected;
+    const items = CartState?.items?.list?.map(item => {
+      const base = {
+        catalog_id: item.id,
+        category_id: item.category_id,
+        quantity: item.quantity,
+        unit_nett: item.unit_nett,
+        catalog_name: item.name,
+      };
 
-        if (isSelected) {
-          const entry = { addon_group_id, addon_item_id: child.addon_item_id ?? child.id };
+      if (item?.is_custom) {
+        base.catalog_name = item?.name;
+        base.unit_nett = item?.unit_nett;
+      }
 
-          if (child.addon_item_id) {
-            entry.id = child.id;
-          }
+      if (item?.additionals_flat?.length > 0) {
+        base.addons = item?.additionals_flat;
+      }
 
-          if (type === 'quantity') {
-            entry.quantity = child.quantity;
-          }
-
-          result.push(entry);
-        }
-      });
+      return base;
     });
 
-    return result;
+    const orderId = uuidv4();
+    const now = new Date();
+    const code = `${now.toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
+    const payload = {
+      code: code,
+      sync_id: orderId,
+      bill_name: billName,
+      membership_id: CartState?.meta?.customer?.id,
+      sales_channel_id: Channel?.selectedChannel?.id,
+      status: 'pending',
+      items,
+
+      // ini untuk kebutuhan standarisasi data Offline to Online
+      created_at: now,
+      session: OfflineSummary,
+      membership: CartState?.meta?.customer,
+      sales_channel: Channel?.selectedChannel,
+      is_discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? true : false,
+      discount_value: CartState?.discount?.cart?.amount,
+      service_charge_percentage: CartState?.meta?.service_charge_percentage,
+      service_charge_value: CartState?.meta?.service_charge_value,
+      total_charges: CartState?.meta?.grand_total,
+      created_at: new Date(),
+    };
+
+    if (CartState?.discount?.cart?.type) {
+      if (CartState?.discount?.cart?.type === 'percentage') {
+        payload.discount_percentage = CartState?.discount?.cart?.value;
+      }
+    }
+
+    if (discount_categories?.length > 0) {
+      payload.category_discounts = discount_categories;
+    }
+
+    const dataOfflineToOnline = makePendingBill(payload);
+    try {
+      await createOrderBill(dataOfflineToOnline, session?.user?.id);
+    } catch (err) {
+      dispatch($failure(err));
+      return;
+    }
+
+    triggerQueueRefresh();
+
+    // Push ke localStorage bills cache
+    try {
+      const existing = getCache(BILLS_CACHE_KEY) || [];
+      existing.unshift(dataOfflineToOnline);
+      setCache(BILLS_CACHE_KEY, existing);
+    } catch (e) {
+      console.error('[SAVE BILL] cache error:', e);
+    }
+
+    // 🔁 Update sessionSummary incremental
+    updateSessionSummary({
+      type: 'bill',
+      outstanding_bill: CartState?.meta?.grand_total,
+    });
+
+    handleModalPrint(dataOfflineToOnline);
+
+    // Refresh bills list biar button jadi Open Bill
+    bill();
+
+    // dispatch(resetCart());
+  };
+
+  // Online — API
+  const onCreateBillOnline = async billName => {
+    const discount_categories = CartState?.discount?.category
+      ?.filter(
+        cat =>
+          cat && cat.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
+      )
+      ?.map(cat => ({
+        category_id: cat.id,
+        ...(cat.discount_type === 'nominal'
+          ? { discount_value: cat.discount_value }
+          : { discount_percentage: cat.discount_value }),
+      }));
+
+    const items = CartState?.items?.list?.map(item => {
+      const base = {
+        catalog_id: item.id,
+        quantity: item.quantity,
+      };
+
+      if (item?.is_custom) {
+        base.catalog_name = item?.name;
+        base.unit_nett = item?.unit_nett;
+      }
+
+      if (item?.additionals_flat?.length > 0) {
+        base.addons = item?.additionals_flat?.map(addon => {
+          return {
+            ...addon,
+            addon_group_id: addon?.addon_group?.id,
+          };
+        });
+      }
+
+      return base;
+    });
+
+    const payload = {
+      bill_name: billName,
+      membership_id: CartState?.meta?.customer?.id,
+      sales_channel_id: Channel?.selectedChannel?.id,
+      status: 'pending',
+      items,
+    };
+
+    if (CartState?.discount?.cart?.type) {
+      if (CartState?.discount?.cart?.type === 'percentage') {
+        payload.discount_percentage = CartState?.discount?.cart?.value;
+      }
+
+      if (CartState?.discount?.cart?.type === 'nominal') {
+        payload.discount_value = CartState?.discount?.cart?.value;
+      }
+    }
+
+    if (discount_categories?.length > 0) {
+      payload.category_discounts = discount_categories;
+    }
+
+    // kenapa gua pakai ini karena kita saat sukses API tidak ambil data ulang, jadi kita perlu masukan ke data modal ini bro
+    dataModalSuccess.current = {
+      total_charges: CartState?.meta?.grand_total || 0,
+      paid_at: new Date(),
+      sales_channel: Channel?.selectedChannel,
+      membership: CartState?.meta?.customer,
+      session: session.sales_session,
+    };
+
+    try {
+      await checkout(payload).unwrap();
+      dispatch(setWarning('Bill saved.'));
+    } catch (err) {
+      dispatch($failure(err));
+    }
+  };
+
+  const onCreateBill = async billName => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+
+    if (isOffline) {
+      onCreateBillOffline(billName);
+    } else {
+      onCreateBillOnline(billName);
+    }
   };
 
   const getOrderPayload = () => {
@@ -325,231 +492,6 @@ const Cart = ({ onUpdate }) => {
     setUpdateBillName(false);
   };
 
-  const onCreateBill = async billName => {
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-    const userId = session?.user?.id;
-
-    if (isOffline) {
-      const allItems = [...(CartState?.items?.list || []), ...(CartState?.items?.bill || [])];
-      const orderItems = allItems.map(item => ({
-        catalog_id: item.catalog_id || item.id,
-        catalog_name: item.name || '',
-        quantity: item.quantity,
-        unit_nett: Number(item.unit_nett) || 0,
-        addons: (item.additionals_flat || []).map(a => ({
-          addon_group_id: a.addon_group?.id,
-          addon_item_id: a.addon_item_id,
-          catalog_name: a.name || '',
-          unit_nett: a.unit_nett || 0,
-          ...(a?.addon_group?.type === 'quantity' ? { quantity: a.quantity ?? 1 } : {}),
-        })),
-        ...(item.is_custom ? { is_custom: true } : {}),
-      }));
-
-      const orderId = uuidv4();
-      const now = new Date();
-      const code = `${now.toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
-
-      const discountCatList = [];
-      const originSessionSyncId = store.getState()?.Offline?.sessionSummary?.id || null;
-      try {
-        const idbData = makeIdbBillData({
-          orderId,
-          code,
-          billName,
-          items: orderItems,
-          cartState: CartState,
-          channel: Channel?.selectedChannel,
-          session,
-          discountCategories: discountCatList,
-          originSessionSyncId,
-          paidSessionSyncId: null,
-        });
-        await createOrderBill(idbData, userId);
-      } catch (err) {
-        dispatch($failure(err));
-        return;
-      }
-      triggerQueueRefresh();
-      dispatch(setWarning('Bill saved offline.'));
-
-      // Push ke localStorage bills cache
-      try {
-        const BILLS_CACHE_KEY = 'cache_openbills';
-        const existing = getCache(BILLS_CACHE_KEY) || [];
-        const cacheEntry = makePendingBill({
-          orderId,
-          code,
-          billName,
-          items: orderItems,
-          cartState: CartState,
-          channel: Channel?.selectedChannel,
-          session,
-          discountCategories: discountCatList,
-        });
-        existing.unshift(cacheEntry);
-        setCache(BILLS_CACHE_KEY, existing);
-      } catch (e) {
-        console.error('[SAVE BILL] cache error:', e);
-      }
-
-      // 🔁 Update sessionSummary incremental
-      updateSessionSummary({
-        type: 'bill',
-        sync_id: orderId,
-        items: orderItems,
-        bill_name: billName,
-        service_charge_value: CartState?.meta?.service_charge_value || 0,
-      });
-
-      const newItems = (CartState?.items?.list || []).map(i => ({
-        catalog: { name: i.name || '' },
-        catalog_name: i.name || '',
-        quantity: i.quantity || 0,
-        unit_nett: i.unit_nett || 0,
-        discount_value: 0,
-        addons: (i.additionals_flat || []).map(a => ({
-          catalog_name: a.name || '',
-          unit_nett: a.unit_nett || 0,
-          quantity: Number(a.quantity || 1) * Number(i.quantity),
-        })),
-      }));
-      const successData = makeSuccessData({
-        orderId,
-        code,
-        billName,
-        items: orderItems,
-        cartState: CartState,
-        channel: Channel?.selectedChannel,
-        session,
-        paymentMethod: null,
-        paymentRef: '',
-        totalPayment: 0,
-        paidAt: null,
-        discountCategories: discountCatList,
-        isPayment: false,
-      });
-      successData.new_items = newItems;
-
-      // ⛔️ Flag: skip stale mutation effect
-      isOfflineSaveRef.current = true;
-
-      openModal(<SuccessModal data={successData} />, 'w-md');
-
-      // Refresh bills list biar button jadi Open Bill
-      bill();
-
-      dispatch(resetCart());
-      return; // ⛔️ skip mutation API
-    }
-
-    // ===== ONLINE PATH =====
-    const discount_categories = CartState?.discount?.category
-      ?.filter(
-        cat =>
-          cat && cat.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
-      )
-      ?.map(cat => ({
-        category_id: cat.id,
-        ...(cat.discount_type === 'nominal'
-          ? { discount_value: cat.discount_value }
-          : { discount_percentage: cat.discount_value }),
-      }));
-
-    const billItems = CartState?.items?.bill?.map(bi => {
-      const base = {
-        id: bi.id,
-        catalog_id: bi.catalog_id,
-        quantity: bi.quantity,
-      };
-
-      if (bi?.is_custom) {
-        base.catalog_name = bi.name;
-        base.unit_nett = bi.unit_nett;
-      }
-
-      const flattened = flattenAdditionals(bi?.addons);
-
-      if (flattened?.length > 0) {
-        base.addons = flattened;
-      }
-
-      return base;
-    });
-
-    const items = CartState?.items?.list?.map(item => {
-      const base = {
-        catalog_id: item.id,
-        quantity: item.quantity,
-      };
-
-      if (item?.is_custom) {
-        base.catalog_name = item?.name;
-        base.unit_nett = item?.unit_nett;
-      }
-
-      const flattened = flattenAdditionals(item?.addons);
-
-      if (flattened?.length > 0) {
-        base.addons = flattened;
-      }
-
-      return base;
-    });
-
-    // Simpan meta sebelum reset (online path)
-    billPayloadMetaRef.current = {
-      total_charges: CartState?.meta?.grand_total || 0,
-      service_charge_value: CartState?.meta?.service_charge_value || 0,
-      discount_value: CartState?.discount?.cart?.amount || 0,
-      code: CartState?.bill?.code || '',
-      created_at: new Date().toISOString(),
-    };
-
-    const payload = {
-      bill_name: billName,
-      membership_id: CartState?.meta?.customer?.id,
-      sales_channel_id: Channel?.selectedChannel?.id,
-      status: 'pending',
-      items,
-    };
-
-    if (billItems?.length > 0) {
-      payload.items = [...billItems, ...items];
-    }
-
-    if (CartState?.discount?.cart?.type) {
-      if (CartState?.discount?.cart?.type === 'percentage') {
-        payload.discount_percentage = CartState?.discount?.cart?.value;
-      }
-
-      if (CartState?.discount?.cart?.type === 'nominal') {
-        payload.discount_value = CartState?.discount?.cart?.value;
-      }
-    }
-
-    if (discount_categories?.length > 0) {
-      payload.category_discounts = discount_categories;
-    }
-
-    // Simpan meta sebelum reset (online path)
-    billPayloadMetaRef.current = {
-      total_charges: CartState?.meta?.grand_total || 0,
-      service_charge_value: CartState?.meta?.service_charge_value || 0,
-      discount_value: CartState?.discount?.cart?.amount || 0,
-      code: CartState?.bill?.code || '',
-      created_at: new Date().toISOString(),
-    };
-
-    // Online — API
-    try {
-      await checkout(payload).unwrap();
-      dispatch(setWarning('Bill saved.'));
-    } catch (err) {
-      dispatch($failure(err));
-    }
-  };
-
   const renderAdditionals = item => {
     return (item?.addons || [])
       .map(add => {
@@ -647,21 +589,7 @@ const Cart = ({ onUpdate }) => {
   };
 
   const handleModalPrint = data => {
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-
-    let printData = data;
-    if (isOffline && saveBillOfflineDataRef.current) {
-      printData = {
-        ...saveBillOfflineDataRef.current,
-        id: data?.id || saveBillOfflineDataRef.current.id,
-      };
-    }
-
-    openModal(<SuccessModal data={printData} />, 'w-md');
-
-    if (isOffline && saveBillOfflineDataRef.current) {
-      saveBillOfflineDataRef.current = null;
-    }
+    openModal(<SuccessModal data={data} />, 'w-md');
   };
 
   const handleModalUpdateBillName = data => {
@@ -687,57 +615,29 @@ const Cart = ({ onUpdate }) => {
   };
 
   React.useEffect(() => {
-    if (checkoutResult?.isSuccess || updateResult?.isSuccess) {
-      // ⛔️ Skip — this is a stale trigger from offline path
-      if (isOfflineSaveRef.current) {
-        isOfflineSaveRef.current = false;
-        checkoutResult?.reset();
-        updateResult?.reset();
-        return;
-      }
-
-      const respData = checkoutResult?.data?.data || updateResult?.data?.data || {};
-      const metaRef = billPayloadMetaRef.current;
-      const billData = {
-        ...respData,
-        code:
-          respData?.code ||
-          metaRef?.code ||
-          checkoutResult?.data?.code ||
-          updateResult?.data?.code ||
-          '',
-        sales_channel:
-          respData?.sales_channel ||
-          (Channel?.selectedChannel?.name ? { name: Channel.selectedChannel.name } : null),
-        session: respData?.session || { cashier: { name: session?.user?.name || '-' } },
-        total_charges: respData?.total_charges || metaRef?.total_charges || 0,
-        service_charge_value: respData?.service_charge_value || metaRef?.service_charge_value || 0,
-        discount_value: respData?.discount_value || metaRef?.discount_value || 0,
-        paid_at:
-          respData?.paid_at && !respData.paid_at.startsWith('0001')
-            ? respData.paid_at
-            : metaRef?.created_at || respData?.created_at || new Date().toISOString(),
-      };
-      billPayloadMetaRef.current = null;
-
-      if (updateBillNameRef.current) {
-        closeModal();
-        onBillSelected(billData);
-        updateBillNameRef.current = false;
-      } else {
-        bill();
-        handleModalPrint(billData);
-        // getServiceCharge();
-      }
-
-      checkoutResult?.reset();
-      updateResult?.reset();
-    }
-  }, [checkoutResult, updateResult]);
-
-  React.useEffect(() => {
     if (checkoutResult?.isError) {
       handleModalError();
+      checkoutResult?.reset();
+    }
+  }, [checkoutResult]);
+
+  React.useEffect(() => {
+    if (checkoutResult?.isSuccess && checkoutResult?.data) {
+      const metaRef = dataModalSuccess.current;
+
+      console.log('============metaRef============', metaRef);
+
+      const data = {
+        ...checkoutResult?.data?.data,
+        ...metaRef,
+      };
+
+      console.log('============data============', data);
+
+      dataModalSuccess.current = null;
+
+      handleModalPrint(data);
+      bill();
       checkoutResult?.reset();
     }
   }, [checkoutResult]);

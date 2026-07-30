@@ -1,5 +1,6 @@
 import { openDB, deleteDB } from 'idb';
 import { v4 as uuidv4 } from 'uuid';
+import { recalculateDiscountCategory } from './helper';
 
 const DB_VERSION = 5;
 
@@ -114,7 +115,10 @@ export const initQueueDB = async userId => {
 
 // ========== SESSIONS ==========
 
-export const createOfflineSession = async ({ cash_started, latitude, longitude, battery_health }, userId) => {
+export const createOfflineSession = async (
+  { cash_started, latitude, longitude, battery_health },
+  userId
+) => {
   const db = await ensureDB(userId);
   const sync_id = uuidv4();
   const now = getISO();
@@ -172,39 +176,16 @@ export const deleteOfflineSession = async (syncId, userId) => {
 
 // ========== ORDER BILLS ==========
 
-export const createOrderBill = async (data, userId) => {
+// payload ini sudah data sync untuk online bro
+export const createOrderBill = async (payload, userId) => {
   const db = await ensureDB(userId);
-  const sync_id = data.sync_id || uuidv4();
-  const now = getISO();
+
+  // origin_session_sync_id ini kenapa menggunakan or seperti ini, karena jika session summary/session payload dari online dia tidak mempunyai sync_id (sync_id adalah new id uuid dari client)
+  const origin_session_sync_id = payload?.session?.id || payload?.session?.sync_id;
 
   const doc = {
-    sync_id,
-    origin_session_sync_id: data.origin_session_sync_id || null,
-    sales_channel_id: data.sales_channel_id || null,
-    sales_channel_name: data.sales_channel_name || null,
-    payment_method_id: data.payment_method_id || null,
-    membership_id: data.membership_id || null,
-    payment_ref: data.payment_ref || '',
-    bill_name: data.bill_name || '',
-    cashier_name: data.cashier_name || '',
-    service_charge_value: data.service_charge_value || 0,
-    service_charge_percentage: data.service_charge_percentage || 0,
-    discount_percentage: data.discount_percentage || 0,
-    discount_value: data.discount_value || 0,
-    category_discounts: data.category_discounts || [],
-    items: data.items || [],
-    code: data.code || '',
-    status: data.status || 'pending',
-    total_payment: data.total_payment || 0,
-    paid_at: data.paid_at || null,
-    is_offline_mode: true,
-    is_synced: false,
-    ref_sync_id: data.ref_sync_id || '',
-    origin_session_sync_id: data.origin_session_sync_id || '',
-    paid_session_sync_id: data.paid_session_sync_id || null,
-    is_show: data.is_show !== false,
-    original_items: data.original_items || [],
-    createdAt: now,
+    ...payload,
+    origin_session_sync_id: origin_session_sync_id,
   };
 
   await db.add(STORES.orderBills, doc);

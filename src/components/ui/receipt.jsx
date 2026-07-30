@@ -87,23 +87,24 @@ const Receipt = ({ data }) => {
               {currencyFormat(item?.quantity * item?.unit_nett, false)}
             </p>
           </div>
-          {item?.addons?.map((addon, idx) => (
-            <div
-              key={idx}
-              style={{ display: 'flex', alignItems: '', justifyContent: 'space-between' }}
-            >
-              <p style={{ marginBlock: 2, fontSize: 9, textTransform: 'capitalize' }}>
-                + {addon?.catalog_name || '-'}{' '}
-                {/* catalog_name langsung, catalog?.name fallback struktural */}{' '}
-                {addon?.addon_group?.type === 'options'
-                  ? ''
-                  : `${addon?.quantity > 0 ? `(${addon?.quantity} x ${currencyFormat(addon?.unit_nett)})` : ''}`}
-              </p>
-              <p style={{ marginBlock: 2, fontSize: 9 }}>
-                {currencyFormat(addon?.quantity * addon?.unit_nett, false)}
-              </p>
-            </div>
-          ))}
+          {item?.addons &&
+            item?.addons?.map((addon, idx) => (
+              <div
+                key={idx}
+                style={{ display: 'flex', alignItems: '', justifyContent: 'space-between' }}
+              >
+                <p style={{ marginBlock: 2, fontSize: 9, textTransform: 'capitalize' }}>
+                  + {addon?.catalog_name || '-'}{' '}
+                  {/* catalog_name langsung, catalog?.name fallback struktural */}{' '}
+                  {addon?.addon_group?.type === 'options'
+                    ? ''
+                    : `${addon?.quantity > 0 ? `(${addon?.quantity} x ${currencyFormat(addon?.unit_nett)})` : ''}`}
+                </p>
+                <p style={{ marginBlock: 2, fontSize: 9 }}>
+                  {currencyFormat(addon?.quantity * addon?.unit_nett, false)}
+                </p>
+              </div>
+            ))}
         </div>
       ))}
 

@@ -62,18 +62,8 @@ export const updateSessionSummary = newData => {
   }, 0);
 
   if (newData.type === 'bill') {
-    const serviceCharge = newData.serviceChargeValue || newData.service_charge_value || 0;
-    const discount = newData.discountValue || newData.discount_value || 0;
-    const totalBill = itemsTotal - discount + serviceCharge;
     summary.summary.sales.outstanding_bill =
-      (summary.summary.sales.outstanding_bill || 0) + totalBill;
-    summary.orders.push({
-      sync_id: newData.sync_id,
-      status: 'pending',
-      items: newData.items,
-      bill_name: newData.bill_name,
-      total_payment: 0,
-    });
+      (summary.summary.sales.outstanding_bill || 0) + newData.outstanding_bill;
   } else if (newData.type === 'payment') {
     const totalPayment = newData.total_payment || 0;
     const serviceCharge = newData.service_charge_value || 0;

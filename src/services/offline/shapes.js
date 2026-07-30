@@ -1,75 +1,10 @@
 import { DATE_ZERO } from './constants';
+import { recalculateDiscountCategory } from './helper';
 
 // ── Numbers ──
 const toNum = v => (v && !Number.isNaN(Number(v)) ? Number(v) : 0);
 
 // ── Builders ──
-
-export function makeBillItem(item, orderId, index) {
-  const qty = toNum(item.quantity) || 1;
-  const unitNett = toNum(item.unit_nett ?? 0);
-  const unitGross = toNum(item.unit_gross ?? unitNett);
-  const unitBase = toNum(item.unit_base ?? unitGross);
-  const unitTax = toNum(item.unit_tax ?? 0);
-  const unitTaxed = toNum(item.unit_taxed ?? unitNett);
-  const unitBill = toNum(item.unit_bill ?? unitNett);
-  const discountVal = toNum(item.discount_value ?? item.discount_amount ?? 0);
-  const discountPct = toNum(item.discount_percentage ?? 0);
-  const isDiscPct = !!(item.is_discount_percentage ?? false);
-
-  return {
-    id: item.id || '',
-    order_id: orderId || '',
-    additional_id: item.additional_id || null,
-    addon_group_id: item.addon_group_id || null,
-    catalog_id: item.catalog_id || item.catalog?.id || '',
-    catalog_name: item.catalog_name || '',
-    category_name: item.category_name || '',
-    unit_base: unitBase,
-    unit_gross: unitGross,
-    discount_percentage: discountPct,
-    discount_value: discountVal,
-    is_discount_percentage: isDiscPct,
-    unit_nett: unitNett,
-    unit_tax: unitTax,
-    unit_taxed: unitTaxed,
-    unit_bill: unitBill,
-    quantity: qty,
-    catalog: item.catalog || {
-      id: item.catalog_id || '',
-      name: item.catalog_name || '',
-      category_id: item.category_id || 0,
-    },
-    addons: makeBillAddons(item.addons || [], orderId, qty),
-  };
-}
-
-export function makeBillAddons(addons, orderId, itemQty) {
-  if (!Array.isArray(addons)) return [];
-  return addons.map(a => {
-    const qty = toNum(a.quantity) || 1;
-    return {
-      order_id: orderId || '',
-      addon_group: a.addon_group || { id: a.addon_group_id || '', name: '', type: '' },
-      addon_group_id: a.addon_group_id || a.addon_group?.id || '',
-      quantity: qty,
-      unit_nett: toNum(a.unit_nett ?? 0),
-      unit_bill: toNum(a.unit_bill ?? a.unit_nett ?? 0),
-      catalog_name: a.catalog?.name || a.catalog_name || '',
-      catalog_id: a.catalog_id || a.catalog?.id || '',
-    };
-  });
-}
-
-export function makeCategoryDiscount(d) {
-  return {
-    category_id: d.category_id || d.id || '',
-    is_discount_percentage: d.discount_type === 'percentage' || !!d.is_discount_percentage,
-    discount_percentage: d.discount_type === 'percentage' ? toNum(d.discount_value) : toNum(d.discount_percentage || 0),
-    discount_value: d.discount_type === 'nominal' ? toNum(d.discount_value) : toNum(d.discount_value || 0),
-    category: d.category || { name: d.name || '' },
-  };
-}
 
 export function makeSessionStub(sesh) {
   return {
@@ -95,83 +30,58 @@ export function makeSessionStub(sesh) {
 }
 
 export function makeSalesChannelStub(ch) {
-  return ch
-    ? { id: ch.id || '', name: ch.name || '' }
-    : { id: '', name: '' };
+  return ch ? { id: ch.id || '', name: ch.name || '' } : { id: '', name: '' };
 }
 
 // ── Pending bill for cache_openbills ──
-export function makePendingBill({ orderId, code, billName, items, cartState, channel, session, discountCategories }) {
-  const allItems = Array.isArray(items) ? items : [];
-  const orderItems = allItems.map((it, idx) => makeBillItem(it, orderId, idx));
-
-  const itemsTotal = orderItems.reduce((s, i) => {
-    const it = i.unit_nett * i.quantity;
-    const at = (i.addons || []).reduce((a, ad) => a + ad.unit_nett * ad.quantity, 0);
-    return s + it + at;
-  }, 0);
-  const tax = orderItems.reduce((s, i) => s + i.unit_tax * i.quantity, 0);
-  const taxed = orderItems.reduce((s, i) => s + i.unit_taxed * i.quantity, 0);
-  const gross = orderItems.reduce((s, i) => s + i.unit_gross * i.quantity, 0);
-  const discPct = cartState?.discount?.cart?.type === 'percentage' ? toNum(cartState?.discount?.cart?.value) : 0;
-  const discVal = cartState?.discount?.cart?.type === 'nominal' ? toNum(cartState?.discount?.cart?.value) : 0;
-  const svcPct = toNum(cartState?.meta?.service_charge_percentage);
-  const svcVal = toNum(cartState?.meta?.service_charge_value);
-  const totalCharges = itemsTotal + svcVal;
-  const hasCatDisc = Array.isArray(discountCategories) && discountCategories.length > 0;
+export function makePendingBill(payload) {
+  // kita butuh untuk jumlahkan ulang data items addons terhadap
+  const cloneItems = payload.items.map(item => ({
+    ...item,
+    ...(item.addons && {
+      addons: item.addons.map(addon => ({
+        ...addon,
+        catalog_name: addon.name,
+        quantity: (addon.quantity || 1) * item.quantity,
+      })),
+    }),
+  }));
 
   return {
-    id: '',
-    sync_id: orderId,
-    ref_id: '',
-    session_id: '',
-    sales_channel_id: channel?.id || '',
-    payment_method_id: '',
-    membership_id: cartState?.meta?.customer?.id || '',
-    code: code || '',
-    payment_ref: '',
-    bill_name: billName || '',
-    subtotal_tax: tax,
-    subtotal_taxed: taxed,
-    subtotal_gross: gross,
-    subtotal_nett: itemsTotal,
-    total_bill: itemsTotal,
-    discount_percentage: discPct,
-    discount_value: discVal,
-    service_charge_percentage: svcPct,
-    service_charge_value: svcVal,
-    total_charges: totalCharges,
-    total_payment: 0,
-    cost_goods: 0,
-    status: 'pending',
-    is_discount_percentage: cartState?.discount?.cart?.type === 'percentage',
-    cancelled_reason: '',
-    cancelled_by: '',
-    cancelled_at: DATE_ZERO,
-    paid_at: DATE_ZERO,
-    paid_session_id: '',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    is_category_discount: hasCatDisc,
+    ...payload,
+    items: cloneItems,
     is_offline_mode: true,
     is_synced: false,
-    session: {
-      id: '',
-      sync_id: '',
-      cashier: { id: '', name: session?.user?.name || '' },
-      outlet: session?.sales_session?.outlet
-        ? { id: session.sales_session.outlet.id, name: session.sales_session.outlet.name }
-        : null,
-    },
-    sales_channel: makeSalesChannelStub(channel),
-    items: orderItems,
-    category_discounts: (Array.isArray(discountCategories) ? discountCategories : []).map(makeCategoryDiscount),
+    original_items: cloneItems,
+    category_discounts: recalculateDiscountCategory(payload.category_discounts, payload.items),
   };
 }
 
 // ── Completed order for cache_order_history ──
-export function makeCompletedOrder({ orderId, code, billName, items, cartState, channel, session, paymentMethod, paymentRef, totalPayment, paidAt, discountCategories }) {
-  const billing = makePendingBill({ orderId, code, billName, items, cartState, channel, session, discountCategories });
+export function makeCompletedOrder({
+  orderId,
+  code,
+  billName,
+  items,
+  cartState,
+  channel,
+  session,
+  paymentMethod,
+  paymentRef,
+  totalPayment,
+  paidAt,
+  discountCategories,
+}) {
+  const billing = makePendingBill({
+    orderId,
+    code,
+    billName,
+    items,
+    cartState,
+    channel,
+    session,
+    discountCategories,
+  });
 
   return {
     ...billing,
@@ -195,7 +105,18 @@ export function makeCompletedOrder({ orderId, code, billName, items, cartState, 
 }
 
 // ── IDB input for createOrderBill / updateOrderBill ──
-export function makeIdbBillData({ orderId, code, billName, items, cartState, channel, session, discountCategories, originSessionSyncId, paidSessionSyncId }) {
+export function makeIdbBillData({
+  orderId,
+  code,
+  billName,
+  items,
+  cartState,
+  channel,
+  session,
+  discountCategories,
+  originSessionSyncId,
+  paidSessionSyncId,
+}) {
   const orderItems = Array.isArray(items) ? items : [];
   return {
     sync_id: orderId,
@@ -213,64 +134,18 @@ export function makeIdbBillData({ orderId, code, billName, items, cartState, cha
     cashier_name: session?.user?.name || '',
     service_charge_value: toNum(cartState?.meta?.service_charge_value),
     service_charge_percentage: toNum(cartState?.meta?.service_charge_percentage),
-    discount_percentage: cartState?.discount?.cart?.type === 'percentage' ? toNum(cartState?.discount?.cart?.value) : 0,
-    discount_value: cartState?.discount?.cart?.type === 'nominal' ? toNum(cartState?.discount?.cart?.value) : 0,
-    category_discounts: (Array.isArray(discountCategories) ? discountCategories : []).map(makeCategoryDiscount),
+    discount_percentage:
+      cartState?.discount?.cart?.type === 'percentage'
+        ? toNum(cartState?.discount?.cart?.value)
+        : 0,
+    discount_value:
+      cartState?.discount?.cart?.type === 'nominal' ? toNum(cartState?.discount?.cart?.value) : 0,
+    category_discounts: (Array.isArray(discountCategories) ? discountCategories : []).map(
+      makeCategoryDiscount
+    ),
     items: orderItems.map((it, idx) => makeBillItem(it, orderId, idx)),
     status: 'pending',
     total_payment: 0,
     paid_at: null,
-  };
-}
-
-// ── SuccessModal data ──
-export function makeSuccessData({ orderId, code, billName, items, cartState, channel, session, paymentMethod, paymentRef, totalPayment, paidAt, discountCategories, isPayment }) {
-  const allItems = Array.isArray(items) ? items : [];
-  const orderItems = allItems.map((it, idx) => makeBillItem(it, orderId, idx));
-
-  const itemsTotal = orderItems.reduce((s, i) => {
-    const it = i.unit_nett * i.quantity;
-    const at = (i.addons || []).reduce((a, ad) => a + ad.unit_nett * ad.quantity, 0);
-    return s + it + at;
-  }, 0);
-  const svcVal = toNum(cartState?.meta?.service_charge_value);
-  const discVal = toNum(cartState?.discount?.cart?.amount || (cartState?.discount?.cart?.type === 'nominal' ? cartState?.discount?.cart?.value : 0));
-  const totalCharges = isPayment ? (toNum(totalPayment) || itemsTotal + svcVal) : itemsTotal + svcVal;
-
-  return {
-    sync_id: orderId,
-    code: code || '',
-    bill_name: billName || '',
-    total_charges: totalCharges,
-    total_payment: isPayment ? (toNum(totalPayment) || totalCharges) : 0,
-    status: isPayment ? 'completed' : 'pending',
-    paid_at: isPayment ? (paidAt || new Date().toISOString()) : DATE_ZERO,
-    subtotal_nett: itemsTotal,
-    subtotal_tax: 0,
-    subtotal_taxed: 0,
-    subtotal_gross: itemsTotal,
-    service_charge_value: svcVal,
-    discount_value: discVal,
-    is_discount_percentage: cartState?.discount?.cart?.type === 'percentage',
-    is_offline_mode: true,
-    is_synced: false,
-    payment_ref: paymentRef || '',
-    payment_method: paymentMethod ? { id: paymentMethod.id, name: paymentMethod.name, provider: paymentMethod.provider } : null,
-    sales_channel: channel?.name ? { id: channel.id, name: channel.name } : null,
-    session: { id: '', cashier: { name: session?.user?.name || '' } },
-    items: orderItems.map(i => ({
-      catalog: { name: i.catalog_name || '', category_id: i.catalog?.category_id || 0 },
-      catalog_name: i.catalog_name || '',
-      quantity: i.quantity,
-      unit_nett: i.unit_nett,
-      discount_value: i.discount_value,
-      addons: (i.addons || []).map(a => ({
-        catalog_name: a.catalog_name || '',
-        unit_nett: a.unit_nett,
-        quantity: a.quantity,
-      })),
-    })),
-    new_items: [],
-    category_discounts: (Array.isArray(discountCategories) ? discountCategories : []).map(makeCategoryDiscount),
   };
 }
