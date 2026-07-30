@@ -161,7 +161,7 @@ const CheckoutScreen = () => {
 
     const items = CartState?.items?.list?.map(item => {
       const base = {
-        catalog_id: item.id,
+        catalog_id: item.catalog_id,
         category_id: item.category_id,
         quantity: item.quantity,
         unit_nett: item.unit_nett,
@@ -245,7 +245,7 @@ const CheckoutScreen = () => {
     // Refresh bills list biar button jadi Open Bill
     bill();
 
-    // dispatch(resetCart());
+    dispatch(resetCart());
   };
 
   // Online — API
@@ -264,7 +264,7 @@ const CheckoutScreen = () => {
 
     const items = CartState?.items?.list?.map(item => {
       const base = {
-        catalog_id: item.id,
+        catalog_id: item.catalog_id,
         quantity: item.quantity,
       };
 

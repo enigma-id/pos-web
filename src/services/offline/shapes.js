@@ -47,6 +47,14 @@ export function makePendingBill(payload) {
     }),
   }));
 
+  let subtotal = 0;
+  cloneItems.forEach(item => {
+    subtotal += item.quantity * item.unit_nett;
+    (item.addons ?? []).forEach(addon => {
+      subtotal += addon.quantity * addon.unit_nett;
+    });
+  });
+
   return {
     ...payload,
     items: cloneItems,
@@ -54,6 +62,7 @@ export function makePendingBill(payload) {
     is_synced: false,
     original_items: cloneItems,
     category_discounts: recalculateDiscountCategory(payload.category_discounts, payload.items),
+    subtotal_nett: subtotal,
   };
 }
 

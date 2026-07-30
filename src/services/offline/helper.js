@@ -17,7 +17,7 @@ export function recalculateDiscountCategory(discountCategories, items) {
           dv = item.unit_nett * (dp / 100);
         }
 
-        totalDiscount += dv;
+        totalDiscount += dv * item.quantity;
       }
     });
 
