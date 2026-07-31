@@ -1,5 +1,3 @@
-import { DATE_ZERO } from './constants';
-
 const toIsoNow = () => new Date().toISOString();
 
 const toNumber = value => {
@@ -264,8 +262,8 @@ export const buildOfflineTransactionPayload = ({
   const category_discounts = cartState?.discount?.category?.map(d => ({
     category_id: d?.id,
     is_discount_percentage: d?.discount_type === 'percentage',
-    discount_percentage: d?.discount_type === 'percentage' ? (d?.discount_value || 0) : 0,
-    discount_value: d?.discount_type === 'nominal' ? (d?.discount_value || 0) : 0,
+    discount_percentage: d?.discount_type === 'percentage' ? d?.discount_value || 0 : 0,
+    discount_value: d?.discount_type === 'nominal' ? d?.discount_value || 0 : 0,
     category: { name: d?.name || '' },
   }));
 
@@ -287,9 +285,12 @@ export const buildOfflineTransactionPayload = ({
     membership: cartState?.membership || null,
     category_discounts: (category_discounts || []).map(d => ({
       category_id: d.category_id || d.id || '',
-      is_discount_percentage: d.is_discount_percentage ?? (d.discount_type === 'percentage'),
-      discount_percentage: d.discount_percentage || (d.discount_type === 'percentage' ? toNumber(d.discount_value) : 0),
-      discount_value: d.discount_value || (d.discount_type === 'nominal' ? toNumber(d.discount_value) : 0),
+      is_discount_percentage: d.is_discount_percentage ?? d.discount_type === 'percentage',
+      discount_percentage:
+        d.discount_percentage ||
+        (d.discount_type === 'percentage' ? toNumber(d.discount_value) : 0),
+      discount_value:
+        d.discount_value || (d.discount_type === 'nominal' ? toNumber(d.discount_value) : 0),
       category: d.category || { name: '' },
     })),
     bill_name:

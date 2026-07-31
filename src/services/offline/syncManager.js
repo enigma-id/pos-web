@@ -1,5 +1,5 @@
 import { baseQuery } from '../baseQuery';
-import { getCache, setCache } from '../../utils/cache';
+import { deleteOpenBills, getCache, setCache } from '../../utils/cache';
 import { ensureDB, STORES, setLastSyncTime as setLastSyncTimeMeta } from './queue';
 import { triggerQueueRefresh } from './usePendingQueueCount';
 import {
@@ -10,6 +10,7 @@ import {
   setSessionSummary,
   setSyncing,
 } from './slice';
+import { updateSessionSummary } from '../sales/session/hook';
 
 const MAX_RETRY = 5;
 const BASE_DELAY = 1000;
@@ -44,12 +45,11 @@ const shouldRetry = error => {
 };
 
 const HISTORY_CACHE_KEY = 'cache_order_history';
-const BILLS_CACHE_KEY = 'cache_openbills';
 
 // ===== HELPER: map order fields to /sales/sync payload =====
 
 const mapOrderToSync = (order, sessionSyncId) => ({
-  sync_id: order.sync_id || '',
+  sync_id: order.id ? null : order.sync_id,
   sales_channel_id: order.sales_channel_id || null,
   sales_channel_name: order.sales_channel_name || '',
   payment_method_id: order.payment_method_id || null,
@@ -130,23 +130,6 @@ const mapTopupsToSync = (topups, sessionSyncId) =>
     member_code: t.member_code || '',
     created_at: t.created_at,
   }));
-
-const cleanupLocalStorageCache = () => {
-  try {
-    for (const key of [HISTORY_CACHE_KEY, BILLS_CACHE_KEY]) {
-      const existing = getCache(key) || [];
-      const updated = existing.map(e => {
-        if (e?.is_synced === undefined || e?.is_synced === false) {
-          return { ...e, is_synced: e?.needs_sync ? false : true, needs_sync: undefined };
-        }
-        return e;
-      });
-      setCache(key, updated);
-    }
-  } catch {
-    // Silently fail
-  }
-};
 
 // ===== MAIN SYNC FUNCTION =====
 
@@ -477,37 +460,20 @@ export const removeFailedItem = async itemId => {
       await db.delete(STORES.orderBills, itemId);
       // Hapus juga dari cache_openbills kalo ada
       try {
-        const BILLS_CACHE_KEY = 'cache_openbills';
-        const cached = getCache(BILLS_CACHE_KEY) || [];
-        const filtered = cached.filter(b => b.sync_id !== itemId && b.id !== itemId);
-        setCache(BILLS_CACHE_KEY, filtered);
-      } catch (_) {}
-      // Recalculate session summary — remove outstanding bill
-      try {
-        const state = storeRef.getState();
-        const existing = state?.Offline?.sessionSummary;
-        if (existing) {
-          const itemsTotal = (bill.items || []).reduce((s, i) => {
-            const it = Number(i.unit_nett ?? 0) * Number(i.quantity || 0);
-            const at = (i.addons || []).reduce((a, ad) => a + Number(ad.unit_nett ?? 0) * Number(ad.quantity || 0), 0);
-            return s + it + at;
-          }, 0);
-          const svcVal = Number(bill.service_charge_value || 0);
-          const discVal = Number(bill.discount_value || 0);
-          const totalBill = itemsTotal - discVal + svcVal;
-          storeRef.dispatch(setSessionSummary({
-            ...existing,
-            summary: {
-              ...existing.summary,
-              sales: {
-                ...existing.summary?.sales,
-                outstanding_bill: Math.max(0, (existing.summary?.sales?.outstanding_bill || 0) - totalBill),
-              },
-            },
-            orders: (existing.orders || []).filter(o => o.sync_id !== itemId),
-          }));
+        if (bill?.id) {
+          console.log(
+            '[DEBUG]: Pikirin gimana cara-nya, karena ini bukan dihapus data-nya, tapi kemablikan ke semua'
+          );
+        } else {
+          deleteOpenBills(itemId);
         }
       } catch (_) {}
+
+      // Recalculate session summary — remove outstanding bill
+      try {
+        updateSessionSummary({ type: 'bill', outstanding_bill: -1 * bill.total_charges });
+      } catch (_) {}
+
       triggerQueueRefresh();
       return true;
     }

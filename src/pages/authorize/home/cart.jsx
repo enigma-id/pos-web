@@ -11,25 +11,16 @@ import { AddUserIcon, EditIcon, TrashIcon, UserIcon } from '../../../components/
 import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
-import { buildOfflineTransactionPayload, setWarning } from '../../../services/offline';
+import { setWarning } from '../../../services/offline';
 import { updateSessionSummary } from '../../../services/sales/session/hook';
-import {
-  createOrderBill,
-  createOrderPayment,
-  updateOrderBill,
-} from '../../../services/offline/queue';
+import { createOrderBill, updateOrderBill } from '../../../services/offline/queue';
 import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
-import { resetCart, selectedBill } from '../../../services/cart/slice';
+import { resetCart } from '../../../services/cart/slice';
 import { v4 as uuidv4 } from 'uuid';
-import { store } from '../../../services/store';
-import { makePendingBill, makeIdbBillData } from '../../../services/offline/shapes';
+import { makePendingBill } from '../../../services/offline/shapes';
 import { $failure } from '../../../services/form/action';
-import { useUpdateMutation } from '../../../services/sales/order/action';
-import { getCache, setCache } from '../../../utils/cache';
-// import useOutlet from '../../../services/outlet/hooks';
+import { saveOpenBills, updateOpenBills } from '../../../utils/cache';
 import { currencyFormat } from '../../../utils/common';
-
-const BILLS_CACHE_KEY = 'cache_openbills';
 
 const Cart = ({ onUpdate }) => {
   const navigate = useNavigate();
@@ -43,14 +34,8 @@ const Cart = ({ onUpdate }) => {
   const dataModalSuccess = React.useRef(null);
   const hasChangeBillName = React.useRef(false);
 
-  const [updateBillName, setUpdateBillName] = React.useState(false);
-  const updateBillNameRef = React.useRef(false);
-  const isOfflineSaveRef = React.useRef(false);
-  const billPayloadMetaRef = React.useRef(null);
   const { showCustomer } = useSidebar();
   const { openModal, closeModal } = useModal();
-
-  const [updateBillNameMutation] = useUpdateMutation();
 
   const {
     reset,
@@ -59,11 +44,11 @@ const Cart = ({ onUpdate }) => {
     billResult,
     billData,
     cartItems,
-    onBillSelected,
     checkout,
     checkoutResult,
     update,
     updateResult,
+    onUpdateBillName,
   } = useCart();
 
   // const { getServiceCharge } = useOutlet();
@@ -81,6 +66,19 @@ const Cart = ({ onUpdate }) => {
       dispatch(setWaring('Please open session.'));
       return;
     }
+
+    const discount_categories = CartState?.discount?.category
+      ?.filter(
+        cat =>
+          cat && cat.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
+      )
+      ?.map(cat => ({
+        category_id: cat.id,
+        category: cat,
+        ...(cat.discount_type === 'nominal'
+          ? { discount_value: cat.discount_value }
+          : { discount_percentage: cat.discount_value }),
+      }));
 
     const items = CartState?.items?.list?.map(item => {
       const base = {
@@ -126,8 +124,17 @@ const Cart = ({ onUpdate }) => {
       service_charge_percentage: CartState?.meta?.service_charge_percentage,
       service_charge_value: CartState?.meta?.service_charge_value,
       total_charges: CartState?.meta?.grand_total,
-      created_at: new Date(),
     };
+
+    if (CartState?.discount?.cart?.type) {
+      if (CartState?.discount?.cart?.type === 'percentage') {
+        payload.discount_percentage = CartState?.discount?.cart?.value;
+      }
+    }
+
+    if (discount_categories?.length > 0) {
+      payload.category_discounts = discount_categories;
+    }
 
     const dataOfflineToOnline = makePendingBill(payload);
     try {
@@ -142,9 +149,7 @@ const Cart = ({ onUpdate }) => {
 
     // Push ke localStorage bills cache
     try {
-      const existing = getCache(BILLS_CACHE_KEY) || [];
-      existing.unshift(dataOfflineToOnline);
-      setCache(BILLS_CACHE_KEY, existing);
+      saveOpenBills(dataOfflineToOnline);
     } catch (e) {
       handleModalError();
     }
@@ -165,6 +170,18 @@ const Cart = ({ onUpdate }) => {
 
   // Online — API
   const onCreateBillOnline = async billName => {
+    const discount_categories = CartState?.discount?.category
+      ?.filter(
+        cat =>
+          cat && cat.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
+      )
+      ?.map(cat => ({
+        category_id: cat.id,
+        ...(cat.discount_type === 'nominal'
+          ? { discount_value: cat.discount_value }
+          : { discount_percentage: cat.discount_value }),
+      }));
+
     const items = CartState?.items?.list?.map(item => {
       const base = {
         catalog_id: item.catalog_id,
@@ -195,6 +212,20 @@ const Cart = ({ onUpdate }) => {
       status: 'pending',
       items,
     };
+
+    if (CartState?.discount?.cart?.type) {
+      if (CartState?.discount?.cart?.type === 'percentage') {
+        payload.discount_percentage = CartState?.discount?.cart?.value;
+      }
+
+      if (CartState?.discount?.cart?.type === 'nominal') {
+        payload.discount_value = CartState?.discount?.cart?.value;
+      }
+    }
+
+    if (discount_categories?.length > 0) {
+      payload.category_discounts = discount_categories;
+    }
 
     // kenapa gua pakai ini karena kita saat sukses API tidak ambil data ulang, jadi kita perlu masukan ke data modal ini bro
     dataModalSuccess.current = {
@@ -227,6 +258,19 @@ const Cart = ({ onUpdate }) => {
 
   // Offline — Cache and IDB
   const onUpdateBillOffline = async billName => {
+    const discount_categories = CartState?.discount?.category
+      ?.filter(
+        cat =>
+          cat && cat.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
+      )
+      ?.map(cat => ({
+        category_id: cat.id,
+        category: cat,
+        ...(cat.discount_type === 'nominal'
+          ? { discount_value: cat.discount_value }
+          : { discount_percentage: cat.discount_value }),
+      }));
+
     // kalo hanya update bill name saja tidak perlu update yang di list CartState items list bro
     let allItems = [...(CartState?.items?.bill || []), ...(CartState?.items?.list || [])];
     if (hasChangeBillName.current) {
@@ -254,11 +298,12 @@ const Cart = ({ onUpdate }) => {
       return base;
     });
 
+    const now = new Date();
+
     const payload = {
       // kenapa gua tidak pakai sync_id - karena data-nya sudah ada di server bukan lagi di IDB
-      id: CartState?.bill?.id || '',
-      // kenapa gua pakai if conditional seperti ini, karena jika sudah ada di server kita tidak butuh lagi sync_id, tapi kalo masih ada di IDB kita perlu sync_id bro
-      sync_id: CartState?.bill?.id ? '' : CartState?.bill?.sync_id,
+      id: CartState?.bill?.id || null,
+      sync_id: CartState?.bill?.sync_id,
       code: CartState?.bill?.code,
       bill_name: billName,
       membership_id: CartState?.meta?.customer?.id,
@@ -276,47 +321,77 @@ const Cart = ({ onUpdate }) => {
       service_charge_percentage: CartState?.meta?.service_charge_percentage,
       service_charge_value: CartState?.meta?.service_charge_value,
       total_charges: CartState?.meta?.grand_total,
-      created_at: new Date(),
     };
+
+    if (CartState?.discount?.cart?.type) {
+      if (CartState?.discount?.cart?.type === 'percentage') {
+        payload.discount_percentage = CartState?.discount?.cart?.value;
+      }
+    }
+
+    if (discount_categories?.length > 0) {
+      payload.category_discounts = discount_categories;
+    }
+
     const dataOfflineToOnline = makePendingBill(payload);
 
     console.log('===================dataOfflineToOnline===================', dataOfflineToOnline);
 
-    // try {
-    //   await updateOrderBill(dataOfflineToOnline, session?.user?.id);
-    // } catch (err) {
-    //   handleModalError();
-    //   dispatch($failure(err));
-    //   return;
-    // }
+    console.log(
+      '[DEBUG] [CART] GT-TC',
+      CartState?.meta?.grand_total - CartState?.bill?.total_charges
+    );
 
-    // triggerQueueRefresh();
+    try {
+      await updateOrderBill(dataOfflineToOnline, session?.user?.id);
+    } catch (err) {
+      handleModalError();
+      dispatch($failure(err));
+      return;
+    }
 
-    // // Push ke localStorage bills cache
-    // try {
-    //   const existing = getCache(BILLS_CACHE_KEY) || [];
-    //   existing.unshift(dataOfflineToOnline);
-    //   setCache(BILLS_CACHE_KEY, existing);
-    // } catch (e) {
-    //   handleModalError();
-    // }
+    triggerQueueRefresh();
 
-    // // 🔁 Update sessionSummary incremental
-    // updateSessionSummary({
-    //   type: 'bill',
-    //   outstanding_bill: CartState?.meta?.grand_total,
-    // });
+    // Push ke localStorage bills cache
+    try {
+      updateOpenBills(dataOfflineToOnline);
+    } catch (err) {
+      handleModalError();
+    }
 
-    // handleModalPrint(dataOfflineToOnline);
+    // 🔁 Update sessionSummary incremental
+    updateSessionSummary({
+      type: 'bill',
+      outstanding_bill: CartState?.meta?.grand_total - CartState?.bill?.total_charges,
+    });
 
-    // // Refresh bills list biar button jadi Open Bill
-    // bill();
+    if (!hasChangeBillName) {
+      handleModalPrint(dataOfflineToOnline);
 
-    // dispatch(resetCart());
+      // Refresh bills list biar button jadi Open Bill
+      bill();
+      dispatch(resetCart());
+    } else {
+      onUpdateBillName(billName);
+      closeModal();
+      hasChangeBillName.current = false;
+    }
   };
 
   // Online — API
   const onUpdateBillOnline = async billName => {
+    const discount_categories = CartState?.discount?.category
+      ?.filter(
+        cat =>
+          cat && cat.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
+      )
+      ?.map(cat => ({
+        category_id: cat.id,
+        ...(cat.discount_type === 'nominal'
+          ? { discount_value: cat.discount_value }
+          : { discount_percentage: cat.discount_value }),
+      }));
+
     // kalo hanya update bill name saja tidak perlu update yang di list CartState items list bro
     let allItems = [...(CartState?.items?.bill || []), ...(CartState?.items?.list || [])];
     if (hasChangeBillName.current) {
@@ -403,6 +478,7 @@ const Cart = ({ onUpdate }) => {
       membership: CartState?.meta?.customer,
       session: session.sales_session,
       new_items: newItems,
+      bill_name: billName,
     };
 
     try {
@@ -570,6 +646,7 @@ const Cart = ({ onUpdate }) => {
   React.useEffect(() => {
     if (updateResult?.isSuccess && updateResult?.data) {
       if (hasChangeBillName.current) {
+        onUpdateBillName(dataModalSuccess.current.bill_name);
         closeModal();
         hasChangeBillName.current = false;
       } else {
