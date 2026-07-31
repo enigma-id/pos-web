@@ -59,33 +59,37 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
 
   // Flatten sessions for shifts tab
   const shiftItems = useMemo(() => {
-    return data.sessions.map(s => {
-      const isClosed = !!s.close_at;
-      const isOfflineSession = !s.id;
-      const skipShift = !isOfflineSession && !isClosed;
-      return {
-        id: s.sync_id,
-        sync_id: s.sync_id,
-        _type: 'session',
-        status: s.syncStatus || 'pending',
-        lastError: s.error || null,
-        createdAt: isClosed ? s.close_at : (s.createdAt || s.open_at),
-        body: {
-          cash: isClosed ? (s.cash_finished || s.cash_started) : s.cash_started,
-          cash_started: s.cash_started,
-          cash_finished: s.cash_finished,
-          open_at: s.open_at,
-          close_at: s.close_at,
-          orderCount: data.bills.filter(b => b.origin_session_sync_id === s.sync_id).length + data.orders.filter(o => o.paid_session_sync_id === s.sync_id).length,
-        },
-        transaction_preview: {
-          code: `SES-${(s.sync_id || '').slice(0, 8)}`,
-          cashier: { name: '-' },
-          session: { cashier: { name: '-' } },
-          created_at: isClosed ? s.close_at : (s.createdAt || s.open_at),
-        },
-      };
-    }).filter(s => !s.skipShift);
+    return data.sessions
+      .map(s => {
+        const isClosed = !!s.close_at;
+        const isOfflineSession = !s.id;
+        const skipShift = !isOfflineSession && !isClosed;
+        return {
+          id: s.sync_id,
+          sync_id: s.sync_id,
+          _type: 'session',
+          status: s.syncStatus || 'pending',
+          lastError: s.error || null,
+          createdAt: isClosed ? s.close_at : s.createdAt || s.open_at,
+          body: {
+            cash: isClosed ? s.cash_finished || s.cash_started : s.cash_started,
+            cash_started: s.cash_started,
+            cash_finished: s.cash_finished,
+            open_at: s.open_at,
+            close_at: s.close_at,
+            orderCount:
+              data.bills.filter(b => b.origin_session_sync_id === s.sync_id).length +
+              data.orders.filter(o => o.paid_session_sync_id === s.sync_id).length,
+          },
+          transaction_preview: {
+            code: `SES-${(s.sync_id || '').slice(0, 8)}`,
+            cashier: { name: '-' },
+            session: { cashier: { name: '-' } },
+            created_at: isClosed ? s.close_at : s.createdAt || s.open_at,
+          },
+        };
+      })
+      .filter(s => !s.skipShift);
   }, [data.sessions, data.bills, data.orders]);
 
   // Build categorized items
@@ -100,13 +104,13 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
       status: b.status || 'pending',
       lastError: null,
       transaction_preview: {
-        code: b.code || `OFF-${(b.sync_id || '').slice(0, 8)}`,
+        code: b.code,
         bill_name: b.bill_name,
-        channel: { name: b.sales_channel_name || '-' },
-        payment_method: { name: b.payment_method_name || (b.payment_method_id === 0 || b.payment_method_id === null ? 'Cash' : '#' + b.payment_method_id) },
-        cashier: { name: b.cashier_name || '-' },
+        sales_channel: b.sales_channel,
+        payment_method: b.payment_method,
+        session: b.session,
         item_count: (b.items || []).length,
-        total_charges: b.total_payment || 0,
+        total_charges: b.total_charges || 0,
         items: b.items || [],
         created_at: b.createdAt,
       },
@@ -123,7 +127,13 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
         code: p.code || `OFF-${(p.sync_id || '').slice(0, 8)}`,
         bill_name: p.bill_name,
         channel: { name: p.sales_channel_name || '-' },
-        payment_method: { name: p.payment_method_name || (p.payment_method_id === 0 || p.payment_method_id === null ? 'Cash' : '#' + p.payment_method_id) },
+        payment_method: {
+          name:
+            p.payment_method_name ||
+            (p.payment_method_id === 0 || p.payment_method_id === null
+              ? 'Cash'
+              : '#' + p.payment_method_id),
+        },
         cashier: { name: p.cashier_name || '-' },
         item_count: (p.items || []).length,
         total_charges: p.total_payment || 0,
@@ -191,7 +201,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
     const count = categorized[id]?.length || 0;
     return (
       <button
-        className={`relative z-10 flex-1 h-10 flex items-center justify-center transition-colors duration-300 gap-1.5 ${
+        className={`relative z-10 flex h-10 flex-1 items-center justify-center gap-1.5 transition-colors duration-300 ${
           isActive ? 'text-primary-content' : 'text-base-content/40 hover:text-base-content/70'
         }`}
         onClick={() => setActiveTab(id)}
@@ -200,17 +210,17 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
           {icon}
         </span>
         {isActive && (
-          <span className="capitalize text-[11px] font-bold tracking-tight animate-in fade-in duration-300">
+          <span className="animate-in fade-in text-[11px] font-bold tracking-tight capitalize duration-300">
             {label}
           </span>
         )}
         {count > 0 && (
           <span
-            className={`badge badge-xs min-w-4 h-3.5 ${
+            className={`badge badge-xs h-3.5 min-w-4 ${
               isActive
                 ? 'bg-primary-content text-primary border-none'
-                : 'badge-neutral text-white border-none'
-            } tabular-nums text-[8px]`}
+                : 'badge-neutral border-none text-white'
+            } text-[8px] tabular-nums`}
           >
             {count}
           </span>
@@ -225,18 +235,21 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
       onClick={onClose}
     >
       <div
-        className="bg-base-100 h-full w-105 shadow-2xl overflow-hidden flex flex-col animate-fade-slide"
+        className="bg-base-100 animate-fade-slide flex h-full w-105 flex-col overflow-hidden shadow-2xl"
         onClick={e => e.stopPropagation()}
         style={{ '--tw-translate-x': '100%' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-base-200 bg-base-100">
+        <div className="border-base-200 bg-base-100 flex items-center justify-between border-b px-5 py-4">
           <div className="flex items-center gap-3">
-            <h3 className="text-sm font-black text-base-content uppercase tracking-widest">
+            <h3 className="text-base-content text-sm font-black tracking-widest uppercase">
               Queue Manager
             </h3>
             {hasPendingOrFailed && (
-              <button className="btn btn-ghost btn-xs btn-circle" onClick={() => syncPendingSessions()}>
+              <button
+                className="btn btn-ghost btn-xs btn-circle"
+                onClick={() => syncPendingSessions()}
+              >
                 <FiRefreshCw className="h-4 w-4" />
               </button>
             )}
@@ -248,9 +261,9 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
 
         {/* Sliding Pill Tabs */}
         <div className="mx-4 mt-3 mb-1">
-          <div className="bg-base-200/60 p-1 rounded-xl flex relative border border-base-300/30 h-12">
+          <div className="bg-base-200/60 border-base-300/30 relative flex h-12 rounded-xl border p-1">
             <div
-              className="absolute h-[calc(100%-8px)] top-1 bg-primary rounded-lg transition-all duration-300 ease-in-out shadow-md"
+              className="bg-primary absolute top-1 h-[calc(100%-8px)] rounded-lg shadow-md transition-all duration-300 ease-in-out"
               style={{
                 width: 'calc(25% - 4px)',
                 left: `calc(${activeIndex * 25}% + 2px)`,
@@ -263,11 +276,17 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-base-200/20">
+        <div className="bg-base-200/20 flex-1 space-y-2 overflow-y-auto p-3">
           {filteredItems.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12 text-base-content/30 italic">
-              <span className="text-4xl mb-3 opacity-20">
-                {activeTab === 'member' ? '👤' : activeTab === 'order' ? '🛒' : activeTab === 'bills' ? '📋' : '💼'}
+            <div className="text-base-content/30 flex flex-col items-center justify-center py-12 italic">
+              <span className="mb-3 text-4xl opacity-20">
+                {activeTab === 'member'
+                  ? '👤'
+                  : activeTab === 'order'
+                    ? '🛒'
+                    : activeTab === 'bills'
+                      ? '📋'
+                      : '💼'}
               </span>
               <span className="text-xs font-medium">No {activeTab} items in queue</span>
             </div>
@@ -275,44 +294,62 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
 
           {filteredItems.map(item => {
             const preview = item?.transaction_preview || {};
-            const code = preview?.code || item?.code || `OFF-${item?.sync_id?.slice(0, 8) || item?.id}`;
-            const channelName = preview?.channel?.name || item?.sales_channel_name || item?.sales_channel_id || '-';
-            const paymentName = preview?.payment_method?.name || item?.payment_method_name || (item?.payment_method_id === 0 || item?.payment_method_id === null ? 'Cash' : '#' + item?.payment_method_id);
-            const cashierName = preview?.cashier?.name || '-';
-            const itemCount = Number(preview?.item_count) || preview?.items?.length || item?.items?.length || 0;
-            const totalCharges = Number(preview?.total_charges || preview?.total_bill) || item?.total_payment || 0;
-            const itemsTotal = (item?.items || []).reduce((sum, p) =>
-              sum + (Number(p.unit_nett || 0) * Number(p.quantity || 0))
-                + (p.addons || []).reduce((asum, a) => asum + (Number(a.unit_nett || 0) * Number(a.quantity || 0)), 0),
-            0);
-            const displayTotal = totalCharges || itemsTotal + (Number(item?.service_charge_value) || 0);
+            const itemCount =
+              Number(preview?.item_count) || preview?.items?.length || item?.items?.length || 0;
             const createdAt = preview?.created_at || item?.paid_at || item?.createdAt;
             const status = statusConfig[item.status] || statusConfig.pending;
             const itemsList = preview?.items || item?.items || [];
 
-            const apiType = item._type === 'topup' ? 'topup'
-              : item._type === 'membership' ? 'create member'
-              : item._type === 'session' ? (item.body?.cash_started != null && item.body?.cash_finished != null ? 'both' : item.body?.cash_finished ? 'close' : 'start')
-              : item.status === 'pending' ? 'save bill' : 'checkout';
+            const apiType =
+              item._type === 'topup'
+                ? 'topup'
+                : item._type === 'membership'
+                  ? 'create member'
+                  : item._type === 'session'
+                    ? item.body?.cash_started != null && item.body?.cash_finished != null
+                      ? 'both'
+                      : item.body?.cash_finished
+                        ? 'close'
+                        : 'start'
+                    : item.status === 'pending'
+                      ? 'save bill'
+                      : 'checkout';
 
             const isSession = apiType === 'start' || apiType === 'close' || apiType === 'both';
 
             if (isSession) {
-              const sessionLabel = apiType === 'both' ? 'Open & Close Session' : (apiType === 'start' ? 'Open Session' : 'Close Session');
-              const sessionIcon = apiType === 'both' ? '🔄' : (apiType === 'start' ? '🚪' : '🏁');
-              const sessionColor = apiType === 'both' ? 'badge-info' : (apiType === 'start' ? 'badge-success' : 'badge-warning');
+              const sessionLabel =
+                apiType === 'both'
+                  ? 'Open & Close Session'
+                  : apiType === 'start'
+                    ? 'Open Session'
+                    : 'Close Session';
+              const sessionIcon = apiType === 'both' ? '🔄' : apiType === 'start' ? '🚪' : '🏁';
+              const sessionColor =
+                apiType === 'both'
+                  ? 'badge-info'
+                  : apiType === 'start'
+                    ? 'badge-success'
+                    : 'badge-warning';
               const cashAmount = item?.body?.cash || 0;
 
               return (
-                <div key={item.id} className="rounded-lg border border-base-200 bg-base-100 transition-colors hover:border-base-300 overflow-hidden">
-                  <div className={`h-1 w-full ${apiType === 'start' ? 'bg-success' : 'bg-warning'}`} />
+                <div
+                  key={item.id}
+                  className="border-base-200 bg-base-100 hover:border-base-300 overflow-hidden rounded-lg border transition-colors"
+                >
+                  <div
+                    className={`h-1 w-full ${apiType === 'start' ? 'bg-success' : 'bg-warning'}`}
+                  />
                   <div className="p-2.5">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className={`badge badge-xs ${sessionColor} uppercase font-bold tracking-wider`}>
+                    <div className="mb-1.5 flex items-center gap-2">
+                      <span
+                        className={`badge badge-xs ${sessionColor} font-bold tracking-wider uppercase`}
+                      >
                         {sessionIcon} {sessionLabel}
                       </span>
                       {apiType !== 'both' && (
-                        <span className="text-[10px] font-bold text-base-content/50 flex-1 truncate">
+                        <span className="text-base-content/50 flex-1 truncate text-[10px] font-bold">
                           {dateFormat(createdAt)}
                         </span>
                       )}
@@ -322,33 +359,49 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                       </span>
                     </div>
                     {apiType === 'both' && (
-                      <div className="flex gap-3 text-[10px] text-base-content/50 font-bold mb-1.5">
+                      <div className="text-base-content/50 mb-1.5 flex gap-3 text-[10px] font-bold">
                         <span>Open: {dateFormat(item?.body?.open_at || item?.createdAt)}</span>
                         <span>Close: {dateFormat(item?.body?.close_at || createdAt)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between items-center bg-base-200/30 rounded p-2">
+                    <div className="bg-base-200/30 flex items-center justify-between rounded p-2">
                       <div className="flex flex-col gap-1">
-                        <span className="text-[9px] uppercase text-base-content/40 font-bold">
-                          {apiType === 'both' ? 'Starting Cash' : (apiType === 'start' ? 'Starting Cash' : 'Ending Cash')}
+                        <span className="text-base-content/40 text-[9px] font-bold uppercase">
+                          {apiType === 'both'
+                            ? 'Starting Cash'
+                            : apiType === 'start'
+                              ? 'Starting Cash'
+                              : 'Ending Cash'}
                         </span>
-                        <span className="text-sm font-black text-base-content">
-                          {currencyFormat(apiType === 'both' ? (item?.body?.cash_started || item?.body?.cash) : cashAmount)}
+                        <span className="text-base-content text-sm font-black">
+                          {currencyFormat(
+                            apiType === 'both'
+                              ? item?.body?.cash_started || item?.body?.cash
+                              : cashAmount
+                          )}
                         </span>
                         {apiType === 'both' && (
                           <>
-                            <span className="text-[9px] uppercase text-base-content/40 font-bold">Ending Cash</span>
-                            <span className="text-sm font-black text-base-content">{currencyFormat(item?.body?.cash || 0)}</span>
+                            <span className="text-base-content/40 text-[9px] font-bold uppercase">
+                              Ending Cash
+                            </span>
+                            <span className="text-base-content text-sm font-black">
+                              {currencyFormat(item?.body?.cash || 0)}
+                            </span>
                           </>
                         )}
                       </div>
                       <div className="text-right">
-                        <span className="text-[9px] uppercase text-base-content/40 font-bold block">Total Orders</span>
+                        <span className="text-base-content/40 block text-[9px] font-bold uppercase">
+                          Total Orders
+                        </span>
                         <span className="text-[10px] font-bold">{item?.body?.orderCount || 0}</span>
                       </div>
                     </div>
                     {item.lastError && (
-                      <div className="mt-2 text-[10px] text-error bg-error/10 rounded px-2 py-1 leading-tight">{item.lastError}</div>
+                      <div className="text-error bg-error/10 mt-2 rounded px-2 py-1 text-[10px] leading-tight">
+                        {item.lastError}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -360,34 +413,49 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
               const memberName = preview?.member_name || item?.member_name || '-';
 
               return (
-                <div key={item.id} className="rounded-lg border border-base-200 bg-base-100 transition-colors hover:border-base-300 overflow-hidden">
-                  <div className="h-1 w-full bg-info" />
+                <div
+                  key={item.id}
+                  className="border-base-200 bg-base-100 hover:border-base-300 overflow-hidden rounded-lg border transition-colors"
+                >
+                  <div className="bg-info h-1 w-full" />
                   <div className="p-2.5">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className="badge badge-xs badge-info uppercase font-bold tracking-wider">💰 Topup</span>
+                    <div className="mb-1.5 flex items-center gap-2">
+                      <span className="badge badge-xs badge-info font-bold tracking-wider uppercase">
+                        💰 Topup
+                      </span>
                       <span className="flex-1" />
                       <span className={`badge badge-xs ${status.badge} gap-0.5`}>
                         <span className="text-[9px]">{status.icon}</span>
                         {item.status}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1 text-[10px] text-base-content/50 flex-wrap mb-2">
+                    <div className="text-base-content/50 mb-2 flex flex-wrap items-center gap-1 text-[10px]">
                       <span className="truncate">{memberName}</span>
                       <span>·</span>
                       <span className="whitespace-nowrap">{dateFormat(createdAt)}</span>
                     </div>
                     <div className="bg-base-200/30 rounded p-2">
-                      <div className="flex justify-between text-[9px] uppercase text-base-content/40 font-bold">
+                      <div className="text-base-content/40 flex justify-between text-[9px] font-bold uppercase">
                         <span>Payment</span>
                         <span>Amount</span>
                       </div>
-                      <div className="flex justify-between items-center mt-0.5">
-                        <span className="text-[13px] font-bold capitalize">{item?.payment_type || '-'}</span>
-                        <span className="text-sm font-black text-success">{currencyFormat(nominal)}</span>
+                      <div className="mt-0.5 flex items-center justify-between">
+                        <span className="text-[13px] font-bold capitalize">
+                          {item?.payment_type || '-'}
+                        </span>
+                        <span className="text-success text-sm font-black">
+                          {currencyFormat(nominal)}
+                        </span>
                       </div>
                     </div>
                     <div className="mt-2 flex gap-1">
-                      <button className="btn btn-ghost btn-xs text-base-content/50" onClick={async () => { await onRemove?.(item.id); setRefreshKey(k => k + 1); }}>
+                      <button
+                        className="btn btn-ghost btn-xs text-base-content/50"
+                        onClick={async () => {
+                          await onRemove?.(item.id);
+                          setRefreshKey(k => k + 1);
+                        }}
+                      >
                         🗑️ Remove
                       </button>
                     </div>
@@ -398,61 +466,90 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
 
             // Default render for bills & orders
             return (
-              <div key={item.id} className="rounded-lg border border-base-200 bg-base-100 transition-colors hover:border-base-300 overflow-hidden">
+              <div
+                key={item.id}
+                className="border-base-200 bg-base-100 hover:border-base-300 overflow-hidden rounded-lg border transition-colors"
+              >
                 <div className="p-2.5 pb-1.5">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="badge badge-xs badge-primary badge-outline uppercase font-bold tracking-wider">{apiType}</span>
-                    <span className="text-xs font-bold text-base-content truncate flex-1">{code}</span>
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <span className="badge badge-xs badge-primary badge-outline font-bold tracking-wider uppercase">
+                      {apiType}
+                    </span>
+                    <span className="text-base-content flex-1 truncate text-xs font-bold">
+                      {preview?.code}
+                    </span>
                     <span className={`badge badge-xs ${status.badge} gap-0.5`}>
                       <span className="text-[9px]">{status.icon}</span>
                       {item.status}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1 text-[10px] text-base-content/50 flex-wrap">
-                    <span className="truncate max-w-24">{preview?.bill_name || '-'}</span>
+                  <div className="text-base-content/50 flex flex-wrap items-center gap-1 text-[10px]">
+                    {preview?.bill_name && (
+                      <>
+                        <span className="max-w-24 truncate">{preview?.bill_name || '-'}</span>
+                        <span>·</span>
+                      </>
+                    )}
+                    <span className="truncate">{preview?.sales_channel?.name}</span>
                     <span>·</span>
-                    <span className="truncate">{channelName}</span>
-                    <span>·</span>
-                    <span className="truncate">{paymentName}</span>
-                    <span>·</span>
-                    <span className="whitespace-nowrap">{dateFormat(createdAt)}</span>
+                    {preview?.payment_method && (
+                      <>
+                        <span className="truncate">{preview?.payment_method?.name}</span>
+                        <span>·</span>
+                      </>
+                    )}
+                    <span className="whitespace-nowrap">{dateFormat(preview?.created_at)}</span>
                   </div>
                 </div>
 
                 {itemsList.length > 0 ? (
-                  <div className="collapse collapse-arrow rounded-none border-t border-base-200">
+                  <div className="collapse-arrow border-base-200 collapse rounded-none border-t">
                     <input type="checkbox" className="min-h-0" />
-                    <div className="collapse-title min-h-0 py-2 px-2.5 flex items-center justify-between group">
-                      <span className="text-[12px] font-bold text-base-content/70">
+                    <div className="collapse-title group flex min-h-0 items-center justify-between px-2.5 py-2">
+                      <span className="text-base-content/70 text-[12px] font-bold">
                         {itemCount} item{itemCount !== 1 ? 's' : ''}
                       </span>
-                      <span className="text-[12px] font-extrabold text-base-content mr-6">{currencyFormat(displayTotal)}</span>
+                      <span className="text-base-content mr-6 text-[12px] font-extrabold">
+                        {currencyFormat(preview?.total_charges)}
+                      </span>
                     </div>
-                    <div className="collapse-content px-2.5 pb-2 bg-base-200/30">
+                    <div className="collapse-content bg-base-200/30 px-2.5 pb-2">
                       <div className="space-y-2 pt-2">
                         {itemsList.map((product, idx) => (
                           <div key={idx} className="flex flex-col gap-0.5">
-                            <div className="flex justify-between items-start gap-2">
-                              <div className="flex gap-1.5 items-start flex-1 min-w-0">
-                                <span className="bg-base-content/80 rounded px-1.5 py-0.5 text-[13px] text-white font-bold leading-none mt-0.5">{product.quantity}</span>
-                                <span className="text-[13px] font-bold uppercase truncate leading-tight">
-                                  {product.catalog_name || product.catalog?.name || '-'} {/* catalog_name langsung, catalog?.name fallback struktural */}
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex min-w-0 flex-1 items-start gap-1.5">
+                                <span className="bg-base-content/80 mt-0.5 rounded px-1.5 py-0.5 text-[13px] leading-none font-bold text-white">
+                                  {product.quantity}
+                                </span>
+                                <span className="truncate text-[13px] leading-tight font-bold uppercase">
+                                  {product.catalog_name || product.catalog?.name || '-'}{' '}
+                                  {/* catalog_name langsung, catalog?.name fallback struktural */}
                                 </span>
                               </div>
-                              <span className="text-[13px] text-base-content/60 font-medium whitespace-nowrap">
-                                {currencyFormat(Number(product.unit_nett || 0) * Number(product.quantity || 0))}
+                              <span className="text-base-content/60 text-[13px] font-medium whitespace-nowrap">
+                                {currencyFormat(
+                                  Number(product.unit_nett || 0) * Number(product.quantity || 0)
+                                )}
                               </span>
                             </div>
                             {product.addons?.length > 0 && (
-                              <div className="ml-5 border-l border-base-content/10 pl-2 flex flex-col gap-0.5">
+                              <div className="border-base-content/10 ml-5 flex flex-col gap-0.5 border-l pl-2">
                                 {product.addons?.map((add, aIdx) => {
                                   const addonName = add.catalog_name || '-';
                                   const addonPrice = Number(add.unit_nett || 0);
                                   const addonQty = Number(add.quantity || 1);
                                   return (
-                                    <div key={aIdx} className="flex justify-between text-[11px] text-base-content/40 italic">
-                                      <span>+ {addonName} ({addonQty} x {currencyFormat(addonPrice)})</span>
-                                      {addonPrice > 0 && <span>{currencyFormat(addonQty * addonPrice)}</span>}
+                                    <div
+                                      key={aIdx}
+                                      className="text-base-content/40 flex justify-between text-[11px] italic"
+                                    >
+                                      <span>
+                                        + {addonName} ({addonQty} x {currencyFormat(addonPrice)})
+                                      </span>
+                                      {addonPrice > 0 && (
+                                        <span>{currencyFormat(addonQty * addonPrice)}</span>
+                                      )}
                                     </div>
                                   );
                                 })}
@@ -464,30 +561,38 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                     </div>
                   </div>
                 ) : (
-                  <div className="px-2.5 py-2 border-t border-base-200 flex justify-between items-center bg-base-200/10">
-                    <span className="text-[10px] text-base-content/50">No items</span>
-                    <span className="text-xs font-extrabold text-base-content">{currencyFormat(displayTotal)}</span>
+                  <div className="border-base-200 bg-base-200/10 flex items-center justify-between border-t px-2.5 py-2">
+                    <span className="text-base-content/50 text-[10px]">No items</span>
                   </div>
                 )}
 
                 {item.lastError && (
-                  <div className="mx-2.5 mb-1.5 text-[10px] text-error bg-error/10 rounded px-2 py-1 leading-tight">{item.lastError}</div>
+                  <div className="text-error bg-error/10 mx-2.5 mb-1.5 rounded px-2 py-1 text-[10px] leading-tight">
+                    {item.lastError}
+                  </div>
                 )}
 
-                <div className="p-2.5 pt-0 flex gap-1">
+                <div className="flex gap-1 p-2.5 pt-0">
                   {apiType === 'save bill' && item.status === 'pending' && (
-                    <button className="btn btn-primary btn-xs flex-1 gap-1" onClick={() => { onOpenBill?.(item); onClose(); }}>
+                    <button
+                      className="btn btn-primary btn-xs flex-1 gap-1"
+                      onClick={() => {
+                        onOpenBill?.(item);
+                        onClose();
+                      }}
+                    >
                       📋 Open Bill
                     </button>
                   )}
                   {item.status === 'pending' && (
-                    <button className="btn btn-error btn-ghost btn-xs text-base-content/50" onClick={async () => { await onRemove?.(item.id); setRefreshKey(k => k + 1); }}>
+                    <button
+                      className="btn btn-error btn-ghost btn-xs text-base-content/50"
+                      onClick={async () => {
+                        await onRemove?.(item.id);
+                        setRefreshKey(k => k + 1);
+                      }}
+                    >
                       &#10006; Remove
-                    </button>
-                  )}
-                  {item.status === 'failed' && (
-                    <button className="btn btn-error btn-xs flex-1 gap-1" onClick={() => onRetry?.(item.id)}>
-                      ↻ Retry Sync
                     </button>
                   )}
                 </div>

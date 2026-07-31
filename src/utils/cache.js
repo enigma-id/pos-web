@@ -242,5 +242,62 @@ export const getCatalogItemFromPricingCache = (id, channelId) => {
   const key = `catalog_pricing_${channelId}`;
   const list = getCatalogCacheValue(key);
   if (!Array.isArray(list)) return null;
-  return list.find(item => String(item.id) === String(id) || String(item.catalog_id) === String(id)) || null;
+  return (
+    list.find(item => String(item.id) === String(id) || String(item.catalog_id) === String(id)) ||
+    null
+  );
+};
+
+const BILLS_CACHE_KEY = 'cache_openbills';
+
+const getOpenBillsCacheRaw = () => {
+  try {
+    const raw = localStorage.getItem(BILLS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveOpenBills = data => {
+  const existing = getOpenBillsCacheRaw();
+
+  if (!existing.data) {
+    existing.data = [];
+  }
+
+  existing.data.unshift(data);
+
+  localStorage.setItem(BILLS_CACHE_KEY, JSON.stringify(existing));
+
+  return bill;
+};
+
+export const updateOpenBills = data => {
+  const existing = getOpenBillsCacheRaw();
+
+  console.log('[DEBUG] [CACHE] updateOpenBills', existing.data);
+
+  const index = existing.data.findIndex(
+    item => item.id === data.id || item.sync_id === data.sync_id
+  );
+
+  if (index === -1) return null;
+
+  existing.data[index] = {
+    ...existing.data[index],
+    ...data,
+  };
+
+  localStorage.setItem(BILLS_CACHE_KEY, JSON.stringify(existing));
+
+  return existing.data[index];
+};
+
+export const deleteOpenBills = id => {
+  const existing = getOpenBillsCacheRaw();
+
+  existing.data = existing.data.filter(item => item.id !== id && item.sync_id !== id);
+
+  localStorage.setItem(BILLS_CACHE_KEY, JSON.stringify(existing));
 };

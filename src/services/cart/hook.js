@@ -21,6 +21,7 @@ import {
   changeBillItem,
   addItem,
   changeServiceCharge,
+  changeBillName,
 } from './slice';
 import {
   getPaymentMethodsCache,
@@ -34,7 +35,6 @@ import {
 import { useLazyGetCatalogDetailQuery } from '../catalog/action';
 import { $failure } from '../form/action';
 import { useLazyShowQuery } from '../sales/order/action';
-import { loadOfflineBill } from './slice';
 import { getCache, setCache } from '../../utils/cache';
 
 const BILLS_CACHE_KEY = 'cache_openbills';
@@ -131,6 +131,10 @@ const useCart = catalog_id => {
       dispatch($failure(error));
       return [];
     }
+  };
+
+  const onUpdateBillName = billName => {
+    dispatch(changeBillName(billName));
   };
 
   const add = catalog => {
@@ -394,6 +398,7 @@ const useCart = catalog_id => {
     billItems,
     update,
     updateResult,
+    onUpdateBillName,
   };
 };
 

@@ -525,77 +525,8 @@ const cartSlice = createSlice({
       recalculateTotals(state);
     },
 
-    loadOfflineBill: (state, action) => {
-      const order = action.payload;
-      const totalCharges =
-        order.total_payment ||
-        order.totalPayment ||
-        (order.items || []).reduce((sum, item) => {
-          const it = Number(item.unit_nett || 0) * Number(item.quantity || 0);
-          const at = (item.addons || []).reduce(
-            (a, ad) => a + Number(ad.unit_nett || 0) * Number(ad.quantity || 0),
-            0
-          );
-          return sum + it + at;
-        }, 0) + Number(order.service_charge_value || order.serviceChargeValue || 0);
-
-      const previewItems = (order.items || []).map(item => ({
-        ...item,
-        catalog: { name: item.catalog_name || '', id: item.catalog_id },
-        unit_nett: item.unit_nett,
-        discount_value: 0,
-        addons: (item.addons || []).map((a, idx) => {
-          const grpType = a.addon_group?.type || '';
-          const ae = {
-            addon_group: {
-              id: a.addon_group?.id || `oad-${idx}`,
-              name: a.addon_group?.name || 'Add-ons',
-              type: grpType,
-            },
-            catalog: {
-              id: a.addon_item_id,
-              name: a.catalog_name || '',
-              unit_nett: a.unit_nett || 0,
-            },
-            selected: true,
-            quantity: a.quantity / item.quantity,
-          };
-          return ae;
-        }),
-      }));
-
-      state.bill = {
-        id: order?.sync_id || '',
-        bill_name: order.bill_name || '',
-        total_bill: totalCharges,
-        membership: order.membership_id ? { id: order.membership_id } : null,
-        is_offline_mode: true,
-        sync_id: order?.sync_id || '',
-        origin_session_sync_id: order.origin_session_sync_id || null,
-        originalItems: order.original_items || null,
-        itemSnapshot: (order.items || []).map(i => ({
-          catalog_id: i.catalog_id || i.catalog?.id,
-          quantity: i.quantity || 0,
-        })),
-      };
-
-      state.items.list = [];
-      state.items.bill = previewItems.map(item => convertApiOrderToCartItem(item));
-      state.bill.items = order.items || [];
-      state.items.count = 0;
-
-      if (order.membership_id) {
-        state.meta.customer = { id: order.membership_id };
-      }
-
-      const isPer = !!(order.discount_percentage || 0);
-      const dVal = order.discount_value || 0;
-      if (dVal > 0) {
-        state.discount.cart = { type: isPer ? 'percentage' : 'nominal', value: dVal, amount: 0 };
-      }
-
-      state.discount.category = extractUniqueCategories([...state.items.list, ...state.items.bill]);
-      recalculateTotals(state);
+    changeBillName: (state, action) => {
+      state.bill.bill_name = action.payload;
     },
   },
 });
@@ -613,7 +544,7 @@ export const {
   setBillItems,
   changeBillItem,
   removeBillItem,
-  loadOfflineBill,
+  changeBillName,
 } = cartSlice.actions;
 
 export const cartReducer = cartSlice.reducer;

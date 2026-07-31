@@ -1,4 +1,3 @@
-import { DATE_ZERO } from './constants';
 import { recalculateDiscountCategory } from './helper';
 
 // ── Numbers ──
@@ -23,7 +22,7 @@ export function makeSessionStub(sesh) {
     battery_health: sesh?.battery_health || '',
     is_synced: sesh?.is_synced ?? false,
     created_at: sesh?.created_at || '',
-    updated_at: sesh?.updated_at || DATE_ZERO,
+    updated_at: sesh?.updated_at || null,
     outlet: sesh?.outlet || null,
     cashier: sesh?.cashier || { id: '', name: '' },
   };
@@ -62,6 +61,7 @@ export function makePendingBill(payload) {
     original_items: cloneItems,
     category_discounts: recalculateDiscountCategory(payload.category_discounts, payload.items),
     subtotal_nett: subtotal,
+    total_bill: subtotal,
   };
 }
 

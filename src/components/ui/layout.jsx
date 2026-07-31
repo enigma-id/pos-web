@@ -6,7 +6,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { BurgerIcon, HistoryIcon, ListIcon, MenuIcon, ReceiptIcon, UserIcon } from './icon';
 import { OfflineBanner, PendingDrawer, SyncIndicator } from './offline';
 import useSidebar from './sidebar/hook';
-import { loadOfflineBill } from '../../services/cart/slice';
 import { removeFailedItem, retryFailedItem, syncNow } from '../../services/offline';
 import { setNetworkState } from '../../services/offline/slice';
 import useNetworkStatus from '../../services/offline/useNetworkStatus';
@@ -78,7 +77,7 @@ const Layout = ({ children }) => {
   }, [Offline?.apiReachable, isOnline]);
 
   const handleOpenBill = queueItem => {
-    dispatch(loadOfflineBill(queueItem));
+    console.log('[DEBUG] pikirin ini harus-nya ke selectedBill agar konsisten');
   };
 
   const refreshQueue = useCallback(async () => {
@@ -175,7 +174,6 @@ const Navbar = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const handleOpenBill = queueItem => {
-    dispatch(loadOfflineBill(queueItem));
     navigate('/');
   };
 

@@ -192,31 +192,39 @@ export const createOrderBill = async (payload, userId) => {
   return doc;
 };
 
-export const updateOrderBill = async (syncId, data, userId) => {
+export const updateOrderBill = async (data, userId) => {
   const db = await ensureDB(userId);
-  // Cari by sync_id — indexed lookup
-  let existing = syncId ? await db.get(STORES.orderBills, syncId) : null;
+
+  // cari index untuk update saat create dari offline juga
+  let existing = data?.sync_id ? await db.get(STORES.orderBills, data?.sync_id) : null;
+
+  // jika esxsting sync_id gaada berarti ini updateo order bill dari online bro
+  if (!existing) {
+    existing = await db.get(STORES.orderBills, data?.id);
+    data.sync_id = data?.id;
+  }
+
+  console.log('[DEBUG] [QUEUE] updateOrderBill: ', existing);
+
   if (!existing) {
     // Bill dari server — insert sebagai referensi
-    if (!syncId) throw new Error('updateOrderBill: no syncId provided');
     const doc = {
-      id: syncId,
-      bill_name: data.bill_name || '',
-      items: data.items || [],
-      code: data.code || '',
-      status: 'pending',
-      is_offline_mode: false,
+      ...data,
       is_synced: false,
-      createdAt: new Date().toISOString(),
+      // sync_id ini tidak perlu nanti dikirim ke api ya bro - karena ini dari update server
+      sync_id: data?.id,
     };
+
     await db.add(STORES.orderBills, doc);
     return doc;
   }
 
-  // Merge update
-  const updated = { ...existing, ...data, sync_id: existing.sync_id };
-  await db.put(STORES.orderBills, updated);
-  return updated;
+  await db.put(STORES.orderBills, {
+    ...existing,
+    ...data,
+  });
+
+  return data;
 };
 
 export const deleteOrderBill = async (syncId, userId) => {
