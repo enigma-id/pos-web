@@ -10,7 +10,7 @@ export function recalculateDiscountCategory(discountCategories, items) {
         let dp = dc.discount_percentage;
 
         if (dv > 0) {
-          dp = (dv / item.unit_nett) * 100;
+          dp = Math.ceil(dv / item.unit_nett) * 100;
         }
 
         if (dp > 0) {
@@ -21,6 +21,9 @@ export function recalculateDiscountCategory(discountCategories, items) {
       }
     });
 
+    if (dc.discount_percentage > 0) {
+      dc.is_discount_percentage = true;
+    }
     dc.total_discount = totalDiscount;
     result.push(dc);
   });

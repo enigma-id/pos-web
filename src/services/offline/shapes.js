@@ -45,6 +45,12 @@ export function makePendingBill(payload) {
         quantity: (addon.quantity || 1) * item.quantity,
       })),
     }),
+
+    discount_value:
+      item.discount_percentage > 0
+        ? item.unit_nett * (item.discount_percentage / 100)
+        : item.discount_value,
+    discount_percentage: item.discount_percentage,
   }));
 
   let subtotal = 0;

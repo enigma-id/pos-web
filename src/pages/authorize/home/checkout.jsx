@@ -7,7 +7,7 @@ import DetailScreen from './detail';
 import BillModal from './saveBill';
 import SuccessModal from './success';
 import { Input, Modal, NFCField } from '../../../components/ui';
-import { changeServiceCharge } from '../../../services/cart/slice';
+import { changeServiceCharge, resetCart } from '../../../services/cart/slice';
 import {
   BackIcon,
   CardIcon,
@@ -40,7 +40,7 @@ import {
   makeCompletedOrder,
   makeIdbBillData,
 } from '../../../services/offline/shapes';
-import { getCache, saveOpenBills, setCache } from '../../../utils/cache';
+import { getCache, saveOpenBills, setCache, updateOpenBills } from '../../../utils/cache';
 // import useOutlet from '../../../services/outlet/hooks';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
@@ -49,6 +49,8 @@ import { getMemberCache } from '../../../utils/cache';
 const CheckoutScreen = () => {
   const location = useLocation();
   const isBill = location.state?.is_bill;
+
+  const FormState = useSelector(state => state?.Form);
 
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -80,25 +82,17 @@ const CheckoutScreen = () => {
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
   const syncIdOffline = useSelector(state => state?.Offline?.activeSyncId);
   const syncIdServer = useSelector(state => state?.Auth?.session?.sales_session?.id);
-  const activeSyncId = syncIdOffline || syncIdServer;
   const { openModal, closeModal } = useModal();
 
   const [isOpen, setIsOpen] = React.useState(false);
   const [paymentMethod, setPaymentMethod] = React.useState([]);
   const [paymentRef, setPaymentRef] = React.useState('');
   const [pay, setPay] = React.useState(0);
-  const isOfflineSaveRef = React.useRef(false);
   const [discountInputs, setDiscountInputs] = React.useState({});
-  // const [billID, setBillID] = React.useState(null);
   const [billName, setBillName] = React.useState('');
 
   const [selectedMethod, setSelectedMethod] = React.useState(null);
   const checkoutSnapshotRef = React.useRef(null);
-  const isSaveBillFlowRef = React.useRef(false);
-  const [isSaveBillFlow, setIsSaveBillFlow] = React.useState(false);
-  const [saveBillError, setSaveBillError] = React.useState('');
-  const kitchenNewItemsRef = React.useRef(null);
-  const billPayloadMetaRef = React.useRef(null);
 
   const renderAdditionals = item => {
     return (item?.addons || [])
@@ -109,13 +103,13 @@ const CheckoutScreen = () => {
 
         if (selectedChilds.length === 0) return null;
 
-        const childNames = selectedChilds.map(child => {
+        const childNames = selectedChilds.map((child, key) => {
           const suffix =
             add?.type === 'quantity' || add?.type === 'checkbox'
               ? `(${item?.quantity} x ${child?.quantity}) x ${currencyFormat(child?.unit_nett)}`
               : '';
           return (
-            <div className="text-base-300 flex place-content-between text-xs font-thin">
+            <div className="text-base-300 flex place-content-between text-xs font-thin" key={key}>
               <span>
                 + {child?.name} {suffix}
               </span>
@@ -133,6 +127,8 @@ const CheckoutScreen = () => {
       })
       .filter(Boolean);
   };
+
+  console.log('=======[DEBUG] [CHECKOUT]================', CartState);
 
   const onShow = (data, index = null, type) => {
     handleModal({ catalog: data, key: index, type });
@@ -165,6 +161,7 @@ const CheckoutScreen = () => {
         quantity: item.quantity,
         unit_nett: item.unit_nett,
         catalog_name: item.name,
+        category_name: item.category_name,
         catalog: {
           id: item.catalog_id,
           category_id: item.category_id,
@@ -172,6 +169,9 @@ const CheckoutScreen = () => {
           name: item.name,
           is_custom: item.is_custom,
         },
+        is_discount_percentage: item.is_discount_percentage,
+        discount_percentage: item.discount_percentage,
+        discount_value: item.discount_value,
       };
 
       if (item?.is_custom) {
@@ -219,6 +219,7 @@ const CheckoutScreen = () => {
 
     if (discount_categories?.length > 0) {
       payload.category_discounts = discount_categories;
+      payload.is_category_discount = true;
     }
 
     const dataOfflineToOnline = makePendingBill(payload);
@@ -246,10 +247,8 @@ const CheckoutScreen = () => {
 
     handleModalPrint(dataOfflineToOnline);
 
-    // Refresh bills list biar button jadi Open Bill
-    bill();
-
     dispatch(resetCart());
+    setDiscountInputs([]);
   };
 
   // Online — API
@@ -326,6 +325,202 @@ const CheckoutScreen = () => {
       onCreateBillOffline(billName);
     } else {
       onCreateBillOnline(billName);
+    }
+  };
+
+  // Offline — Cache and IDB
+  const onUpdateBillOffline = async billName => {
+    const discount_categories = CartState?.discount?.category
+      ?.filter(
+        cat =>
+          cat && cat.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
+      )
+      ?.map(cat => ({
+        category_id: cat.id,
+        category: cat,
+        ...(cat.discount_type === 'nominal'
+          ? { discount_value: cat.discount_value }
+          : { discount_percentage: cat.discount_value }),
+      }));
+
+    // kalo hanya update bill name saja tidak perlu update yang di list CartState items list bro
+    let allItems = [...(CartState?.items?.bill || []), ...(CartState?.items?.list || [])];
+
+    const items = allItems?.map(item => {
+      const base = {
+        catalog_id: item.catalog_id,
+        category_id: item.category_id,
+        quantity: item.quantity,
+        unit_nett: item.unit_nett,
+        catalog_name: item.name,
+        category_name: item.category_name,
+        catalog: {
+          id: item.catalog_id,
+          category_id: item.category_id,
+          code: item.code,
+          name: item.name,
+          is_custom: item.is_custom,
+        },
+        is_discount_percentage: item.is_discount_percentage,
+        discount_percentage: item.discount_percentage,
+        discount_value: item.discount_value,
+      };
+
+      if (item?.is_custom) {
+        base.catalog_name = item?.name;
+        base.unit_nett = item?.unit_nett;
+      }
+
+      if (item?.additionals_flat?.length > 0) {
+        base.addons = item?.additionals_flat;
+      }
+
+      return base;
+    });
+
+    const payload = {
+      // kenapa gua tidak pakai sync_id - karena data-nya sudah ada di server bukan lagi di IDB
+      id: CartState?.bill?.id || null,
+      sync_id: CartState?.bill?.sync_id,
+      code: CartState?.bill?.code,
+      bill_name: billName,
+      membership_id: CartState?.meta?.customer?.id,
+      sales_channel_id: Channel?.selectedChannel?.id,
+      status: 'pending',
+      items,
+
+      // ini untuk kebutuhan standarisasi data Offline to Online
+      created_at: CartState?.bill?.created_at,
+      session: OfflineSummary,
+      membership: CartState?.meta?.customer,
+      sales_channel: Channel?.selectedChannel,
+      is_discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? true : false,
+      discount_percentage: 0,
+      discount_value: CartState?.discount?.cart?.amount,
+      service_charge_percentage: CartState?.meta?.service_charge_percentage,
+      service_charge_value: CartState?.meta?.service_charge_value,
+      total_charges: CartState?.meta?.grand_total,
+    };
+
+    if (CartState?.discount?.cart?.type) {
+      if (CartState?.discount?.cart?.type === 'percentage') {
+        payload.discount_percentage = CartState?.discount?.cart?.value;
+      }
+    }
+
+    if (discount_categories?.length > 0) {
+      payload.category_discounts = discount_categories;
+      payload.is_category_discount = true;
+    }
+
+    const dataOfflineToOnline = makePendingBill(payload);
+
+    try {
+      await updateOrderBill(dataOfflineToOnline, session?.user?.id);
+    } catch (err) {
+      handleModalError();
+      dispatch($failure(err));
+      return;
+    }
+
+    triggerQueueRefresh();
+
+    // Push ke localStorage bills cache
+    try {
+      updateOpenBills(dataOfflineToOnline);
+    } catch (err) {
+      handleModalError();
+    }
+
+    // 🔁 Update sessionSummary incremental
+    updateSessionSummary({
+      type: 'bill',
+      outstanding_bill: CartState?.meta?.grand_total - CartState?.bill?.total_charges,
+    });
+
+    handleModalPrint(dataOfflineToOnline);
+
+    dispatch(resetCart());
+    setDiscountInputs([]);
+  };
+
+  // Online — API
+  const onUpdateBillOnline = async billName => {
+    const discount_categories = CartState?.discount?.category
+      ?.filter(
+        cat =>
+          cat && cat.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
+      )
+      ?.map(cat => ({
+        category_id: cat.id,
+        ...(cat.discount_type === 'nominal'
+          ? { discount_value: cat.discount_value }
+          : { discount_percentage: cat.discount_value }),
+      }));
+
+    // kalo hanya update bill name saja tidak perlu update yang di list CartState items list bro
+    let allItems = [...(CartState?.items?.bill || []), ...(CartState?.items?.list || [])];
+
+    const items = allItems?.map(item => {
+      const base = {
+        catalog_id: item.catalog_id,
+        quantity: item.quantity,
+      };
+
+      if (item?.is_custom) {
+        base.catalog_name = item?.name;
+        base.unit_nett = item?.unit_nett;
+      }
+
+      if (item?.additionals_flat?.length > 0) {
+        base.addons = item?.additionals_flat?.map(addon => {
+          return {
+            ...addon,
+            addon_group_id: addon?.addon_group?.id,
+          };
+        });
+      }
+
+      return base;
+    });
+
+    const payload = {
+      bill_name: billName,
+      membership_id: CartState?.meta?.customer?.id,
+      sales_channel_id: Channel?.selectedChannel?.id,
+      status: 'pending',
+      items,
+    };
+
+    if (CartState?.discount?.cart?.type) {
+      if (CartState?.discount?.cart?.type === 'percentage') {
+        payload.discount_percentage = CartState?.discount?.cart?.value;
+      }
+
+      if (CartState?.discount?.cart?.type === 'nominal') {
+        payload.discount_value = CartState?.discount?.cart?.value;
+      }
+    }
+
+    if (discount_categories?.length > 0) {
+      payload.category_discounts = discount_categories;
+    }
+
+    try {
+      await update({ id: CartState?.bill?.id, payload }).unwrap();
+      dispatch(setWarning('Bill saved.'));
+    } catch (err) {
+      dispatch($failure(err));
+    }
+  };
+
+  const onUpdateBill = async billName => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+
+    if (isOffline) {
+      onUpdateBillOffline(billName);
+    } else {
+      onUpdateBillOnline(billName);
     }
   };
 
@@ -607,7 +802,7 @@ const CheckoutScreen = () => {
           catalog_name: i.catalog_name || '',
           quantity: i.quantity || 0,
           unit_nett: i.unit_nett || 0,
-          discount_value: ci?.discount_amount || 0,
+          discount_value: ci?.unit_discount || 0,
           addons: (i.addons || []).map(a => ({
             catalog_name: a.catalog_name || '',
             unit_nett: a.unit_nett || 0,
@@ -622,7 +817,7 @@ const CheckoutScreen = () => {
         catalog_name: i.name || '',
         quantity: i.quantity || 0,
         unit_nett: i.unit_nett || 0,
-        discount_value: i?.discount_amount || 0,
+        discount_value: i?.unit_discount || 0,
         addons: (i.additionals_flat || []).map(a => ({
           catalog_name: a.name || '',
           unit_nett: a.unit_nett || 0,
@@ -663,7 +858,7 @@ const CheckoutScreen = () => {
       catalog_name: i.name || '',
       quantity: i.quantity || 0,
       unit_nett: i.unit_nett || 0,
-      discount_value: i?.discount_amount || 0,
+      discount_value: i?.unit_discount || 0,
       addons: (i.additionals_flat || []).map(a => ({
         catalog_name: a.name || '',
         unit_nett: a.unit_nett || 0,
@@ -708,49 +903,57 @@ const CheckoutScreen = () => {
     );
   };
 
-  const confirmSaveBillModal = () => (
-    <>
-      <Modal.Header
-        onClose={() => {
-          setSaveBillError('');
-          closeModal();
-        }}
-      >
-        <div className="text-lg font-semibold">Confirm Save Bill</div>
-      </Modal.Header>
-      <Modal.Body>
-        <div className="mb-3 py-4">
-          <div>Are you sure?</div>
-        </div>
-      </Modal.Body>
-      <Modal.Footer>
-        <div
-          className="btn btn-md px-10"
-          onClick={() => {
-            setSaveBillError('');
-            closeModal();
-          }}
-        >
-          Cancel
-        </div>
-        <div
-          className={`btn btn-md btn-success px-10 text-white ${checkoutResult?.isLoading || updateResult?.isLoading ? 'btn-disabled' : ''}`}
-          onClick={() => {
-            setSaveBillError('');
-            handleUpdateBill(CartState?.bill?.bill_name);
-            // ⛔️ Don't closeModal — handleUpdateBill calls openModal internally.
-            // closeModal has a 200ms setTimeout that nukes the component,
-            // which would override openModal's SuccessModal.
-          }}
-        >
-          Confirm{' '}
-          {checkoutResult?.isLoading || updateResult?.isLoading ? (
-            <span className="loading loading-spinner loading-sm"></span>
-          ) : null}
-        </div>
-      </Modal.Footer>
-    </>
-  );
+  const confirmSaveBillModal = () => {
+    openModal(
+      <>
+        <Modal.Header onClose={closeModal}>
+          <div className="text-lg font-semibold">Confirm Save Bill</div>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="mb-3 py-4">
+            <div>Are you sure?</div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <div className="btn btn-md px-10" onClick={closeModal}>
+            Cancel
+          </div>
+          <div
+            className={`btn btn-md btn-success px-10 text-white ${updateResult?.isLoading ? 'btn-disabled' : ''}`}
+            onClick={() => onUpdateBill(CartState?.bill?.bill_name)}
+          >
+            Confirm{' '}
+            {updateResult?.isLoading ? (
+              <span className="loading loading-spinner loading-sm"></span>
+            ) : null}
+          </div>
+        </Modal.Footer>
+      </>,
+
+      'w-md'
+    );
+  };
+
+  const handleModalError = () => {
+    openModal(
+      <>
+        <Modal.Header onClose={closeModal}>
+          <div className="text-lg font-semibold">Can't save bill</div>
+        </Modal.Header>
+        <Modal.Body full>
+          <div className="flex place-content-center place-items-center">
+            <img src="./error.png" className="h-64" />
+          </div>
+          <div className="-mt-5 pb-4 text-center">
+            <div className="text-lg font-semibold capitalize">{FormState?.errors?.billName}</div>
+            <p className="text-base-300 text-xs">Try another bill’s</p>
+          </div>
+        </Modal.Body>
+      </>,
+
+      'w-md'
+    );
+  };
 
   const handleModalPrint = data => {
     openModal(<SuccessModal data={data} />, 'w-md');
@@ -790,28 +993,28 @@ const CheckoutScreen = () => {
   }, [checkResult]);
 
   React.useEffect(() => {
-    if (checkoutResult?.isSuccess && checkoutResult?.data) {
-      const data = checkoutResult?.data?.data;
+    if (
+      (checkoutResult?.isSuccess && checkoutResult?.data) ||
+      (updateResult?.isSuccess && updateResult?.data)
+    ) {
+      const data = checkoutResult?.data?.data || updateResult?.data?.data;
       if (data) {
         show(data?.id);
       }
 
+      if (updateResult?.isSuccess) {
+        dispatch(resetCart());
+      }
+
       setDiscountInputs([]);
     }
-  }, [checkoutResult?.isSuccess]);
+  }, [checkoutResult?.isSuccess, updateResult?.isSuccess]);
 
   React.useEffect(() => {
     if (showResult?.isSuccess && showResult?.data) {
       handleModalPrint(showResult?.data?.data);
     }
   }, [showResult?.isSuccess, showResult?.data]);
-
-  // Cleanup isSaveBillFlowRef on unmount
-  React.useEffect(() => {
-    return () => {
-      isSaveBillFlowRef.current = false;
-    };
-  }, []);
 
   React.useEffect(() => {
     const getMethod = async () => {
@@ -881,14 +1084,12 @@ const CheckoutScreen = () => {
                       <div className="flex place-content-between place-items-center text-base font-semibold">
                         <div>{item?.name}</div>
                         <div className="text-base-300 text-xs">
-                          {currencyFormat(
-                            item?.quantity * (item?.unit_nett - item?.discount_amount)
-                          )}
+                          {currencyFormat(item?.quantity * (item?.unit_nett - item?.unit_discount))}
                         </div>
                       </div>
                       <div className="pb-2 text-xs">
-                        {item?.quantity} x {currencyFormat(item?.unit_nett - item?.discount_amount)}
-                        {item?.discount_amount > 0 && (
+                        {item?.quantity} x {currencyFormat(item?.unit_nett - item?.unit_discount)}
+                        {item?.unit_discount > 0 && (
                           <span className="text-base-300 ms-2 line-through">
                             {currencyFormat(item?.unit_nett)}
                           </span>
@@ -918,7 +1119,7 @@ const CheckoutScreen = () => {
                           </div>
                         </div>
                         <div>
-                          {item?.discount_amount > 0 ? (
+                          {item?.unit_discount > 0 ? (
                             <div className="text-primary text-lg font-bold">
                               <span className="me-2 text-xs !font-thin line-through">
                                 {currencyFormat(item?.subtotal)}
@@ -942,8 +1143,8 @@ const CheckoutScreen = () => {
                     <div>{item?.name}</div>
                     <div className="text-base-300 text-xs">
                       {currencyFormat(
-                        item?.quantity * (item?.unit_nett - item?.discount_amount) > 0
-                          ? item?.unit_nett - item?.discount_amount
+                        item?.quantity * (item?.unit_nett - item?.unit_discount) > 0
+                          ? item?.unit_nett - item?.unit_discount
                           : 0
                       )}
                     </div>
@@ -951,11 +1152,11 @@ const CheckoutScreen = () => {
                   <div className="pb-2 text-xs">
                     {item?.quantity} x{' '}
                     {currencyFormat(
-                      item?.unit_nett - item?.discount_amount > 0
-                        ? item?.unit_nett - item?.discount_amount
+                      item?.unit_nett - item?.unit_discount > 0
+                        ? item?.unit_nett - item?.unit_discount
                         : 0
                     )}
-                    {item?.discount_amount > 0 && (
+                    {item?.unit_discount > 0 && (
                       <span className="text-base-300 ms-2 line-through">
                         {currencyFormat(item?.unit_nett)}
                       </span>
@@ -970,7 +1171,7 @@ const CheckoutScreen = () => {
                   </div>
                   <div className="flex place-content-end place-items-center gap-2">
                     <div>
-                      {item?.discount_amount > 0 ? (
+                      {item?.unit_discount > 0 ? (
                         <div className="text-primary text-lg font-bold">
                           <span className="me-2 text-xs !font-thin line-through">
                             {currencyFormat(item?.subtotal)}
@@ -1244,13 +1445,7 @@ const CheckoutScreen = () => {
           <div className="flex gap-1">
             <div
               className={`btn btn-default btn-xl btn-block flex-1 ${CartState?.items?.list?.count === 0 || checkoutResult?.isLoading || updateResult?.isLoading ? 'btn-disabled' : ''}`}
-              onClick={
-                CartState?.bill
-                  ? () => {
-                      openModal(confirmSaveBillModal());
-                    }
-                  : () => openBillNameModal()
-              }
+              onClick={CartState?.bill ? confirmSaveBillModal : openBillNameModal}
             >
               Save Bill
               {(checkoutResult?.isLoading || updateResult?.isLoading) && (

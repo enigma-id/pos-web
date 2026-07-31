@@ -51,7 +51,7 @@ const Cart = ({ onUpdate }) => {
     onUpdateBillName,
   } = useCart();
 
-  // const { getServiceCharge } = useOutlet();
+  console.log('[DEBUG] Cart Page', CartState);
 
   const getMode = () => {
     const isOpen =
@@ -87,6 +87,7 @@ const Cart = ({ onUpdate }) => {
         quantity: item.quantity,
         unit_nett: item.unit_nett,
         catalog_name: item.name,
+        category_name: item.category_name,
         catalog: {
           id: item.catalog_id,
           category_id: item.category_id,
@@ -94,6 +95,9 @@ const Cart = ({ onUpdate }) => {
           name: item.name,
           is_custom: item.is_custom,
         },
+        is_discount_percentage: item.is_discount_percentage,
+        discount_percentage: item.discount_percentage,
+        discount_value: item.discount_value,
       };
 
       if (item?.is_custom) {
@@ -141,6 +145,7 @@ const Cart = ({ onUpdate }) => {
 
     if (discount_categories?.length > 0) {
       payload.category_discounts = discount_categories;
+      payload.is_category_discount = true;
     }
 
     const dataOfflineToOnline = makePendingBill(payload);
@@ -184,6 +189,7 @@ const Cart = ({ onUpdate }) => {
       )
       ?.map(cat => ({
         category_id: cat.id,
+        category: cat,
         ...(cat.discount_type === 'nominal'
           ? { discount_value: cat.discount_value }
           : { discount_percentage: cat.discount_value }),
@@ -289,6 +295,7 @@ const Cart = ({ onUpdate }) => {
         quantity: item.quantity,
         unit_nett: item.unit_nett,
         catalog_name: item.name,
+        category_name: item.category_name,
         catalog: {
           id: item.catalog_id,
           category_id: item.category_id,
@@ -296,6 +303,9 @@ const Cart = ({ onUpdate }) => {
           name: item.name,
           is_custom: item.is_custom,
         },
+        is_discount_percentage: item.is_discount_percentage,
+        discount_percentage: item.discount_percentage,
+        discount_value: item.discount_value,
       };
 
       if (item?.is_custom) {
@@ -327,6 +337,7 @@ const Cart = ({ onUpdate }) => {
       membership: CartState?.meta?.customer,
       sales_channel: Channel?.selectedChannel,
       is_discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? true : false,
+      discount_percentage: 0,
       discount_value: CartState?.discount?.cart?.amount,
       service_charge_percentage: CartState?.meta?.service_charge_percentage,
       service_charge_value: CartState?.meta?.service_charge_value,
@@ -341,6 +352,7 @@ const Cart = ({ onUpdate }) => {
 
     if (discount_categories?.length > 0) {
       payload.category_discounts = discount_categories;
+      payload.is_category_discount = true;
     }
 
     const dataOfflineToOnline = makePendingBill(payload);
@@ -400,8 +412,6 @@ const Cart = ({ onUpdate }) => {
 
       handleModalPrint(dataOfflineToOnline);
 
-      // Refresh bills list biar button jadi Open Bill
-      bill();
       dispatch(resetCart());
     } else {
       onUpdateBillName(billName);
@@ -419,6 +429,7 @@ const Cart = ({ onUpdate }) => {
       )
       ?.map(cat => ({
         category_id: cat.id,
+        category: cat,
         ...(cat.discount_type === 'nominal'
           ? { discount_value: cat.discount_value }
           : { discount_percentage: cat.discount_value }),
@@ -584,11 +595,11 @@ const Cart = ({ onUpdate }) => {
             Cancel
           </div>
           <div
-            className={`btn btn-md btn-success px-10 text-white ${billResult?.isLoading ? 'btn-disabled' : ''}`}
+            className={`btn btn-md btn-success px-10 text-white ${updateResult?.isLoading ? 'btn-disabled' : ''}`}
             onClick={() => onUpdateBill(CartState?.bill?.bill_name)}
           >
             Confirm{' '}
-            {billResult.isLoading ? (
+            {updateResult.isLoading ? (
               <span className="loading loading-spinner loading-sm"></span>
             ) : null}
           </div>

@@ -270,7 +270,7 @@ export const saveOpenBills = data => {
 
   localStorage.setItem(BILLS_CACHE_KEY, JSON.stringify(existing));
 
-  return bill;
+  return data;
 };
 
 export const updateOpenBills = data => {

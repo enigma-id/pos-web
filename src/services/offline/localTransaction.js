@@ -177,7 +177,7 @@ const enrichRequestItemsFromCartSnapshot = (requestItems, snapshotItems) => {
 const buildOrderItem = (item, index, orderId) => {
   const unitNett = toNumber(item?.unit_nett ?? item?.price);
   const qty = toNumber(item?.quantity) || 1;
-  const discountValue = toNumber(item?.discount_value ?? item?.discount_amount);
+  const discountValue = toNumber(item?.discount_value);
   const unitBill = Math.max(0, unitNett - discountValue);
 
   return {

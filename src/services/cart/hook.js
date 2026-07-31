@@ -337,7 +337,8 @@ const useCart = catalog_id => {
   const showSetDiscount = data => {
     if (data?.discount_value > 0) {
       const discountType = data?.is_discount_percentage ? 'percentage' : 'nominal';
-      const discountValue = discountType === 'percentage' ? data?.discount : data?.discount_value;
+      const discountValue =
+        discountType === 'percentage' ? data?.discount_percentage : data?.discount_value;
 
       dispatch(updateCartDiscount({ discount_type: discountType, discount_value: discountValue }));
     }
