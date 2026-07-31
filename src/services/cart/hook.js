@@ -309,8 +309,6 @@ const useCart = catalog_id => {
     try {
       const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
       if (isOffline || apiReachable === false) {
-        console.log('[DEBUG] onBillSelected', data);
-
         billItems({ items: data?.items, category_discounts: data?.category_discounts });
         dispatch(selectedBill(data));
         showSetDiscount(data);

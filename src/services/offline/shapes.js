@@ -40,6 +40,7 @@ export function makePendingBill(payload) {
     ...(item.addons && {
       addons: item.addons.map(addon => ({
         ...addon,
+        addon_group_id: addon?.addon_group?.id,
         catalog_name: addon.name,
         quantity: (addon.quantity || 1) * item.quantity,
       })),

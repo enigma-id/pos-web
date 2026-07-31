@@ -261,8 +261,6 @@ const Cart = ({ onUpdate }) => {
     }
   };
 
-  console.log('[DEBUG]', CartState);
-
   // Offline — Cache and IDB
   const onUpdateBillOffline = async billName => {
     const discount_categories = CartState?.discount?.category
@@ -285,7 +283,6 @@ const Cart = ({ onUpdate }) => {
     }
 
     const items = allItems?.map(item => {
-      console.log('DEBUG items', item);
       const base = {
         catalog_id: item.catalog_id,
         category_id: item.category_id,
@@ -313,8 +310,6 @@ const Cart = ({ onUpdate }) => {
       return base;
     });
 
-    const now = new Date();
-
     const payload = {
       // kenapa gua tidak pakai sync_id - karena data-nya sudah ada di server bukan lagi di IDB
       id: CartState?.bill?.id || null,
@@ -327,7 +322,7 @@ const Cart = ({ onUpdate }) => {
       items,
 
       // ini untuk kebutuhan standarisasi data Offline to Online
-      created_at: now,
+      created_at: CartState?.bill?.created_at,
       session: OfflineSummary,
       membership: CartState?.meta?.customer,
       sales_channel: Channel?.selectedChannel,
@@ -349,13 +344,6 @@ const Cart = ({ onUpdate }) => {
     }
 
     const dataOfflineToOnline = makePendingBill(payload);
-
-    console.log('===================dataOfflineToOnline===================', dataOfflineToOnline);
-
-    console.log(
-      '[DEBUG] [CART] GT-TC',
-      CartState?.meta?.grand_total - CartState?.bill?.total_charges
-    );
 
     try {
       await updateOrderBill(dataOfflineToOnline, session?.user?.id);
@@ -380,7 +368,36 @@ const Cart = ({ onUpdate }) => {
       outstanding_bill: CartState?.meta?.grand_total - CartState?.bill?.total_charges,
     });
 
-    if (!hasChangeBillName) {
+    if (!hasChangeBillName.current) {
+      // newItems ini hanya untuk tampilan print kitchen bro
+      const newItems = CartState?.items?.list?.map(item => {
+        const base = {
+          catalog_id: item.catalog_id,
+          quantity: item.quantity,
+          catalog_name: item?.name,
+        };
+
+        if (item?.is_custom) {
+          base.catalog_name = item?.name;
+          base.unit_nett = item?.unit_nett;
+        }
+
+        if (item?.additionals_flat?.length > 0) {
+          base.addons = item?.additionals_flat?.map(addon => {
+            return {
+              ...addon,
+              addon_group_id: addon?.addon_group?.id,
+              catalog_name: addon.name,
+              quantity: (addon.quantity || 1) * item.quantity,
+            };
+          });
+        }
+
+        return base;
+      });
+
+      dataOfflineToOnline.new_items = newItems;
+
       handleModalPrint(dataOfflineToOnline);
 
       // Refresh bills list biar button jadi Open Bill

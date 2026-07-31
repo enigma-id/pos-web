@@ -204,13 +204,13 @@ export const updateOrderBill = async (data, userId) => {
     data.sync_id = data?.id;
   }
 
-  console.log('[DEBUG] [QUEUE] updateOrderBill: ', existing);
-
   if (!existing) {
     // Bill dari server — insert sebagai referensi
     const doc = {
       ...data,
       is_synced: false,
+      // ini data dari session bill server bro
+      origin_session_sync_id: data?.session?.id,
       // sync_id ini tidak perlu nanti dikirim ke api ya bro - karena ini dari update server
       sync_id: data?.id,
     };

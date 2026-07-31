@@ -137,6 +137,7 @@ const CheckoutScreen = () => {
   const onShow = (data, index = null, type) => {
     handleModal({ catalog: data, key: index, type });
   };
+
   // Offline — Cache and IDB
   const onCreateBillOffline = async billName => {
     if (!OfflineSummary) {

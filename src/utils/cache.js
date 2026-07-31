@@ -276,8 +276,6 @@ export const saveOpenBills = data => {
 export const updateOpenBills = data => {
   const existing = getOpenBillsCacheRaw();
 
-  console.log('[DEBUG] [CACHE] updateOpenBills', existing.data);
-
   const index = existing.data.findIndex(
     item => item.id === data.id || item.sync_id === data.sync_id
   );
