@@ -8,7 +8,7 @@ import {
   getSalesCacheValue,
   setSalesCacheValue,
 } from '../../utils/cache';
-import { changeServiceCharge, resetCart } from '../cart/slice';
+import { resetCart } from '../cart/slice';
 import { $failure } from '../form/action';
 import { ensureDB, STORES, deleteUserDB } from '../offline/queue';
 import { syncPendingSessions } from '../offline/syncManager';
@@ -46,17 +46,9 @@ const useAuth = () => {
 
       if (res?.message === 'success') {
         dispatch(session(res?.data));
-        const charge = res?.data?.sales_session?.outlet?.service_charges;
-        setSalesCacheValue('service_charge', charge);
-        dispatch(changeServiceCharge(charge));
       }
     } catch (error) {
-      const cachedCharge = getSalesCacheValue('service_charge');
-      if (cachedCharge !== null && cachedCharge !== undefined) {
-        dispatch(changeServiceCharge(cachedCharge));
-      } else {
-        console.log('Error fetching:', error);
-      }
+      console.log('Error fetching:', error);
     }
   };
 

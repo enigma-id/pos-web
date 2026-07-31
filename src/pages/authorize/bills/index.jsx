@@ -20,15 +20,16 @@ import { usePrintWindow } from '../../../utils/print';
 
 const BillScreen = () => {
   const [detail, setDetail] = React.useState(null);
-  const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [search, setSearch] = React.useState('');
+  const [selectedIndex, setSelectedIndex] = React.useState(0);
+  const [data, setData] = React.useState([]);
   const isOnline = useSelector(state => state?.Offline?.isOnline);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
   const lastSyncTime = useSelector(state => state?.Offline?.lastSyncTime);
-  const offlinePendingCount = useSelector(state => state?.Offline?.pendingCount);
 
-  const { show, showResult } = useOrder();
+  const { show: showOrder, showResult: showOrderResult } = useOrder();
   const { bill, billResult, billData } = useCart();
+
   const { openModal, closeModal } = useModal();
 
   const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
@@ -59,17 +60,29 @@ const BillScreen = () => {
     bill(search);
   }, [lastSyncTime]);
 
-  // Re-read cache ketika queue berubah (remove/sync dari PendingDrawer)
-  const isOnlineRef = React.useRef(isOnline);
-  const apiReachableRef = React.useRef(apiReachable);
-  isOnlineRef.current = isOnline;
-  apiReachableRef.current = apiReachable;
+  // Search online → panggil endpoint; kosong → baca cache
+  React.useEffect(() => {
+    const t = setTimeout(
+      () => {
+        bill(search ? { search } : {});
+      },
+      search ? 1000 : 0
+    );
+    return () => clearTimeout(t);
+  }, [search]);
 
+  // Re-read cache when offline pending count changes
+  const offlinePendingCount = useSelector(state => state?.Offline?.pendingCount);
   React.useEffect(() => {
     if (isOnline && apiReachable !== false) return;
     bill();
   }, [offlinePendingCount]);
 
+  // Re-read cache ketika queue berubah (remove/sync dari PendingDrawer)
+  const isOnlineRef = React.useRef(isOnline);
+  const apiReachableRef = React.useRef(apiReachable);
+  isOnlineRef.current = isOnline;
+  apiReachableRef.current = apiReachable;
   React.useEffect(() => {
     const handler = () => {
       if (isOnlineRef.current && apiReachableRef.current !== false) return;
@@ -79,58 +92,38 @@ const BillScreen = () => {
     return () => window.removeEventListener('pending-queue-changed', handler);
   }, []);
 
-  // Search online → fetch; kosong → baca cache (online/offline sama)
-  React.useEffect(() => {
-    const t = setTimeout(
-      () => {
-        bill(search);
-      },
-      search ? 1000 : 0
-    );
-    return () => clearTimeout(t);
-  }, [search]);
-
-  // Reset to first item on new data
+  // Sync billData from hook into local state
   React.useEffect(() => {
     if (billData || billResult?.isSuccess) {
       setSelectedIndex(0);
       setDetail(null);
+      setData(billData || billResult?.data?.data || []);
     }
-  }, [billData]);
+  }, [billData, billResult]);
 
-  // Fetch or resolve detail when selected index changes
+  // Fetch or resolve detail
   React.useEffect(() => {
-    const list = billData || billResult?.data?.data || [];
+    const list = data;
     const selected = list[selectedIndex];
     if (!selected) return;
 
-    // Offline → render from list data (already has items from /openbill)
-    if (selected?.is_offline_mode || !isOnline || apiReachable === false) {
+    // Offline / queue item → render from list data
+    if (!isOnline || apiReachable === false) {
       setDetail(selected);
       return;
     }
 
     // Online → fetch full detail from server
     if (selected?.id) {
-      show(selected.id);
+      showOrder(selected.id);
     }
-  }, [billData, selectedIndex]);
+  }, [data, selectedIndex]);
 
   React.useEffect(() => {
-    if (showResult?.isSuccess) {
-      const detailData = showResult?.data?.data;
-      setDetail(detailData);
+    if (showOrderResult?.isSuccess) {
+      setDetail(showOrderResult?.data?.data);
     }
-  }, [showResult]);
-
-  const data = (billData || billResult?.data?.data || []).filter(item => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      (item?.bill_name || '').toLowerCase().includes(q) ||
-      (item?.code || '').toLowerCase().includes(q)
-    );
-  });
+  }, [showOrderResult]);
 
   return (
     <div className="flex h-screen">

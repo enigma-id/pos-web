@@ -238,6 +238,8 @@ function convertApiOrderToCartItem(item) {
   const subtotal = (item.unit_nett + additionalPerItem) * item.quantity;
 
   return {
+    // ini convertion dari id saels order item
+    order_item_id: item?.id,
     category_id: item.catalog?.category_id,
     category_name: item.category_name,
     code: item.catalog?.code,

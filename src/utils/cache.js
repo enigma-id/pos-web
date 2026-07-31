@@ -299,3 +299,28 @@ export const deleteOpenBills = id => {
 
   localStorage.setItem(BILLS_CACHE_KEY, JSON.stringify(existing));
 };
+
+const HISTORY_CACHE_KEY = 'cache_order_history';
+
+const getOrderHistoryCacheRaw = () => {
+  try {
+    const raw = localStorage.getItem(BILLS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveOrderHistory = data => {
+  const existing = getOrderHistoryCacheRaw();
+
+  if (!existing.data) {
+    existing.data = [];
+  }
+
+  existing.data.unshift(data);
+
+  localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(existing));
+
+  return data;
+};

@@ -11,7 +11,6 @@ import { AddUserIcon, EditIcon, TrashIcon, UserIcon } from '../../../components/
 import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
-import { setWarning } from '../../../services/offline';
 import { updateSessionSummary } from '../../../services/sales/session/hook';
 import { createOrderBill, updateOrderBill } from '../../../services/offline/queue';
 import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
@@ -50,8 +49,6 @@ const Cart = ({ onUpdate }) => {
     updateResult,
     onUpdateBillName,
   } = useCart();
-
-  console.log('[DEBUG] Cart Page', CartState);
 
   const getMode = () => {
     const isOpen =
@@ -251,7 +248,6 @@ const Cart = ({ onUpdate }) => {
 
     try {
       await checkout(payload).unwrap();
-      dispatch(setWarning('Bill saved.'));
     } catch (err) {
       dispatch($failure(err));
     }
@@ -526,7 +522,6 @@ const Cart = ({ onUpdate }) => {
 
     try {
       await update({ id: CartState?.bill?.id, payload }).unwrap();
-      dispatch(setWarning('Bill saved.'));
     } catch (err) {
       dispatch($failure(err));
     }
@@ -666,6 +661,7 @@ const Cart = ({ onUpdate }) => {
     if (checkoutResult?.isError || updateResult?.isError) {
       handleModalError();
       checkoutResult?.reset();
+      updateResult?.reset();
     }
   }, [checkoutResult, updateResult]);
 
