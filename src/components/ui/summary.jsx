@@ -6,6 +6,9 @@ const Summary = ({ data }) => {
   if (!data) return;
 
   const formatFinishedAt = dateString => {
+    if (dateString === '0001-01-01T00:00:00Z') {
+      return '(Ongoing)';
+    }
     const date = new Date(dateString);
     const year = date.getFullYear();
 

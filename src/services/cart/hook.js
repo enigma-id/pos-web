@@ -36,11 +36,13 @@ import { useLazyGetCatalogDetailQuery } from '../catalog/action';
 import { $failure } from '../form/action';
 import { useLazyShowQuery } from '../sales/order/action';
 import { getCache, setCache } from '../../utils/cache';
+import { rest } from 'underscore';
 
 const BILLS_CACHE_KEY = 'cache_openbills';
 
 const useCart = catalog_id => {
   const dispatch = useDispatch();
+  const AuthOutlet = useSelector(state => state?.Auth?.session?.outlet);
   const selectedChannel = useSelector(state => state?.SalesChannel?.selectedChannel);
   const CartState = useSelector(state => state?.Cart);
   const userId = useSelector(state => state?.Auth?.session?.user?.id);
@@ -61,8 +63,6 @@ const useCart = catalog_id => {
   const cartItems = useSelector(state => state?.Cart?.items?.list || []);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
 
-  const charge = useSelector(state => state?.Auth?.session?.sales_session?.outlet?.service_charges);
-
   // Cek apakah item sudah ada
   const existingIndex = cartItems.findIndex(item => item?.id === catalog_id);
   const isItemInCart = existingIndex >= 0;
@@ -70,8 +70,6 @@ const useCart = catalog_id => {
 
   const reset = () => {
     dispatch(resetCart());
-    setSalesCacheValue('service_charge', charge);
-    dispatch(changeServiceCharge(charge));
   };
 
   const isCheckoutRunning = useRef(false);
@@ -91,6 +89,9 @@ const useCart = catalog_id => {
 
   const isBillRunning = useRef(false);
   const closeBill = async (id, payload) => {
+    if (isBillRunning.current) return;
+    isBillRunning.current = true;
+
     try {
       const res = await closeBillMutation({ id, payload }).unwrap();
       if (res?.message === 'success') reset();
@@ -255,41 +256,32 @@ const useCart = catalog_id => {
     );
   };
 
-  const bill = async (search = '') => {
-    let serverData = [];
+  const bill = async (params = {}) => {
     const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     const apiDead = apiReachable === false;
+    const searchCacheKey = `${BILLS_CACHE_KEY}_search`;
 
     if (!isOffline && !apiDead) {
       try {
-        const res = await triggerBill(search ? { search } : {}).unwrap();
-        serverData = res?.data || [];
-        // Merge: server data + offline pending bills (yang ada di cache tp belum di server)
-        const existingCache = getCache(BILLS_CACHE_KEY) || [];
-        const offlineBills = existingCache.filter(c => c.is_synced === false);
-        const merged = [...serverData];
-        for (const ob of offlineBills) {
-          // Jangan duplikat kalo server udah punya (by sync_id)
-          if (!merged.find(m => m.sync_id === ob.sync_id || m.id === ob.id)) {
-            merged.push(ob);
-          }
-        }
-        serverData = merged;
-        if (search) {
-          setCache(BILLS_CACHE_KEY + '_search', serverData);
+        const res = await triggerBill(params).unwrap();
+        const serverData = res?.data || [];
+
+        // Online search → simpan di cache search; online no-search → simpan di cache utama
+        if (params?.search) {
+          setCache(searchCacheKey, serverData);
         } else {
           setCache(BILLS_CACHE_KEY, serverData);
         }
+        setMergedBillData(serverData);
+        return;
       } catch (error) {
-        // online error → fallback ke cache
-        serverData = getCache(BILLS_CACHE_KEY) || [];
+        // fetch error
       }
-    } else {
-      // Offline — selalu baca cache utama, filter client
-      serverData = getCache(BILLS_CACHE_KEY) || [];
     }
 
-    setMergedBillData(serverData);
+    // Offline — selalu baca cache utama, filter client
+    const cached = getCache(BILLS_CACHE_KEY) || [];
+    setMergedBillData(cached);
   };
 
   const update = async ({ id, payload }) => {
@@ -337,7 +329,8 @@ const useCart = catalog_id => {
   const showSetDiscount = data => {
     if (data?.discount_value > 0) {
       const discountType = data?.is_discount_percentage ? 'percentage' : 'nominal';
-      const discountValue = discountType === 'percentage' ? data?.discount : data?.discount_value;
+      const discountValue =
+        discountType === 'percentage' ? data?.discount_percentage : data?.discount_value;
 
       dispatch(updateCartDiscount({ discount_type: discountType, discount_value: discountValue }));
     }
@@ -370,6 +363,12 @@ const useCart = catalog_id => {
       channel_id: selectedChannel?.id,
     });
   }, [catalog_id, selectedChannel, apiReachable, triggerCatalogDetail]);
+
+  useEffect(() => {
+    if (CartState.meta.service_charge_value === 0) {
+      dispatch(changeServiceCharge(AuthOutlet?.service_charges));
+    }
+  }, []);
 
   return {
     catalogDetail: offlineCatalogDetail || catalogDetailResult?.data?.data,

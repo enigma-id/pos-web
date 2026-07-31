@@ -10,8 +10,6 @@ const initialState = {
   error: null,
   lastSyncTime: null,
   apiReachable: true,
-  sessionSummary: null,
-  offlineSessionEnded: false,
 };
 
 const offlineSlice = createSlice({
@@ -52,18 +50,6 @@ const offlineSlice = createSlice({
     setApiReachable: (state, action) => {
       state.apiReachable = !!action.payload;
     },
-    setSessionSummary: (state, action) => {
-      state.sessionSummary = action.payload || null;
-    },
-    clearSessionSummary: state => {
-      state.sessionSummary = null;
-    },
-setOfflineSessionEnded: (state, action) => {
-      state.offlineSessionEnded = !!action.payload;
-    },
-    clearOfflineSessionEnded: state => {
-      state.offlineSessionEnded = false;
-    },
     resetOfflineState: () => initialState,
   },
 });
@@ -79,10 +65,6 @@ export const {
   clearOfflineError,
   setLastSyncTime,
   setApiReachable,
-  setSessionSummary,
-  clearSessionSummary,
-  setOfflineSessionEnded,
-  clearOfflineSessionEnded,
   resetOfflineState,
 } = offlineSlice.actions;
 

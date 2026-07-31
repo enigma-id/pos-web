@@ -6,14 +6,11 @@ import { authApi } from './auth/action';
 import { cartApi } from './cart/action';
 import { catalogApi } from './catalog/action';
 import { memberApi } from './membership/action';
-import { outletApi } from './outlet/action';
 import rootReducer from './reducer';
 import { salesChannelApi } from './sales/channel/action';
 import { salesOrderApi } from './sales/order/action';
 import { salesSessionApi } from './sales/session/action';
 import { tableApi } from './table/action';
-import { getSalesCacheValue } from '../utils/cache';
-import { changeServiceCharge } from './cart/slice';
 
 const persistConfig = {
   key: 'root',
@@ -25,7 +22,6 @@ const persistConfig = {
     'salesOrderApi',
     'salesChannelApi',
     'catalogApi',
-    'outletApi',
     'cartApi',
     'tableApi',
     'memberApi',
@@ -36,24 +32,9 @@ const persistConfig = {
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
 
-// Re-apply cached service charge after any resetCart dispatch
-const preserveServiceCharge = store => next => action => {
-  const result = next(action);
-
-  if (action?.type === 'cart/resetCart') {
-    const cached = getSalesCacheValue('service_charge');
-    if (cached != null) {
-      store.dispatch(changeServiceCharge(cached));
-    }
-  }
-
-  return result;
-};
-
 const apiMiddleware = [
   authApi.middleware,
   catalogApi.middleware,
-  outletApi.middleware,
   salesSessionApi.middleware,
   salesOrderApi.middleware,
   salesChannelApi.middleware,
@@ -69,7 +50,7 @@ const store = configureStore({
     getDefaultMiddleware({
       immutableCheck: false,
       serializableCheck: false,
-    }).concat([preserveServiceCharge, ...apiMiddleware]),
+    }).concat([...apiMiddleware]),
 });
 
 const persistor = persistStore(store);

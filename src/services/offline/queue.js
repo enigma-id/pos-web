@@ -1,6 +1,5 @@
 import { openDB, deleteDB } from 'idb';
 import { v4 as uuidv4 } from 'uuid';
-import { recalculateDiscountCategory } from './helper';
 
 const DB_VERSION = 5;
 
@@ -115,63 +114,46 @@ export const initQueueDB = async userId => {
 
 // ========== SESSIONS ==========
 
-export const createOfflineSession = async (
-  { cash_started, latitude, longitude, battery_health },
-  userId
-) => {
+export const startSession = async (payload, userId) => {
   const db = await ensureDB(userId);
-  const sync_id = uuidv4();
-  const now = getISO();
 
-  const doc = {
-    sync_id,
-    id: null,
-    open_at: now,
-    close_at: null,
-    cash_started: cash_started ?? 0,
-    cash_finished: null,
-    latitude: latitude ?? null,
-    longitude: longitude ?? null,
-    battery_health: battery_health ?? null,
-    syncStatus: 'pending',
-    error: null,
-    createdAt: now,
-  };
+  const doc = { ...payload };
 
   await db.add(STORES.sessions, doc);
   return doc;
 };
 
-export const closeSession = async (syncId, { cash_finished, latitude, longitude }, userId) => {
-  const db = await ensureDB(userId);
-  const existing = await db.get(STORES.sessions, syncId);
-  if (!existing) throw new Error(`Session not found: ${syncId}`);
-
-  existing.close_at = getISO();
-  existing.cash_finished = cash_finished ?? null;
-  if (latitude != null) existing.latitude = latitude;
-  if (longitude != null) existing.longitude = longitude;
-  existing.syncStatus = 'pending';
-
-  await db.put(STORES.sessions, existing);
-  return existing;
-};
-
-export const deleteOfflineSession = async (syncId, userId) => {
+export const closeSession = async (payload, userId) => {
   const db = await ensureDB(userId);
 
-  // Cascade: hapus order_bills, order_payments, topups yg terkait
-  let bills = await db.getAllFromIndex(STORES.orderBills, 'origin_session_sync_id', syncId);
-  for (const b of bills) await db.delete(STORES.orderBills, b.sync_id);
+  // cari index untuk update saat create dari offline juga
+  let existing = payload?.sync_id ? await db.get(STORES.sessions, payload?.sync_id) : null;
 
-  let payments = await db.getAllFromIndex(STORES.orderPayments, 'paid_session_sync_id', syncId);
-  for (const p of payments) await db.delete(STORES.orderPayments, p.sync_id);
+  // jika esxsting sync_id gaada berarti ini updateo order bill dari online bro
+  if (!existing) {
+    existing = await db.get(STORES.sessions, payload?.id);
+    payload.sync_id = payload?.id;
+  }
 
-  let topups = await db.getAllFromIndex(STORES.topups, 'session_sync_id', syncId);
-  for (const t of topups) await db.delete(STORES.topups, t.sync_id);
+  if (!existing) {
+    // Sales Session dari server — insert sebagai referensi
+    const doc = {
+      ...payload,
+      is_synced: false,
+      // sync_id ini tidak perlu nanti dikirim ke api ya bro - karena ini dari update server
+      sync_id: payload?.id,
+    };
 
-  await db.delete(STORES.sessions, syncId);
-  return true;
+    await db.add(STORES.sessions, doc);
+    return doc;
+  }
+
+  await db.put(STORES.sessions, {
+    ...existing,
+    ...data,
+  });
+
+  return data;
 };
 
 // ========== ORDER BILLS ==========
@@ -192,27 +174,27 @@ export const createOrderBill = async (payload, userId) => {
   return doc;
 };
 
-export const updateOrderBill = async (data, userId) => {
+export const updateOrderBill = async (payload, userId) => {
   const db = await ensureDB(userId);
 
   // cari index untuk update saat create dari offline juga
-  let existing = data?.sync_id ? await db.get(STORES.orderBills, data?.sync_id) : null;
+  let existing = payload?.sync_id ? await db.get(STORES.orderBills, payload?.sync_id) : null;
 
   // jika esxsting sync_id gaada berarti ini updateo order bill dari online bro
   if (!existing) {
-    existing = await db.get(STORES.orderBills, data?.id);
-    data.sync_id = data?.id;
+    existing = await db.get(STORES.orderBills, payload?.id);
+    payload.sync_id = payload?.id;
   }
-
-  console.log('[DEBUG] [QUEUE] updateOrderBill: ', existing);
 
   if (!existing) {
     // Bill dari server — insert sebagai referensi
     const doc = {
-      ...data,
+      ...payload,
       is_synced: false,
+      // ini data dari session bill server bro
+      origin_session_sync_id: payload?.session?.id,
       // sync_id ini tidak perlu nanti dikirim ke api ya bro - karena ini dari update server
-      sync_id: data?.id,
+      sync_id: payload?.id,
     };
 
     await db.add(STORES.orderBills, doc);
@@ -235,81 +217,34 @@ export const deleteOrderBill = async (syncId, userId) => {
 
 // ========== ORDER PAYMENTS ==========
 
-export const createOrderPayment = async (data, userId) => {
+export const createOrderPayment = async (payload, userId) => {
   const db = await ensureDB(userId);
-  const sync_id = data.sync_id || uuidv4();
-  const now = getISO();
+
+  // paid_session_sync_id ini kenapa menggunakan or seperti ini, karena jika session summary/session payload dari online dia tidak mempunyai sync_id (sync_id adalah new id uuid dari client)
+  const paid_session_sync_id = payload?.session?.id || payload?.session?.sync_id;
 
   const doc = {
-    sync_id,
-    origin_session_sync_id: data.origin_session_sync_id || null,
-    paid_session_sync_id: data.paid_session_sync_id || null,
-    sales_channel_id: data.sales_channel_id || null,
-    sales_channel_name: data.sales_channel_name || null,
-    payment_method_id: data.payment_method_id || null,
-    payment_method_name: data.payment_method_name || null,
-    membership_id: data.membership_id || null,
-    payment_ref: data.payment_ref || '',
-    bill_name: data.bill_name || '',
-    cashier_name: data.cashier_name || '',
-    service_charge_value: data.service_charge_value || 0,
-    service_charge_percentage: data.service_charge_percentage || 0,
-    discount_percentage: data.discount_percentage || 0,
-    discount_value: data.discount_value || 0,
-    category_discounts: data.category_discounts || [],
-    items: data.items || [],
-    code: data.code || '',
-    status: 'completed',
-    total_payment: data.total_payment || 0,
-    paid_at: data.paid_at || now,
-    is_offline_mode: true,
-    is_synced: false,
-    ref_sync_id: data.ref_sync_id || '',
-    origin_session_sync_id: data.origin_session_sync_id || '',
-    paid_session_sync_id: data.paid_session_sync_id || '',
-    is_show: data.is_show !== false,
-    original_items: data.original_items || [],
-    createdAt: now,
+    ...payload,
+    paid_session_sync_id: paid_session_sync_id,
   };
 
   await db.add(STORES.orderPayments, doc);
   return doc;
 };
 
-export const updateOrderPayment = async (syncId, data, userId) => {
-  const db = await ensureDB(userId);
-  const existing = await db.get(STORES.orderPayments, syncId);
-  if (!existing) throw new Error(`OrderPayment not found: ${syncId}`);
-
-  const updated = { ...existing, ...data, sync_id: syncId };
-  await db.put(STORES.orderPayments, updated);
-  return updated;
-};
-
-export const deleteOrderPayment = async (syncId, userId) => {
-  const db = await ensureDB(userId);
-  await db.delete(STORES.orderPayments, syncId);
-  return true;
-};
-
 // ========== TOPUPS ==========
 
-export const createTopup = async (data, userId) => {
+export const createTopup = async (payload, userId) => {
   const db = await ensureDB(userId);
   const sync_id = data.sync_id || uuidv4();
   const now = getISO();
 
+  // origin_session_sync_id ini kenapa menggunakan or seperti ini, karena jika session summary/session payload dari online dia tidak mempunyai sync_id (sync_id adalah new id uuid dari client)
+  const session_sync_id = payload?.session?.id || payload?.session?.sync_id;
+
   const doc = {
-    sync_id,
-    session_sync_id: data.session_sync_id || data.sessionSyncId || null,
-    membership_id: data.membership_id || data.membershipId || null,
-    membership_sync_id: data.membership_sync_id || data.membershipSyncId || null,
-    nominal: data.nominal || 0,
-    payment_type: data.payment_type || data.paymentType || 'cash',
-    card_id: data.card_id || data.cardId || '',
-    member_name: data.member_name || data.memberName || '',
-    member_code: data.member_code || data.memberCode || '',
-    created_at: data.created_at || data.createdAt || now,
+    ...payload,
+    session_sync_id: session_sync_id,
   };
 
   await db.add(STORES.topups, doc);
@@ -318,32 +253,39 @@ export const createTopup = async (data, userId) => {
 
 // ========== MEMBERSHIPS ==========
 
-export const createMembership = async (data, userId) => {
+export const createMembership = async (payload, userId) => {
   const db = await ensureDB(userId);
-  const sync_id = data.sync_id || uuidv4();
 
   const doc = {
-    sync_id,
-    card_id: data.card_id || data.cardId || '',
-    name: data.name || '',
-    reff_code: data.reff_code || data.reffCode || '',
+    ...payload,
   };
 
   await db.add(STORES.memberships, doc);
   return doc;
 };
 
-export const updateMembership = async (cardId, data, userId) => {
+export const updateMembership = async (payload, userId) => {
   const db = await ensureDB(userId);
 
-  // Cari by card_id
-  const all = await db.getAll(STORES.memberships);
-  const existing = all.find(m => m.card_id === cardId);
-  if (!existing) throw new Error(`Membership not found for card: ${cardId}`);
+  // cari index untuk update saat create dari offline juga
+  let existing = await db.get(STORES.orderBills, payload?.card_id);
 
-  const updated = { ...existing, ...data, card_id: cardId };
-  await db.put(STORES.memberships, updated);
-  return updated;
+  if (!existing) {
+    // membership dari server — insert sebagai referensi
+    const doc = {
+      ...payload,
+    };
+
+    await db.add(STORES.orderBills, doc);
+    return doc;
+  }
+
+  await db.put(STORES.orderBills, {
+    ...existing,
+    ...data,
+  });
+
+  return data;
 };
 
 // ========== METADATA ==========

@@ -11,8 +11,6 @@ import { AddUserIcon, EditIcon, TrashIcon, UserIcon } from '../../../components/
 import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
-import { setWarning } from '../../../services/offline';
-import { updateSessionSummary } from '../../../services/sales/session/hook';
 import { createOrderBill, updateOrderBill } from '../../../services/offline/queue';
 import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
 import { resetCart } from '../../../services/cart/slice';
@@ -21,6 +19,7 @@ import { makePendingBill } from '../../../services/offline/shapes';
 import { $failure } from '../../../services/form/action';
 import { saveOpenBills, updateOpenBills } from '../../../utils/cache';
 import { currencyFormat } from '../../../utils/common';
+import useSession from '../../../services/sales/session/hook';
 
 const Cart = ({ onUpdate }) => {
   const navigate = useNavigate();
@@ -29,7 +28,7 @@ const Cart = ({ onUpdate }) => {
   const FormState = useSelector(state => state?.Form);
   const Channel = useSelector(state => state?.SalesChannel);
   const session = useSelector(s => s.Auth?.session);
-  const OfflineSummary = useSelector(state => state?.Offline.sessionSummary);
+  const sessionSummary = useSelector(state => state?.SalesSession?.sessionSummary);
 
   const dataModalSuccess = React.useRef(null);
   const hasChangeBillName = React.useRef(false);
@@ -51,7 +50,7 @@ const Cart = ({ onUpdate }) => {
     onUpdateBillName,
   } = useCart();
 
-  // const { getServiceCharge } = useOutlet();
+  const { updateSessionSummary } = useSession();
 
   const getMode = () => {
     const isOpen =
@@ -62,7 +61,7 @@ const Cart = ({ onUpdate }) => {
 
   // Offline — Cache and IDB
   const onCreateBillOffline = async billName => {
-    if (!OfflineSummary) {
+    if (!sessionSummary) {
       dispatch(setWaring('Please open session.'));
       return;
     }
@@ -82,11 +81,23 @@ const Cart = ({ onUpdate }) => {
 
     const items = CartState?.items?.list?.map(item => {
       const base = {
+        id: uuidv4(), // --- ini untuk mengikuti backend, karena backend mempunyai id
         catalog_id: item.catalog_id,
         category_id: item.category_id,
         quantity: item.quantity,
         unit_nett: item.unit_nett,
         catalog_name: item.name,
+        category_name: item.category_name,
+        catalog: {
+          id: item.catalog_id,
+          category_id: item.category_id,
+          code: item.code,
+          name: item.name,
+          is_custom: item.is_custom,
+        },
+        is_discount_percentage: item.is_discount_percentage,
+        discount_percentage: item.discount_percentage,
+        discount_value: item.discount_value,
       };
 
       if (item?.is_custom) {
@@ -116,7 +127,7 @@ const Cart = ({ onUpdate }) => {
 
       // ini untuk kebutuhan standarisasi data Offline to Online
       created_at: now,
-      session: OfflineSummary,
+      session: sessionSummary,
       membership: CartState?.meta?.customer,
       sales_channel: Channel?.selectedChannel,
       is_discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? true : false,
@@ -134,6 +145,7 @@ const Cart = ({ onUpdate }) => {
 
     if (discount_categories?.length > 0) {
       payload.category_discounts = discount_categories;
+      payload.is_category_discount = true;
     }
 
     const dataOfflineToOnline = makePendingBill(payload);
@@ -177,6 +189,7 @@ const Cart = ({ onUpdate }) => {
       )
       ?.map(cat => ({
         category_id: cat.id,
+        category: cat,
         ...(cat.discount_type === 'nominal'
           ? { discount_value: cat.discount_value }
           : { discount_percentage: cat.discount_value }),
@@ -238,7 +251,6 @@ const Cart = ({ onUpdate }) => {
 
     try {
       await checkout(payload).unwrap();
-      dispatch(setWarning('Bill saved.'));
     } catch (err) {
       dispatch($failure(err));
     }
@@ -253,8 +265,6 @@ const Cart = ({ onUpdate }) => {
       onCreateBillOnline(billName);
     }
   };
-
-  console.log('[DEBUG]', CartState);
 
   // Offline — Cache and IDB
   const onUpdateBillOffline = async billName => {
@@ -279,11 +289,23 @@ const Cart = ({ onUpdate }) => {
 
     const items = allItems?.map(item => {
       const base = {
+        id: item?.order_item_id || uuidv4(), // --- ini untuk mengikuti backend, karena backend mempunyai id. tapi kenapa ada item?.order_item_id (apabila dari create mempunyai itu - kita tidak boleh merubah-nya)
         catalog_id: item.catalog_id,
         category_id: item.category_id,
         quantity: item.quantity,
         unit_nett: item.unit_nett,
         catalog_name: item.name,
+        category_name: item.category_name,
+        catalog: {
+          id: item.catalog_id,
+          category_id: item.category_id,
+          code: item.code,
+          name: item.name,
+          is_custom: item.is_custom,
+        },
+        is_discount_percentage: item.is_discount_percentage,
+        discount_percentage: item.discount_percentage,
+        discount_value: item.discount_value,
       };
 
       if (item?.is_custom) {
@@ -298,8 +320,6 @@ const Cart = ({ onUpdate }) => {
       return base;
     });
 
-    const now = new Date();
-
     const payload = {
       // kenapa gua tidak pakai sync_id - karena data-nya sudah ada di server bukan lagi di IDB
       id: CartState?.bill?.id || null,
@@ -312,11 +332,12 @@ const Cart = ({ onUpdate }) => {
       items,
 
       // ini untuk kebutuhan standarisasi data Offline to Online
-      created_at: now,
-      session: OfflineSummary,
+      created_at: CartState?.bill?.created_at,
+      session: sessionSummary,
       membership: CartState?.meta?.customer,
       sales_channel: Channel?.selectedChannel,
       is_discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? true : false,
+      discount_percentage: 0,
       discount_value: CartState?.discount?.cart?.amount,
       service_charge_percentage: CartState?.meta?.service_charge_percentage,
       service_charge_value: CartState?.meta?.service_charge_value,
@@ -331,16 +352,10 @@ const Cart = ({ onUpdate }) => {
 
     if (discount_categories?.length > 0) {
       payload.category_discounts = discount_categories;
+      payload.is_category_discount = true;
     }
 
     const dataOfflineToOnline = makePendingBill(payload);
-
-    console.log('===================dataOfflineToOnline===================', dataOfflineToOnline);
-
-    console.log(
-      '[DEBUG] [CART] GT-TC',
-      CartState?.meta?.grand_total - CartState?.bill?.total_charges
-    );
 
     try {
       await updateOrderBill(dataOfflineToOnline, session?.user?.id);
@@ -361,15 +376,42 @@ const Cart = ({ onUpdate }) => {
 
     // 🔁 Update sessionSummary incremental
     updateSessionSummary({
-      type: 'bill',
+      type: 'update',
       outstanding_bill: CartState?.meta?.grand_total - CartState?.bill?.total_charges,
     });
 
-    if (!hasChangeBillName) {
+    if (!hasChangeBillName.current) {
+      // newItems ini hanya untuk tampilan print kitchen bro
+      const newItems = CartState?.items?.list?.map(item => {
+        const base = {
+          catalog_id: item.catalog_id,
+          quantity: item.quantity,
+          catalog_name: item?.name,
+        };
+
+        if (item?.is_custom) {
+          base.catalog_name = item?.name;
+          base.unit_nett = item?.unit_nett;
+        }
+
+        if (item?.additionals_flat?.length > 0) {
+          base.addons = item?.additionals_flat?.map(addon => {
+            return {
+              ...addon,
+              addon_group_id: addon?.addon_group?.id,
+              catalog_name: addon.name,
+              quantity: (addon.quantity || 1) * item.quantity,
+            };
+          });
+        }
+
+        return base;
+      });
+
+      dataOfflineToOnline.new_items = newItems;
+
       handleModalPrint(dataOfflineToOnline);
 
-      // Refresh bills list biar button jadi Open Bill
-      bill();
       dispatch(resetCart());
     } else {
       onUpdateBillName(billName);
@@ -387,6 +429,7 @@ const Cart = ({ onUpdate }) => {
       )
       ?.map(cat => ({
         category_id: cat.id,
+        category: cat,
         ...(cat.discount_type === 'nominal'
           ? { discount_value: cat.discount_value }
           : { discount_percentage: cat.discount_value }),
@@ -400,6 +443,7 @@ const Cart = ({ onUpdate }) => {
 
     const items = allItems?.map(item => {
       const base = {
+        id: item?.order_item_id,
         catalog_id: item.catalog_id,
         quantity: item.quantity,
       };
@@ -483,7 +527,6 @@ const Cart = ({ onUpdate }) => {
 
     try {
       await update({ id: CartState?.bill?.id, payload }).unwrap();
-      dispatch(setWarning('Bill saved.'));
     } catch (err) {
       dispatch($failure(err));
     }
@@ -552,11 +595,11 @@ const Cart = ({ onUpdate }) => {
             Cancel
           </div>
           <div
-            className={`btn btn-md btn-success px-10 text-white ${billResult?.isLoading ? 'btn-disabled' : ''}`}
+            className={`btn btn-md btn-success px-10 text-white ${updateResult?.isLoading ? 'btn-disabled' : ''}`}
             onClick={() => onUpdateBill(CartState?.bill?.bill_name)}
           >
             Confirm{' '}
-            {billResult.isLoading ? (
+            {updateResult.isLoading ? (
               <span className="loading loading-spinner loading-sm"></span>
             ) : null}
           </div>
@@ -623,6 +666,7 @@ const Cart = ({ onUpdate }) => {
     if (checkoutResult?.isError || updateResult?.isError) {
       handleModalError();
       checkoutResult?.reset();
+      updateResult?.reset();
     }
   }, [checkoutResult, updateResult]);
 

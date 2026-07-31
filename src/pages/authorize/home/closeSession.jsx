@@ -10,23 +10,27 @@ import useSidebar from '../../../components/ui/sidebar/hook';
 import useAuth from '../../../services/auth/hook';
 import useSession from '../../../services/sales/session/hook';
 import { syncPendingSessions } from '../../../services/offline/syncManager';
-import { clearOfflineSessionEnded, clearSessionSummary } from '../../../services/offline/slice';
-import usePendingQueueCount, { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
+import usePendingQueueCount, {
+  triggerQueueRefresh,
+} from '../../../services/offline/usePendingQueueCount';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
+import { resetSummary } from '../../../services/sales/session/slice';
 
 const CloseSection = () => {
   const dispatch = useDispatch();
+
+  const sessionSummary = useSelector(state => state?.SalesSession?.sessionSummary);
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+
+  const isOffline = !isOnline || apiReachable === false;
+
   const { summary, summaryResult, end, endResult } = useSession();
   const { count: pendingCount, refresh: refreshQueueCount } = usePendingQueueCount();
-  const isOnline = useSelector(state => state?.Offline?.isOnline !== false);
-  const apiReachable = useSelector(state => state?.Offline?.apiReachable !== false);
-  const sessionSummary = useSelector(state => state?.Offline?.sessionSummary);
-  const offlineEnded = useSelector(state => state?.Offline?.offlineSessionEnded);
-  const userId = useSelector(state => state?.Auth?.session?.user?.id);
   const { onLogout } = useAuth();
 
-  const isOffline = !isOnline || !apiReachable;
+  const userId = useSelector(state => state?.Auth?.session?.user?.id);
 
   const { showCart } = useSidebar();
   const { openModal, closeModal } = useModal();
@@ -45,10 +49,7 @@ const CloseSection = () => {
     open(<Summary data={v} />);
   };
 
-  const doEndSession = () => {
-    const payload = { cash_finished: Number(cash) };
-    end(payload);
-  };
+  const doEndSession = () => {};
 
   const showFailoverModal = (count = pendingCount) => {
     openModal(
@@ -106,32 +107,22 @@ const CloseSection = () => {
     );
   };
 
-  const onSubmit = async () => {
-    if (pendingCount > 0) {
-      if (isOffline) {
-        // Offline → langsung close (simpan di IndexedDB)
-        doEndSession();
-      } else {
-        // Online → sync dulu
-        setSyncing(true);
-        try {
-          await syncPendingSessions();
-        } catch {
-          // sync failed silently
-        }
-        setSyncing(false);
+  const onCloseOffline = async () => {
+    handleOpenPrintSummary(sessionSummary);
+    dispatch(resetSummary());
+  };
 
-        const remaining = store.getState()?.Offline?.pendingCount || 0;
-        if (remaining > 0) {
-          showFailoverModal(remaining);
-        } else {
-          doEndSession();
-        }
-      }
-      return;
+  const onCloseOnline = async () => {
+    const payload = { cash_finished: Number(cash) };
+    end(payload);
+  };
+
+  const onClose = async () => {
+    if (isOffline) {
+      onCloseOffline();
+    } else {
+      onCloseOnline();
     }
-
-    doEndSession();
   };
 
   const openEndSessionConfirm = () => {
@@ -142,9 +133,17 @@ const CloseSection = () => {
         </Modal.Header>
         <Modal.Body>
           <div className="p-6 text-center">
-            <div className="mb-4 text-[16px] font-semibold tracking-wide">Are you sure to end this session?</div>
+            <div className="mb-4 text-[16px] font-semibold tracking-wide">
+              Are you sure to end this session?
+            </div>
             <div className="flex place-content-center place-items-center gap-4">
-              <div className="btn btn-primary btn-lg px-6 text-white" onClick={() => { closeModal(); onSubmit(); }}>
+              <div
+                className="btn btn-primary btn-lg px-6 text-white"
+                onClick={() => {
+                  closeModal();
+                  onClose();
+                }}
+              >
                 Yes
               </div>
               <div className="btn btn-outline btn-lg px-6" onClick={closeModal}>
@@ -184,14 +183,6 @@ const CloseSection = () => {
   React.useEffect(() => {
     summary();
   }, []);
-
-  // Trigger print untuk offline end
-  React.useEffect(() => {
-    if (offlineEnded && sessionSummary) {
-      handleOpenPrintSummary(sessionSummary);
-      dispatch(clearSessionSummary());
-    }
-  }, [offlineEnded, sessionSummary]);
 
   // Trigger print untuk online end
   React.useEffect(() => {

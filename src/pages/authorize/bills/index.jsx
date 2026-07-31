@@ -20,15 +20,25 @@ import { usePrintWindow } from '../../../utils/print';
 
 const BillScreen = () => {
   const [detail, setDetail] = React.useState(null);
-  const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [search, setSearch] = React.useState('');
+  const [selectedIndex, setSelectedIndex] = React.useState(0);
+  const [data, setData] = React.useState([]);
   const isOnline = useSelector(state => state?.Offline?.isOnline);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
   const lastSyncTime = useSelector(state => state?.Offline?.lastSyncTime);
-  const offlinePendingCount = useSelector(state => state?.Offline?.pendingCount);
 
-  const { show, showResult } = useOrder();
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const itemsPerPage = 25;
+
+  const { show: showOrder, showResult: showOrderResult } = useOrder();
   const { bill, billResult, billData } = useCart();
+
+  const isOffline = !isOnline || apiReachable === false;
+
+  const meta = billResult?.data?.meta || {};
+  const total = meta?.total || 0;
+  const totalPages = meta?.total_pages || 0;
+
   const { openModal, closeModal } = useModal();
 
   const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
@@ -56,81 +66,73 @@ const BillScreen = () => {
   };
 
   React.useEffect(() => {
-    bill(search);
+    bill({ limit: itemsPerPage, page: 1 });
   }, [lastSyncTime]);
 
-  // Re-read cache ketika queue berubah (remove/sync dari PendingDrawer)
-  const isOnlineRef = React.useRef(isOnline);
-  const apiReachableRef = React.useRef(apiReachable);
-  isOnlineRef.current = isOnline;
-  apiReachableRef.current = apiReachable;
-
-  React.useEffect(() => {
-    if (isOnline && apiReachable !== false) return;
-    bill();
-  }, [offlinePendingCount]);
-
-  React.useEffect(() => {
-    const handler = () => {
-      if (isOnlineRef.current && apiReachableRef.current !== false) return;
-      bill();
-    };
-    window.addEventListener('pending-queue-changed', handler);
-    return () => window.removeEventListener('pending-queue-changed', handler);
-  }, []);
-
-  // Search online → fetch; kosong → baca cache (online/offline sama)
+  // Search online → panggil endpoint; kosong → baca cache
   React.useEffect(() => {
     const t = setTimeout(
       () => {
-        bill(search);
+        bill(search ? { search } : {});
       },
       search ? 1000 : 0
     );
     return () => clearTimeout(t);
   }, [search]);
 
-  // Reset to first item on new data
+  // Re-read cache when offline pending count changes
+  const offlinePendingCount = useSelector(state => state?.Offline?.pendingCount);
+  React.useEffect(() => {
+    if (isOnline && apiReachable !== false) return;
+    bill({ limit: itemsPerPage, page: 1 });
+  }, [offlinePendingCount]);
+
+  // Re-read cache ketika queue berubah (remove/sync dari PendingDrawer)
+  const isOnlineRef = React.useRef(isOnline);
+  const apiReachableRef = React.useRef(apiReachable);
+  isOnlineRef.current = isOnline;
+  apiReachableRef.current = apiReachable;
+  React.useEffect(() => {
+    const handler = () => {
+      if (isOnlineRef.current && apiReachableRef.current !== false) return;
+      bill({ limit: itemsPerPage, page: 1 });
+    };
+    window.addEventListener('pending-queue-changed', handler);
+    return () => window.removeEventListener('pending-queue-changed', handler);
+  }, []);
+
+  // Sync billData from hook into local state
   React.useEffect(() => {
     if (billData || billResult?.isSuccess) {
       setSelectedIndex(0);
       setDetail(null);
+      setData(billData || billResult?.data?.data || []);
     }
-  }, [billData]);
+  }, [billData, billResult]);
 
-  // Fetch or resolve detail when selected index changes
+  // Fetch or resolve detail
   React.useEffect(() => {
-    const list = billData || billResult?.data?.data || [];
+    const list = data;
     const selected = list[selectedIndex];
     if (!selected) return;
 
-    // Offline → render from list data (already has items from /openbill)
-    if (selected?.is_offline_mode || !isOnline || apiReachable === false) {
+    // Offline / queue item → render from list data
+    if (!isOnline || apiReachable === false) {
       setDetail(selected);
       return;
     }
 
     // Online → fetch full detail from server
     if (selected?.id) {
-      show(selected.id);
+      showOrder(selected.id);
     }
-  }, [billData, selectedIndex]);
+  }, [data, selectedIndex]);
 
   React.useEffect(() => {
-    if (showResult?.isSuccess) {
-      const detailData = showResult?.data?.data;
-      setDetail(detailData);
+    if (showOrderResult?.isSuccess) {
+      setDetail(showOrderResult?.data?.data);
     }
-  }, [showResult]);
-
-  const data = (billData || billResult?.data?.data || []).filter(item => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      (item?.bill_name || '').toLowerCase().includes(q) ||
-      (item?.code || '').toLowerCase().includes(q)
-    );
-  });
+  }, [showOrderResult]);
 
   return (
     <div className="flex h-screen">
@@ -152,6 +154,11 @@ const BillScreen = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto">
+          {data.length === 0 && (
+            <div className="flex h-full place-content-center place-items-center">
+              <div className="text-base-300 text-sm">No bills found.</div>
+            </div>
+          )}
           {data
             ?.filter(item => {
               if (!search) return true;
@@ -197,6 +204,24 @@ const BillScreen = () => {
               </div>
             ))}
         </div>
+        {!isOffline && (
+          <div className="border-base-200 flex justify-end gap-4 border-t p-4">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="disabled:btn-disabled btn"
+            >
+              Prev
+            </button>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages || total === 0}
+              className="disabled:btn-disabled btn"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Detail View */}

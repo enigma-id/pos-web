@@ -2,13 +2,7 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
 
-import {
-  EmptySection,
-  Kitchen,
-  OrderDetails,
-  Receipt,
-  Refund,
-} from '../../../components/ui';
+import { EmptySection, Kitchen, OrderDetails, Receipt, Refund } from '../../../components/ui';
 import { MoneysIcon, PrintIcon, SearchIcon, TrashIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useOrder from '../../../services/sales/order/hook';
@@ -24,7 +18,22 @@ const HistoryScreen = () => {
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
   const lastSyncTime = useSelector(state => state?.Offline?.lastSyncTime);
 
-  const { history, historyResult, historyData, show: showOrder, showResult: showOrderResult } = useOrder();
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const itemsPerPage = 25;
+
+  const {
+    history,
+    historyResult,
+    historyData,
+    show: showOrder,
+    showResult: showOrderResult,
+  } = useOrder();
+
+  const isOffline = !isOnline || apiReachable === false;
+
+  const meta = historyResult?.data?.meta || {};
+  const total = meta?.total || 0;
+  const totalPages = meta?.total_pages || 0;
 
   const { openModal, closeModal } = useModal();
 
@@ -52,14 +61,17 @@ const HistoryScreen = () => {
   };
 
   React.useEffect(() => {
-    history();
+    history({ limit: itemsPerPage, page: 1 });
   }, [lastSyncTime]);
 
   // Search online → panggil endpoint; kosong → baca cache
   React.useEffect(() => {
-    const t = setTimeout(() => {
-      history(search ? { search } : {});
-    }, search ? 1000 : 0);
+    const t = setTimeout(
+      () => {
+        history(search ? { search } : {});
+      },
+      search ? 1000 : 0
+    );
     return () => clearTimeout(t);
   }, [search]);
 
@@ -67,7 +79,7 @@ const HistoryScreen = () => {
   const offlinePendingCount = useSelector(state => state?.Offline?.pendingCount);
   React.useEffect(() => {
     if (isOnline && apiReachable !== false) return;
-    history();
+    history({ limit: itemsPerPage, page: 1 });
   }, [offlinePendingCount]);
 
   // Re-read cache when queue changed (remove from PendingDrawer)
@@ -78,7 +90,7 @@ const HistoryScreen = () => {
   React.useEffect(() => {
     const handler = () => {
       if (isOnlineRef.current && apiReachableRef.current !== false) return;
-      history();
+      history({ limit: itemsPerPage, page: 1 });
     };
     window.addEventListener('pending-queue-changed', handler);
     return () => window.removeEventListener('pending-queue-changed', handler);
@@ -113,10 +125,9 @@ const HistoryScreen = () => {
 
   React.useEffect(() => {
     if (showOrderResult?.isSuccess) {
-      setDetail(showOrderResult?.data?.data)
+      setDetail(showOrderResult?.data?.data);
     }
   }, [showOrderResult]);
-
 
   return (
     <div className="flex h-screen">
@@ -139,57 +150,85 @@ const HistoryScreen = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {data?.filter(item => {
-            if (!search) return true;
-            const q = search.toLowerCase();
-            return (
-              (item?.bill_name || '').toLowerCase().includes(q) ||
-              (item?.code || '').toLowerCase().includes(q) ||
-              (item?.note || '').toLowerCase().includes(q) ||
-              (item?.membership?.name || '').toLowerCase().includes(q) ||
-              (item?.customer_name || '').toLowerCase().includes(q)
-            );
-          }).map((item, index) => (
-            <div
-              key={item.id}
-              onClick={() => setSelectedIndex(index)}
-              className={`border-base-200 cursor-pointer border-b p-4 ${
-                selectedIndex === index ? 'bg-gray-100' : 'hover:bg-gray-50'
-              }`}
-            >
-              <div className="flex place-content-between">
-                <div className="flex place-items-center gap-4">
-                  <div className={`text-base ${selectedIndex === index ? 'text-primary' : ''}`}>
-                    <MoneysIcon />
-                  </div>
-                  <div>
+          {data.length === 0 && (
+            <div className="flex h-full place-content-center place-items-center">
+              <div className="text-base-300 text-sm">No history found.</div>
+            </div>
+          )}
+          {data
+            ?.filter(item => {
+              if (!search) return true;
+              const q = search.toLowerCase();
+              return (
+                (item?.bill_name || '').toLowerCase().includes(q) ||
+                (item?.code || '').toLowerCase().includes(q) ||
+                (item?.note || '').toLowerCase().includes(q) ||
+                (item?.membership?.name || '').toLowerCase().includes(q) ||
+                (item?.customer_name || '').toLowerCase().includes(q)
+              );
+            })
+            .map((item, index) => (
+              <div
+                key={item.id}
+                onClick={() => setSelectedIndex(index)}
+                className={`border-base-200 cursor-pointer border-b p-4 ${
+                  selectedIndex === index ? 'bg-gray-100' : 'hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex place-content-between">
+                  <div className="flex place-items-center gap-4">
                     <div className={`text-base ${selectedIndex === index ? 'text-primary' : ''}`}>
-                      {currencyFormat(item?.total_charges)}
+                      <MoneysIcon />
                     </div>
-                    <div className="text-base-300 text-xs">{
-                      item?.bill_name ? item?.bill_name :
-                      item?.membership ? item?.membership?.name :
-                      item?.note ? item?.note :
-                      '-'
-                    }</div>
+                    <div>
+                      <div className={`text-base ${selectedIndex === index ? 'text-primary' : ''}`}>
+                        {currencyFormat(item?.total_charges)}
+                      </div>
+                      <div className="text-base-300 text-xs">
+                        {item?.bill_name
+                          ? item?.bill_name
+                          : item?.membership
+                            ? item?.membership?.name
+                            : item?.note
+                              ? item?.note
+                              : '-'}
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="flex flex-col place-content-between">
-                  <div className="text-base-300 text-end text-sm">
-                    {item?.is_synced === false && (
-                      <span className="badge badge-warning badge-xs me-1">pending sync</span>
-                    )}
-                    {item?.code}
-                  </div>
+                  <div className="flex flex-col place-content-between">
+                    <div className="text-base-300 text-end text-sm">
+                      {item?.is_synced === false && (
+                        <span className="badge badge-warning badge-xs me-1">pending sync</span>
+                      )}
+                      {item?.code}
+                    </div>
 
-                  <div className="text-base-300 text-end text-xs">
-                    {dateFormat(item?.created_at)}
+                    <div className="text-base-300 text-end text-xs">
+                      {dateFormat(item?.created_at)}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
         </div>
+        {!isOffline && (
+          <div className="border-base-200 flex justify-end gap-4 border-t p-4">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="disabled:btn-disabled btn"
+            >
+              Prev
+            </button>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages || total === 0}
+              className="disabled:btn-disabled btn"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Detail View */}
@@ -211,7 +250,7 @@ const HistoryScreen = () => {
                 <PrintIcon />
                 print kitchen
               </div>
-              {(isOnline && apiReachable !== false) && (
+              {isOnline && apiReachable !== false && (
                 <div
                   className="bg-error text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
                   onClick={() => onRefund(detail?.id, detail?.status)}

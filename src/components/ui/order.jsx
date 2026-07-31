@@ -19,18 +19,27 @@ const OrderDetails = ({ data }) => {
       </div>
 
       <div className="border-base-200 border-b py-4">
-        {(data?.bill_name) && (
+        {data?.bill_name && (
           <div className="mb-2 text-sm">
             <span className="font-semibold">Bills name :</span> {data?.bill_name || '-'}
           </div>
         )}
         <div className="mb-2 text-sm">
-          <span className="font-semibold">Cashier :</span> {data?.session?.cashier?.name || '-'}
+          <span className="font-semibold">Cashier :</span>{' '}
+          {data?.paid_session ? data?.paid_session?.cashier?.name : data?.session?.cashier?.name}
         </div>
         <div className="mb-2 text-sm">
           <span className="font-semibold">Session time :</span>{' '}
-          {dateFormat(data?.session?.started_at, 'DD MMM YYYY')} -{' '}
-          {dateFormat(data?.session?.finished_at, 'DD MMM YYYY', '(ongoing)')}
+          {dateFormat(
+            data?.paid_session ? data?.paid_session?.started_at : data?.session?.started_at,
+            'DD MMM YYYY'
+          )}{' '}
+          -{' '}
+          {dateFormat(
+            data?.paid_session ? data?.paid_session?.finished_at : data?.session?.finished_at,
+            'DD MMM YYYY',
+            '(ongoing)'
+          )}
         </div>
         {data?.membership?.name && (
           <div className="mb-2 text-sm capitalize">
@@ -43,7 +52,10 @@ const OrderDetails = ({ data }) => {
         {data?.items?.map((item, i) => (
           <div key={i} className="pb-2">
             <div className="flex place-content-between place-items-center text-base">
-              <div>{item?.catalog_name || item?.catalog?.name || '-'} {/* catalog_name langsung, catalog?.name fallback struktural */}</div>
+              <div>
+                {item?.catalog_name || item?.catalog?.name || '-'}{' '}
+                {/* catalog_name langsung, catalog?.name fallback struktural */}
+              </div>
               <div>
                 {/* {item?.discount_value > 0 && (
                   <span className="text-base-300 me-2 text-xs line-through">
@@ -67,7 +79,9 @@ const OrderDetails = ({ data }) => {
                   <div className="text-xs font-thin">
                     <span>
                       + {addon?.catalog_name || '-'}{' '}
-                      {addon?.quantity > 0 ? `(${addon?.quantity} x ${currencyFormat(addon?.unit_nett || 0)})` : ""}
+                      {addon?.quantity > 0
+                        ? `(${addon?.quantity} x ${currencyFormat(addon?.unit_nett || 0)})`
+                        : ''}
                     </span>
                   </div>
                   <div className="text-xs font-thin">
@@ -144,7 +158,7 @@ const OrderDetails = ({ data }) => {
             <div>{currencyFormat(data?.total_payment - data?.total_charges)}</div>
           </div>
         )}
-        {data?.payment_ref !== '' && (
+        {data?.payment_ref && data?.payment_ref !== '' && (
           <div className="flex place-content-between place-items-center text-base">
             <div>Ref</div>
             <div>{data?.payment_ref}</div>

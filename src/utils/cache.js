@@ -270,13 +270,11 @@ export const saveOpenBills = data => {
 
   localStorage.setItem(BILLS_CACHE_KEY, JSON.stringify(existing));
 
-  return bill;
+  return data;
 };
 
 export const updateOpenBills = data => {
   const existing = getOpenBillsCacheRaw();
-
-  console.log('[DEBUG] [CACHE] updateOpenBills', existing.data);
 
   const index = existing.data.findIndex(
     item => item.id === data.id || item.sync_id === data.sync_id
@@ -300,4 +298,85 @@ export const deleteOpenBills = id => {
   existing.data = existing.data.filter(item => item.id !== id && item.sync_id !== id);
 
   localStorage.setItem(BILLS_CACHE_KEY, JSON.stringify(existing));
+};
+
+const HISTORY_CACHE_KEY = 'cache_order_history';
+
+const getOrderHistoryCacheRaw = () => {
+  try {
+    const raw = localStorage.getItem(BILLS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveOrderHistory = data => {
+  const existing = getOrderHistoryCacheRaw();
+
+  if (!existing.data) {
+    existing.data = [];
+  }
+
+  existing.data.unshift(data);
+
+  localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(existing));
+
+  return data;
+};
+
+const SHIFTS_CACHE_KEY = 'cache_shifts';
+
+const getShiftsCacheRaw = () => {
+  try {
+    const raw = localStorage.getItem(SHIFTS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveShifts = data => {
+  const existing = getShiftsCacheRaw();
+
+  if (!existing.data) {
+    existing.data = [];
+  }
+
+  existing.data.unshift(data);
+
+  localStorage.setItem(SHIFTS_CACHE_KEY, JSON.stringify(existing));
+
+  return data;
+};
+
+export const updateShifts = data => {
+  const existing = getShiftsCacheRaw();
+
+  const index = existing.data.findIndex(
+    item => item.id === data.id || item.sync_id === data.sync_id
+  );
+
+  if (index === -1) return null;
+
+  existing.data[index] = {
+    ...existing.data[index],
+    ...data,
+  };
+
+  localStorage.setItem(SHIFTS_CACHE_KEY, JSON.stringify(existing));
+
+  return existing.data[index];
+};
+
+export const showShifts = data => {
+  const existing = getShiftsCacheRaw();
+
+  const index = existing.data.findIndex(
+    item => item.id === data.id || item.sync_id === data.sync_id
+  );
+
+  if (index === -1) return null;
+
+  return existing.data[index];
 };

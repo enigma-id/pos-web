@@ -7,10 +7,8 @@ import {
   setFailedCount,
   setLastSyncTime,
   setOfflineError,
-  setSessionSummary,
   setSyncing,
 } from './slice';
-import { updateSessionSummary } from '../sales/session/hook';
 
 const MAX_RETRY = 5;
 const BASE_DELAY = 1000;
@@ -49,52 +47,29 @@ const HISTORY_CACHE_KEY = 'cache_order_history';
 // ===== HELPER: map order fields to /sales/sync payload =====
 
 const mapOrderToSync = (order, sessionSyncId) => ({
-  sync_id: order.id ? null : order.sync_id,
-  sales_channel_id: order.sales_channel_id || null,
-  sales_channel_name: order.sales_channel_name || '',
-  payment_method_id: order.payment_method_id || null,
-  membership_id: order.membership_id || null,
-  payment_ref: order.payment_ref || '',
-  bill_name: order.bill_name || '',
-  cashier_name: order.cashier_name || '',
-  service_charge_value: order.service_charge_value || 0,
-  service_charge_percentage: order.service_charge_percentage || 0,
-  discount_percentage: order.discount_percentage || 0,
-  discount_value: order.discount_value || 0,
-  category_discounts: (order.category_discounts || []).map(cd => ({
-    category_id: cd.category_id || cd.id,
-    discount_percentage: cd.discount_percentage,
-    discount_value: cd.discount_value,
-  })),
+  sync_id: order?.id ? '' : order?.sync_id,
+  id: order?.id,
+  code: order?.code,
+  bill_name: order?.bill_name,
+  origin_session_sync_id: sessionSyncId,
+  sales_chnanel_id: order?.sales_chnanel_id,
+  membership_id: order?.membership_id,
+  service_charge_percentage: order?.service_charge_percentage,
+  service_charge_value: order?.service_charge_value,
+  discount_percentage: order?.discount_percentage,
+  discount_value: order?.discount_value,
+  status: order?.status,
   items: mapItemsToSync(order),
-  code: order.code || '',
-  status: order.status || 'pending',
-  total_payment: order.total_payment || 0,
-  paid_at: order.paid_at || null,
-  is_offline_mode: true,
-  ref_sync_id: order.ref_sync_id || '',
-  session_sync_id: sessionSyncId,
-  origin_session_sync_id: order.origin_session_sync_id || '',
-  paid_session_sync_id: order.paid_session_sync_id || '',
-  is_show: order.is_show !== false,
-  original_items: (order.original_items || []).map(oi => ({
-    catalog_id: oi.catalog_id,
-    catalog_name: oi.catalog_name || '',
-    quantity: oi.quantity || 0,
-    unit_nett: oi.unit_nett || 0,
-    ...(oi.addons?.length > 0
-      ? {
-          addons: oi.addons.map(a => ({
-            addon_group_id: a.addon_group_id,
-            addon_item_id: a.addon_item_id,
-            catalog_name: a.catalog_name || '',
-            unit_nett: a.unit_nett || 0,
-            quantity: a.quantity || 1,
-          })),
-        }
-      : {}),
-    ...(oi.is_custom ? { is_custom: true } : {}),
-  })),
+  category_discounts: mapCategoryDiscountsToSync(order),
+  is_offline_mode: order?.is_offline_mode,
+
+  // fields dibawah ini untuk order yang dibayar atau history
+  paid_session_sync_id: order?.status === 'completed' ? sessionSyncId : '',
+  ref_sync_id: order?.status === 'completed' ? order?.ref_sync_id : '',
+  payment_method_id: order?.status === 'completed' ? order?.payment_method_id : '',
+  payment_ref: order?.status === 'completed' ? order?.payment_ref : '',
+  total_payment: order?.status === 'completed' ? order?.total_payment : '',
+  paid_at: order?.status === 'completed' ? order?.paid_at : '',
 });
 
 const mapItemsToSync = order => {
@@ -118,22 +93,30 @@ const mapItemsToSync = order => {
   }));
 };
 
+const mapCategoryDiscountsToSync = order => {
+  return order.category_discounts.map(cat => ({
+    category_id: cat.category_id,
+    discount_percentage: item.discount_percentage,
+    discount_value: item.discount_value,
+    total_discount: item.total_discount,
+    is_discount_percentage: cat.is_discount_percentage,
+  }));
+};
+
 const mapTopupsToSync = (topups, sessionSyncId) =>
   topups.map(t => ({
     session_sync_id: sessionSyncId,
-    membership_id: t.membership_id || null,
-    membership_sync_id: t.membership_sync_id || null,
+    card_id: t.card_id,
     nominal: t.nominal || 0,
-    payment_type: t.payment_type || 'cash',
-    card_id: t.card_id || '',
-    member_name: t.member_name || '',
-    member_code: t.member_code || '',
+    payment_type: t.payment_type || '',
     created_at: t.created_at,
   }));
 
 // ===== MAIN SYNC FUNCTION =====
 
 export const syncPendingSessions = async () => {
+  console.log('[DEBUG] syncPendingSessions');
+  console.log('[DEBUG] storeRef', storeRef);
   if (!storeRef) {
     return;
   }
@@ -203,6 +186,8 @@ export const syncPendingSessions = async () => {
     const allPayments = await db.getAll(STORES.orderPayments);
     const allTopups = await db.getAll(STORES.topups);
 
+    console.log('[DEBUG] allBills', allBills);
+
     // Group by session ID (origin_session_id / paid_session_id / session_sync_id / sessions.sync_id)
     const grouped = {};
     for (const session of allSessions) {
@@ -267,6 +252,8 @@ export const syncPendingSessions = async () => {
             fakeApi,
             {}
           );
+
+          consoel.log('[DEBUG] syncPendingSessions Hit', result);
 
           if (!result?.error) {
             for (const o of group.orders) {
@@ -471,7 +458,7 @@ export const removeFailedItem = async itemId => {
 
       // Recalculate session summary — remove outstanding bill
       try {
-        updateSessionSummary({ type: 'bill', outstanding_bill: -1 * bill.total_charges });
+        // updateSessionSummary({ type: 'bill', outstanding_bill: -1 * bill.total_charges });
       } catch (_) {}
 
       triggerQueueRefresh();

@@ -43,14 +43,14 @@ function extractUniqueCategories(items) {
     const cat = { id: item.category_id, name: item.category_name };
 
     const discountType =
-      item?.discount_amount > 0 ? (item.is_discount_percentage ? 'percentage' : 'nominal') : null;
+      item?.unit_discount > 0 ? (item.is_discount_percentage ? 'percentage' : 'nominal') : null;
 
     const discoutnValue =
       discountType === null
         ? null
         : discountType === 'percentage'
           ? item?.discount_percentage
-          : item?.discount_amount;
+          : item?.unit_discount;
 
     if (cat?.id !== null) {
       if (!map.has(cat.id)) {
@@ -75,23 +75,33 @@ function extractUniqueCategories(items) {
   return Array.from(map.values());
 }
 
+// getCategoryDiscount ini result-nya adalah data discount (is_discount_percentage, discount_value, discount_percentage, unit_discount)
 function getCategoryDiscount(item, itemCategories) {
   const cat = { id: item.category_id, name: item.category_name };
   const found = itemCategories.find(c => c.id === cat?.id);
-  if (!found) return 0;
+  if (!found) return null;
 
   const { discount_type, discount_value } = found;
-  if (!discount_type || !discount_value) return 0;
+  if (!discount_type || !discount_value) return null;
+
+  const result = {
+    is_discount_percentage: discount_type === 'percentage' ? true : false,
+    discount_percentage: discount_type === 'percentage' ? discount_value : 0,
+    discount_value: discount_type === 'percentage' ? 0 : discount_value,
+    unit_discount: 0,
+  };
 
   if (discount_type === 'percentage') {
-    return Math.ceil(item.unit_nett * (discount_value / 100));
+    result.unit_discount = Math.ceil(item.unit_nett * (discount_value / 100));
   }
 
   if (discount_type === 'nominal') {
-    return Math.ceil(discount_value > item?.unit_nett ? item?.unit_nett : discount_value);
+    result.unit_discount = Math.ceil(
+      discount_value > item?.unit_nett ? item?.unit_nett : discount_value
+    );
   }
 
-  return 0;
+  return result;
 }
 
 function calculateCartLevelDiscount(subtotal, type, value) {
@@ -116,12 +126,17 @@ function recalculateTotals(state) {
   const allItems = getAllItems(state);
 
   const itemWithDiscounts = allItems.map(item => {
-    const discount = getCategoryDiscount(item, state.discount.category);
+    const resultDiscount = getCategoryDiscount(item, state.discount.category);
+    let unit_discount = 0;
+    if (resultDiscount) {
+      unit_discount = resultDiscount.unit_discount;
+    }
 
     return {
       ...item,
-      discount_amount: discount,
-      final_total: Math.max(0, item.subtotal - discount * item?.quantity),
+      ...resultDiscount,
+      unit_discount: unit_discount,
+      final_total: Math.max(0, item.subtotal - unit_discount * item?.quantity),
     };
   });
 
@@ -223,28 +238,22 @@ function convertApiOrderToCartItem(item) {
   const subtotal = (item.unit_nett + additionalPerItem) * item.quantity;
 
   return {
-    id: item.id,
+    // ini convertion dari id saels order item
+    order_item_id: item?.id,
     category_id: item.catalog?.category_id,
     category_name: item.category_name,
-    brand_id: item.catalog?.brand_id,
-    ref_id: item.catalog?.ref_id,
     code: item.catalog?.code,
     name: item.catalog_name || item.catalog?.name || '',
-    base_price: item.catalog?.base_price,
     image: item.catalog?.image,
     is_custom: !!item.catalog?.is_custom,
-    is_vatable: !!item.catalog?.is_vatable,
-    is_active: item.catalog?.is_active,
-    is_additional: item.catalog?.is_additional,
-    is_deleted: item.catalog?.is_deleted,
     unit_nett: item.unit_nett || 0,
     quantity: item.quantity,
     subtotal,
     catalog_id: item.catalog?.id,
     addons: additionalsGrouped,
     additionals_flat: additionalsFlat,
-    discount_amount: item.discount_value || 0,
-    discount_percentage: item.discount || 0,
+    unit_discount: item.discount_value || 0,
+    discount_percentage: item.discount_percentage || 0,
     final_total: item.unit_bill ? item.unit_bill * item.quantity : subtotal,
     from_bill: true,
     is_discount_percentage: !!item.is_discount_percentage,
@@ -480,8 +489,9 @@ const cartSlice = createSlice({
           };
         });
       } else {
-        state.discount.category = extractUniqueCategories(allItems);
       }
+
+      state.discount.category = extractUniqueCategories(allItems);
 
       recalculateTotals(state);
     },

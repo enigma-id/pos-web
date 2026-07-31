@@ -192,6 +192,42 @@ const Receipt = ({ data }) => {
           </div>
         )}
       </div>
+
+      {data?.payment_method?.provider === 'qris' && data?.payment && data?.payment?.qr_url && (
+        <div
+          style={{
+            borderTop: '1px dashed #000',
+            paddingTop: 8,
+            marginTop: 5,
+            textAlign: 'center',
+          }}
+        >
+          <p style={{ marginBlock: '2px 6px', fontSize: 11, fontWeight: 'bold' }}>
+            Scan QRIS to Pay
+          </p>
+
+          {/* Jika backend menyediakan URL Gambar QR */}
+          {data?.payment?.qr_url && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 5 }}>
+              <img
+                src={data?.payment?.qr_url}
+                alt="QRIS Code"
+                style={{ width: 130, height: 130, objectFit: 'contain' }}
+              />
+            </div>
+          )}
+
+          {import.meta.env.DEV && (
+            <>
+              {data?.payment?.qr_url && (
+                <p style={{ marginBlock: 2, fontSize: 9, wordBreak: 'break-all', color: '#555' }}>
+                  {data?.payment?.qr_url}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 };
