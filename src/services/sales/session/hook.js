@@ -65,43 +65,36 @@ export const updateSessionSummary = newData => {
     summary.summary.sales.outstanding_bill =
       (summary.summary.sales.outstanding_bill || 0) + newData.outstanding_bill;
   } else if (newData.type === 'payment') {
-    const totalPayment = newData.total_payment || 0;
-    const serviceCharge = newData.service_charge_value || 0;
-    const discount = newData.discount_value || 0;
-    const itemsTotal = totalPayment - serviceCharge + discount;
-    summary.summary.sales.total_sales = (summary.summary.sales.total_sales || 0) + itemsTotal;
-    summary.summary.sales.total_discount = (summary.summary.sales.total_discount || 0) + discount;
-    summary.summary.sales.total_service =
-      (summary.summary.sales.total_service || 0) + serviceCharge;
-    summary.summary.sales.grand_total = (summary.summary.sales.grand_total || 0) + totalPayment;
+    summary.summary.sales.total_sales =
+      (summary.summary.sales.total_sales || 0) + newData.total_sales;
+    summary.summary.sales.total_discount =
+      (summary.summary.sales.total_discount || 0) + newData.total_discount;
     summary.summary.sales.total_after_discount =
-      (summary.summary.sales.total_after_discount || 0) + (totalPayment - serviceCharge);
-    summary.summary.cash.expected_cash = (summary.summary.cash.expected_cash || 0) + totalPayment;
+      (summary.summary.sales.total_after_discount || 0) + newData.total_after_discount;
+    summary.summary.sales.total_service =
+      (summary.summary.sales.total_service || 0) + newData.service_charges_value;
+    summary.summary.sales.grand_total =
+      (summary.summary.sales.grand_total || 0) + newData.total_charges;
 
     const pmId = newData.payment_method_id || 0;
     const pmIdx = summary.summary.payment_methods.findIndex(p => p.payment_method_id === pmId);
     if (pmIdx >= 0) {
       summary.summary.payment_methods[pmIdx] = {
         ...summary.summary.payment_methods[pmIdx],
-        total_paid: (summary.summary.payment_methods[pmIdx].total_paid || 0) + totalPayment,
+        total_paid:
+          (summary.summary.payment_methods[pmIdx].total_paid || 0) + newData.total_payment,
         count: (summary.summary.payment_methods[pmIdx].count || 0) + 1,
       };
     } else {
       summary.summary.payment_methods.push({
         payment_method_id: pmId,
-        total_paid: totalPayment,
+        total_paid: newData.total_payment,
         count: 1,
-        name: newData.payment_method_name || (pmId === 0 ? 'Cash' : `#${pmId}`),
+        name: newData.payment_method.name,
       });
     }
 
-    summary.orders.push({
-      sync_id: newData.sync_id,
-      status: 'completed',
-      items: newData.items,
-      bill_name: newData.bill_name,
-      total_payment: totalPayment,
-    });
+    summary.orders.push(newData.order);
   } else if (newData.type === 'topup') {
     const nominal = newData.nominal || 0;
     summary.summary.cash.topup_cash = (summary.summary.cash.topup_cash || 0) + nominal;

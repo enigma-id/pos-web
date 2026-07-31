@@ -39,7 +39,13 @@ import {
   makeCompletedOrder,
   makeIdbBillData,
 } from '../../../services/offline/shapes';
-import { getCache, saveOpenBills, setCache, updateOpenBills } from '../../../utils/cache';
+import {
+  getCache,
+  saveOpenBills,
+  saveOrderHistory,
+  setCache,
+  updateOpenBills,
+} from '../../../utils/cache';
 // import useOutlet from '../../../services/outlet/hooks';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
@@ -539,7 +545,145 @@ const CheckoutScreen = () => {
   };
 
   // Pay Offline — Cache and IDB
-  const onPayOffline = async card => {};
+  const onPayOffline = async card => {
+    const discount_categories = CartState?.discount?.category
+      ?.filter(
+        cat =>
+          cat && cat.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
+      )
+      ?.map(cat => ({
+        category_id: cat.id,
+        category: cat,
+        ...(cat.discount_type === 'nominal'
+          ? { discount_value: cat.discount_value }
+          : { discount_percentage: cat.discount_value }),
+      }));
+
+    let allItems = [...(CartState?.items?.bill || []), ...(CartState?.items?.list || [])];
+
+    const items = allItems?.map(item => {
+      const base = {
+        id: item.order_item_id,
+        catalog_id: item.catalog_id,
+        category_id: item.category_id,
+        quantity: item.quantity,
+        unit_nett: item.unit_nett,
+        catalog_name: item.name,
+        category_name: item.category_name,
+        catalog: {
+          id: item.catalog_id,
+          category_id: item.category_id,
+          code: item.code,
+          name: item.name,
+          is_custom: item.is_custom,
+        },
+        is_discount_percentage: item.is_discount_percentage,
+        discount_percentage: item.discount_percentage,
+        discount_value: item.discount_value,
+      };
+
+      if (item?.is_custom) {
+        base.catalog_name = item?.name;
+        base.unit_nett = item?.unit_nett;
+      }
+
+      if (item?.additionals_flat?.length > 0) {
+        base.addons = item?.additionals_flat;
+      }
+
+      return base;
+    });
+
+    const orderId = uuidv4();
+    const now = new Date();
+    const code = `${now.toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
+
+    const payload = {
+      code: code,
+      sync_id: orderId,
+      bill_name: billName,
+      membership_id: CartState?.meta?.customer?.id,
+      sales_channel_id: Channel?.selectedChannel?.id,
+      payment_method_id: selectedMethod?.id,
+      payment_ref: paymentRef,
+      status: 'completed',
+      is_offline_mode: true,
+      total_payment:
+        selectedMethod?.provider === 'cash' ? Number(pay) || 0 : CartState?.meta?.grand_total || 0,
+      items,
+
+      // ini untuk kebutuhan standarisasi data Offline to Online
+      created_at: now,
+      paid_at: now,
+      session: OfflineSummary,
+      membership: CartState?.meta?.customer,
+      sales_channel: Channel?.selectedChannel,
+      payment_method: selectedMethod,
+      is_discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? true : false,
+      discount_value: CartState?.discount?.cart?.amount,
+      service_charge_percentage: CartState?.meta?.service_charge_percentage,
+      service_charge_value: CartState?.meta?.service_charge_value,
+      total_charges: CartState?.meta?.grand_total,
+    };
+
+    if (CartState?.discount?.cart?.type) {
+      if (CartState?.discount?.cart?.type === 'percentage') {
+        payload.discount_percentage = CartState?.discount?.cart?.value;
+      }
+    }
+
+    if (discount_categories?.length > 0) {
+      payload.category_discounts = discount_categories;
+      payload.is_category_discount = true;
+    }
+
+    if (card) {
+      payload.membership_id = card?.id;
+      payload.card_id = card?.card_id;
+      payload.payment_ref = card?.reff_code;
+    }
+
+    const dataOfflineToOnline = makeCompletedOrder(payload);
+
+    try {
+      await createOrderPayment(dataOfflineToOnline, session?.user?.id);
+    } catch (err) {
+      handleModalError();
+
+      dispatch($failure(err));
+      return;
+    }
+
+    triggerQueueRefresh();
+
+    // Push ke localStorage bills cache
+    try {
+      saveOrderHistory(dataOfflineToOnline);
+    } catch (e) {
+      handleModalError();
+
+      console.error('[SAVE ON PAY] cache error:', e);
+    }
+
+    // 🔁 Update sessionSummary incremental
+    updateSessionSummary({
+      type: 'payment',
+      order: dataOfflineToOnline,
+      total_sales: dataOfflineToOnline?.subtotal_nett,
+      total_discount: dataOfflineToOnline?.subtotal_nett - dataOfflineToOnline?.total_bill,
+      total_after_discount: dataOfflineToOnline?.total_bill,
+      grand_total: CartState?.meta?.grand_total,
+      payment_method_id: dataOfflineToOnline?.payment_method_id,
+      total_payment: dataOfflineToOnline?.total_payment,
+      payment_method: dataOfflineToOnline?.payment_method,
+    });
+
+    handleModalPrint(dataOfflineToOnline);
+
+    dispatch(resetCart());
+    setDiscountInputs([]);
+  };
+
   // Pay Online — API
   const onPayOnline = async card => {
     const discount_categories = CartState?.discount?.category
@@ -705,7 +849,7 @@ const CheckoutScreen = () => {
     if (isOffline || apiReachable === false) {
       // No connection → skip checkSaldo, ambil dari cache kalo ada
       const cached = getMemberCache(uid);
-      handlePay(cached || { card_id: uid });
+      onPay(cached || { card_id: uid });
       return;
     }
 
@@ -728,7 +872,7 @@ const CheckoutScreen = () => {
     if (checkResult?.isSuccess) {
       // openSuccess()
       const card = checkResult?.data?.data;
-      handlePay(card);
+      onPay(card);
     }
   }, [checkResult]);
 

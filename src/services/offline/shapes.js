@@ -54,10 +54,13 @@ export function makePendingBill(payload) {
   }));
 
   let subtotal = 0;
+  let totalBill = 0;
   cloneItems.forEach(item => {
     subtotal += item.quantity * item.unit_nett;
+    totalBill += item.quantity * (item.unit_nett - item.unit_bill);
     (item.addons ?? []).forEach(addon => {
       subtotal += addon.quantity * addon.unit_nett;
+      totalBill += addon.quantity * addon.unit_nett;
     });
   });
 
@@ -68,54 +71,51 @@ export function makePendingBill(payload) {
     original_items: cloneItems,
     category_discounts: recalculateDiscountCategory(payload.category_discounts, payload.items),
     subtotal_nett: subtotal,
-    total_bill: subtotal,
+    total_bill: totalBill,
   };
 }
 
 // ── Completed order for cache_order_history ──
-export function makeCompletedOrder({
-  orderId,
-  code,
-  billName,
-  items,
-  cartState,
-  channel,
-  session,
-  paymentMethod,
-  paymentRef,
-  totalPayment,
-  paidAt,
-  discountCategories,
-}) {
-  const billing = makePendingBill({
-    orderId,
-    code,
-    billName,
-    items,
-    cartState,
-    channel,
-    session,
-    discountCategories,
+export function makeCompletedOrder(payload) {
+  // kita butuh untuk jumlahkan ulang data items addons terhadap
+  const cloneItems = payload.items.map(item => ({
+    ...item,
+    ...(item.addons && {
+      addons: item.addons.map(addon => ({
+        ...addon,
+        addon_group_id: addon?.addon_group?.id,
+        catalog_name: addon.name,
+        quantity: (addon.quantity || 1) * item.quantity,
+      })),
+    }),
+
+    discount_value:
+      item.discount_percentage > 0
+        ? item.unit_nett * (item.discount_percentage / 100)
+        : item.discount_value,
+    discount_percentage: item.discount_percentage,
+  }));
+
+  let subtotal = 0;
+  let totalBill = 0;
+  cloneItems.forEach(item => {
+    subtotal += item.quantity * item.unit_nett;
+    totalBill += item.quantity * (item.unit_nett - item.unit_bill);
+    (item.addons ?? []).forEach(addon => {
+      subtotal += addon.quantity * addon.unit_nett;
+      totalBill += addon.quantity * addon.unit_nett;
+    });
   });
 
   return {
-    ...billing,
-    status: 'completed',
-    payment_method_id: paymentMethod?.id || '',
-    payment_ref: paymentRef || '',
-    total_payment: toNum(totalPayment) || billing.total_charges,
-    paid_at: paidAt || new Date().toISOString(),
-    paid_session_id: session?.sales_session?.id || '',
+    ...payload,
+    paid_session: payload.session,
+    items: cloneItems,
     is_synced: false,
-    payment_method: paymentMethod ? { id: paymentMethod.id, name: paymentMethod.name } : null,
-    payment: {
-      id: '',
-      transaction_id: orderId,
-      amount: toNum(totalPayment) || billing.total_charges,
-      status: 'settlement',
-      method: paymentMethod?.provider || 'cash',
-      created_at: paidAt || new Date().toISOString(),
-    },
+    original_items: cloneItems,
+    category_discounts: recalculateDiscountCategory(payload.category_discounts, payload.items),
+    subtotal_nett: subtotal,
+    total_bill: totalBill,
   };
 }
 
