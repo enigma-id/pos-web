@@ -164,6 +164,13 @@ const CheckoutScreen = () => {
         quantity: item.quantity,
         unit_nett: item.unit_nett,
         catalog_name: item.name,
+        catalog: {
+          id: item.catalog_id,
+          category_id: item.category_id,
+          code: item.code,
+          name: item.name,
+          is_custom: item.is_custom,
+        },
       };
 
       if (item?.is_custom) {

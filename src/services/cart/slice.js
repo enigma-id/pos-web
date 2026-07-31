@@ -223,20 +223,12 @@ function convertApiOrderToCartItem(item) {
   const subtotal = (item.unit_nett + additionalPerItem) * item.quantity;
 
   return {
-    id: item.id,
     category_id: item.catalog?.category_id,
     category_name: item.category_name,
-    brand_id: item.catalog?.brand_id,
-    ref_id: item.catalog?.ref_id,
     code: item.catalog?.code,
     name: item.catalog_name || item.catalog?.name || '',
-    base_price: item.catalog?.base_price,
     image: item.catalog?.image,
     is_custom: !!item.catalog?.is_custom,
-    is_vatable: !!item.catalog?.is_vatable,
-    is_active: item.catalog?.is_active,
-    is_additional: item.catalog?.is_additional,
-    is_deleted: item.catalog?.is_deleted,
     unit_nett: item.unit_nett || 0,
     quantity: item.quantity,
     subtotal,

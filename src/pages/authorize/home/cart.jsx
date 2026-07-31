@@ -87,6 +87,13 @@ const Cart = ({ onUpdate }) => {
         quantity: item.quantity,
         unit_nett: item.unit_nett,
         catalog_name: item.name,
+        catalog: {
+          id: item.catalog_id,
+          category_id: item.category_id,
+          code: item.code,
+          name: item.name,
+          is_custom: item.is_custom,
+        },
       };
 
       if (item?.is_custom) {
@@ -278,12 +285,20 @@ const Cart = ({ onUpdate }) => {
     }
 
     const items = allItems?.map(item => {
+      console.log('DEBUG items', item);
       const base = {
         catalog_id: item.catalog_id,
         category_id: item.category_id,
         quantity: item.quantity,
         unit_nett: item.unit_nett,
         catalog_name: item.name,
+        catalog: {
+          id: item.catalog_id,
+          category_id: item.category_id,
+          code: item.code,
+          name: item.name,
+          is_custom: item.is_custom,
+        },
       };
 
       if (item?.is_custom) {
