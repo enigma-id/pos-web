@@ -11,7 +11,6 @@ import { AddUserIcon, EditIcon, TrashIcon, UserIcon } from '../../../components/
 import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
-import { updateSessionSummary } from '../../../services/sales/session/hook';
 import { createOrderBill, updateOrderBill } from '../../../services/offline/queue';
 import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
 import { resetCart } from '../../../services/cart/slice';
@@ -20,6 +19,7 @@ import { makePendingBill } from '../../../services/offline/shapes';
 import { $failure } from '../../../services/form/action';
 import { saveOpenBills, updateOpenBills } from '../../../utils/cache';
 import { currencyFormat } from '../../../utils/common';
+import useSession from '../../../services/sales/session/hook';
 
 const Cart = ({ onUpdate }) => {
   const navigate = useNavigate();
@@ -28,7 +28,7 @@ const Cart = ({ onUpdate }) => {
   const FormState = useSelector(state => state?.Form);
   const Channel = useSelector(state => state?.SalesChannel);
   const session = useSelector(s => s.Auth?.session);
-  const OfflineSummary = useSelector(state => state?.Offline.sessionSummary);
+  const sessionSummary = useSelector(state => state?.SalesSession?.sessionSummary);
 
   const dataModalSuccess = React.useRef(null);
   const hasChangeBillName = React.useRef(false);
@@ -50,6 +50,10 @@ const Cart = ({ onUpdate }) => {
     onUpdateBillName,
   } = useCart();
 
+  const { updateSessionSummary } = useSession();
+
+  console.log(sessionSummary, '===[DEBUG] Cart:====');
+
   const getMode = () => {
     const isOpen =
       data?.length > 0 && CartState?.items?.list?.length === 0 && CartState?.bill === null;
@@ -59,7 +63,7 @@ const Cart = ({ onUpdate }) => {
 
   // Offline — Cache and IDB
   const onCreateBillOffline = async billName => {
-    if (!OfflineSummary) {
+    if (!sessionSummary) {
       dispatch(setWaring('Please open session.'));
       return;
     }
@@ -124,7 +128,7 @@ const Cart = ({ onUpdate }) => {
 
       // ini untuk kebutuhan standarisasi data Offline to Online
       created_at: now,
-      session: OfflineSummary,
+      session: sessionSummary,
       membership: CartState?.meta?.customer,
       sales_channel: Channel?.selectedChannel,
       is_discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? true : false,
@@ -329,7 +333,7 @@ const Cart = ({ onUpdate }) => {
 
       // ini untuk kebutuhan standarisasi data Offline to Online
       created_at: CartState?.bill?.created_at,
-      session: OfflineSummary,
+      session: sessionSummary,
       membership: CartState?.meta?.customer,
       sales_channel: Channel?.selectedChannel,
       is_discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? true : false,
@@ -372,7 +376,7 @@ const Cart = ({ onUpdate }) => {
 
     // 🔁 Update sessionSummary incremental
     updateSessionSummary({
-      type: 'bill',
+      type: 'update',
       outstanding_bill: CartState?.meta?.grand_total - CartState?.bill?.total_charges,
     });
 

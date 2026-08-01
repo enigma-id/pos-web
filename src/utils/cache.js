@@ -324,3 +324,59 @@ export const saveOrderHistory = data => {
 
   return data;
 };
+
+const SHIFTS_CACHE_KEY = 'cache_shifts';
+
+const getShiftsCacheRaw = () => {
+  try {
+    const raw = localStorage.getItem(SHIFTS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveShifts = data => {
+  const existing = getShiftsCacheRaw();
+
+  if (!existing.data) {
+    existing.data = [];
+  }
+
+  existing.data.unshift(data);
+
+  localStorage.setItem(SHIFTS_CACHE_KEY, JSON.stringify(existing));
+
+  return data;
+};
+
+export const updateShifts = data => {
+  const existing = getShiftsCacheRaw();
+
+  const index = existing.data.findIndex(
+    item => item.id === data.id || item.sync_id === data.sync_id
+  );
+
+  if (index === -1) return null;
+
+  existing.data[index] = {
+    ...existing.data[index],
+    ...data,
+  };
+
+  localStorage.setItem(SHIFTS_CACHE_KEY, JSON.stringify(existing));
+
+  return existing.data[index];
+};
+
+export const showShifts = data => {
+  const existing = getShiftsCacheRaw();
+
+  const index = existing.data.findIndex(
+    item => item.id === data.id || item.sync_id === data.sync_id
+  );
+
+  if (index === -1) return null;
+
+  return existing.data[index];
+};

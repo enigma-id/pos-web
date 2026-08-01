@@ -1,5 +1,5 @@
 import { createSlice } from '@reduxjs/toolkit';
-import _, { result } from 'underscore';
+import _ from 'underscore';
 
 // Helpers
 function removingZero(items) {

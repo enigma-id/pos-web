@@ -1,42 +1,87 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useSelector } from 'react-redux';
 
+import { v4 as uuidv4 } from 'uuid';
 import { Input, Modal } from '../../../components/ui';
 import useModal from '../../../components/ui/modal/hook';
 import useAuth from '../../../services/auth/hook';
 import useSession from '../../../services/sales/session/hook';
 import { currencyFormat } from '../../../utils/common';
+import { resetCart } from '../../../services/cart/slice';
+import useCatalog from '../../../services/catalog/hooks';
+import { makeStartSession } from '../../../services/offline/shapes';
+import { startSession } from '../../../services/offline';
+import { saveShifts } from '../../../utils/cache';
 
 const OpenSection = () => {
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+  const AuthSession = useSelector(state => state?.Auth?.session);
+
   const { start, startResult } = useSession();
+  const { refreshCatalog } = useCatalog();
   const { onLogout } = useAuth();
   const { openModal, closeModal } = useModal();
 
-  const isOffline = useSelector(state => !state.Offline.isOnline || state.Offline.apiReachable === false);
-  const offlineStartResult = useSelector(state => state?.SalesSession?.offlineStartResult);
-  const [isStartingLocal, setIsStartingLocal] = React.useState(false);
-
   const [cash, setCash] = React.useState('');
 
-  const isStarting = startResult?.isLoading || (isOffline && isStartingLocal);
+  const isOffline = !isOnline || apiReachable === false;
 
-  const onSubmit = async () => {
-    if (isOffline) {
-      setIsStartingLocal(true);
+  const onStartOffline = async () => {
+    let now = new Date();
+    const payload = {
+      cash_started: parseFloat(cash) || 0,
+      sync_id: uuidv4(),
+      outlet_id: AuthSession?.outlet?.id,
+      cashier_id: AuthSession?.user?.id,
+      transaction_date: now,
+      started_at: now,
+      cash_started: cash,
+      status: 'opened',
+    };
+
+    const dataOfflineToOnline = makeStartSession(payload);
+
+    try {
+      await startSession(dataOfflineToOnline, session?.user?.id);
+    } catch (err) {
+      handleModalError();
+      dispatch($failure(err));
+      return;
     }
+
+    triggerQueueRefresh();
+
+    // Push ke localStorage session cache
+    try {
+      saveShifts(dataOfflineToOnline);
+    } catch (e) {
+      handleModalError();
+    }
+  };
+
+  const onStartOnline = async () => {
     const payload = {
       cash_started: parseFloat(cash) || 0,
     };
 
-    start(payload);
+    await start(payload);
   };
 
-  // Navigate setelah offline start sukses
-  React.useEffect(() => {
-    if (offlineStartResult?.is_offline_session) {
-      window.location.hash = '/';
+  const onStart = async () => {
+    if (isOffline) {
+      onStartOffline();
+    } else {
+      onStartOnline();
     }
-  }, [offlineStartResult]);
+  };
+
+  useEffect(() => {
+    if (startResult?.isSuccess) {
+      refreshCatalog();
+      dispatch(resetCart());
+    }
+  }, [startResult?.isSuccess]);
 
   const openLogout = () => {
     openModal(
@@ -79,7 +124,7 @@ const OpenSection = () => {
           session, making it easier to manage and track your cash flow.
         </div>
         {isOffline && (
-          <div className="bg-warning/10 mb-3 rounded-md p-3 text-sm text-warning">
+          <div className="bg-warning/10 text-warning mb-3 rounded-md p-3 text-sm">
             You are offline. Session will be saved locally and synced when connection is restored.
           </div>
         )}
@@ -98,11 +143,11 @@ const OpenSection = () => {
 
       <div className="border-base-200 min-h-15 border-t">
         <button
-          className={`btn btn-block btn-xl btn-primary rounded-none ${isStarting ? 'btn-disabled' : ''}`}
-          onClick={onSubmit}
-          disabled={isStarting}
+          className={`btn btn-block btn-xl btn-primary rounded-none ${startResult?.isLoading ? 'btn-disabled' : ''}`}
+          onClick={onStart}
+          disabled={startResult?.isLoading}
         >
-          {isStarting ? (
+          {startResult?.isLoading ? (
             <>
               Starting Session...
               <span className="loading loading-spinner"></span>

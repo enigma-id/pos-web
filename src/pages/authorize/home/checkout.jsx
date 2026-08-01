@@ -26,11 +26,8 @@ import {
   createOrderBill,
   createOrderPayment,
   updateOrderBill,
-  ensureDB,
-  STORES,
 } from '../../../services/offline/queue';
 import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
-import { updateSessionSummary } from '../../../services/sales/session/hook';
 import { $failure } from '../../../services/form/action';
 import { v4 as uuidv4 } from 'uuid';
 import { store } from '../../../services/store';
@@ -50,6 +47,7 @@ import {
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
 import { getMemberCache } from '../../../utils/cache';
+import useSession from '../../../services/sales/session/hook';
 
 const CheckoutScreen = () => {
   const location = useLocation();
@@ -62,10 +60,9 @@ const CheckoutScreen = () => {
   const CartState = useSelector(state => state?.Cart);
   const Channel = useSelector(state => state?.SalesChannel);
   const session = useSelector(s => s.Auth?.session);
-  const OfflineSummary = useSelector(state => state?.Offline.sessionSummary);
+  const sessionSummary = useSelector(state => state?.SalesSession?.sessionSummary);
 
   const dropdownRef = React.useRef(null);
-  const isPayRef = React.useRef(false);
 
   console.log('[DEBUG] Checkout:  CartState', CartState);
 
@@ -84,6 +81,8 @@ const CheckoutScreen = () => {
   } = useCart();
   const { show, showResult } = useOrder();
 
+  const { updateSessionSummary } = useSession();
+
   // const { getServiceCharge } = useOutlet();
 
   const { checkSaldo, checkResult } = useMembership();
@@ -100,7 +99,6 @@ const CheckoutScreen = () => {
   const [billName, setBillName] = React.useState('');
 
   const [selectedMethod, setSelectedMethod] = React.useState(null);
-  const checkoutSnapshotRef = React.useRef(null);
 
   const renderAdditionals = item => {
     return (item?.addons || [])
@@ -142,7 +140,7 @@ const CheckoutScreen = () => {
 
   // Create Bill Offline — Cache and IDB
   const onCreateBillOffline = async billName => {
-    if (!OfflineSummary) {
+    if (!sessionSummary) {
       dispatch(setWaring('Please open session.'));
       return;
     }
@@ -178,6 +176,7 @@ const CheckoutScreen = () => {
         is_discount_percentage: item.is_discount_percentage,
         discount_percentage: item.discount_percentage,
         discount_value: item.discount_value,
+        unit_discount: item.unit_discount,
       };
 
       if (item?.is_custom) {
@@ -207,7 +206,7 @@ const CheckoutScreen = () => {
 
       // ini untuk kebutuhan standarisasi data Offline to Online
       created_at: now,
-      session: OfflineSummary,
+      session: sessionSummary,
       membership: CartState?.meta?.customer,
       sales_channel: Channel?.selectedChannel,
       is_discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? true : false,
@@ -373,6 +372,7 @@ const CheckoutScreen = () => {
         is_discount_percentage: item.is_discount_percentage,
         discount_percentage: item.discount_percentage,
         discount_value: item.discount_value,
+        unit_discount: item.unit_discount,
       };
 
       if (item?.is_custom) {
@@ -400,7 +400,7 @@ const CheckoutScreen = () => {
 
       // ini untuk kebutuhan standarisasi data Offline to Online
       created_at: CartState?.bill?.created_at,
-      session: OfflineSummary,
+      session: sessionSummary,
       membership: CartState?.meta?.customer,
       sales_channel: Channel?.selectedChannel,
       is_discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? true : false,
@@ -443,7 +443,7 @@ const CheckoutScreen = () => {
 
     // 🔁 Update sessionSummary incremental
     updateSessionSummary({
-      type: 'bill',
+      type: 'update',
       outstanding_bill: CartState?.meta?.grand_total - CartState?.bill?.total_charges,
     });
 
@@ -580,6 +580,7 @@ const CheckoutScreen = () => {
         is_discount_percentage: item.is_discount_percentage,
         discount_percentage: item.discount_percentage,
         discount_value: item.discount_value,
+        unit_discount: item.unit_discount,
       };
 
       if (item?.is_custom) {
@@ -615,7 +616,7 @@ const CheckoutScreen = () => {
       // ini untuk kebutuhan standarisasi data Offline to Online
       created_at: now,
       paid_at: now,
-      session: OfflineSummary,
+      session: sessionSummary,
       membership: CartState?.meta?.customer,
       sales_channel: Channel?.selectedChannel,
       payment_method: selectedMethod,
@@ -669,13 +670,13 @@ const CheckoutScreen = () => {
     updateSessionSummary({
       type: 'payment',
       order: dataOfflineToOnline,
+      payment_method: dataOfflineToOnline?.payment_method,
+
       total_sales: dataOfflineToOnline?.subtotal_nett,
       total_discount: dataOfflineToOnline?.subtotal_nett - dataOfflineToOnline?.total_bill,
       total_after_discount: dataOfflineToOnline?.total_bill,
-      grand_total: CartState?.meta?.grand_total,
-      payment_method_id: dataOfflineToOnline?.payment_method_id,
-      total_payment: dataOfflineToOnline?.total_payment,
-      payment_method: dataOfflineToOnline?.payment_method,
+      total_service: dataOfflineToOnline?.service_charge_value,
+      total_charges: dataOfflineToOnline?.total_charges,
     });
 
     handleModalPrint(dataOfflineToOnline);

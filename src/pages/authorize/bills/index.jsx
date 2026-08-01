@@ -27,8 +27,17 @@ const BillScreen = () => {
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
   const lastSyncTime = useSelector(state => state?.Offline?.lastSyncTime);
 
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const itemsPerPage = 25;
+
   const { show: showOrder, showResult: showOrderResult } = useOrder();
   const { bill, billResult, billData } = useCart();
+
+  const isOffline = !isOnline || apiReachable === false;
+
+  const meta = billResult?.data?.meta || {};
+  const total = meta?.total || 0;
+  const totalPages = meta?.total_pages || 0;
 
   const { openModal, closeModal } = useModal();
 
@@ -57,7 +66,7 @@ const BillScreen = () => {
   };
 
   React.useEffect(() => {
-    bill(search);
+    bill({ limit: itemsPerPage, page: 1 });
   }, [lastSyncTime]);
 
   // Search online → panggil endpoint; kosong → baca cache
@@ -75,7 +84,7 @@ const BillScreen = () => {
   const offlinePendingCount = useSelector(state => state?.Offline?.pendingCount);
   React.useEffect(() => {
     if (isOnline && apiReachable !== false) return;
-    bill();
+    bill({ limit: itemsPerPage, page: 1 });
   }, [offlinePendingCount]);
 
   // Re-read cache ketika queue berubah (remove/sync dari PendingDrawer)
@@ -86,7 +95,7 @@ const BillScreen = () => {
   React.useEffect(() => {
     const handler = () => {
       if (isOnlineRef.current && apiReachableRef.current !== false) return;
-      bill();
+      bill({ limit: itemsPerPage, page: 1 });
     };
     window.addEventListener('pending-queue-changed', handler);
     return () => window.removeEventListener('pending-queue-changed', handler);
@@ -145,6 +154,11 @@ const BillScreen = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto">
+          {data.length === 0 && (
+            <div className="flex h-full place-content-center place-items-center">
+              <div className="text-base-300 text-sm">No bills found.</div>
+            </div>
+          )}
           {data
             ?.filter(item => {
               if (!search) return true;
@@ -190,6 +204,24 @@ const BillScreen = () => {
               </div>
             ))}
         </div>
+        {!isOffline && (
+          <div className="border-base-200 flex justify-end gap-4 border-t p-4">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="disabled:btn-disabled btn"
+            >
+              Prev
+            </button>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages || total === 0}
+              className="disabled:btn-disabled btn"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Detail View */}

@@ -7,10 +7,8 @@ import {
   setFailedCount,
   setLastSyncTime,
   setOfflineError,
-  setSessionSummary,
   setSyncing,
 } from './slice';
-import { updateSessionSummary } from '../sales/session/hook';
 
 const MAX_RETRY = 5;
 const BASE_DELAY = 1000;
@@ -66,12 +64,12 @@ const mapOrderToSync = (order, sessionSyncId) => ({
   is_offline_mode: order?.is_offline_mode,
 
   // fields dibawah ini untuk order yang dibayar atau history
-  paid_session_sync_id: sessionSyncId,
-  ref_sync_id: order?.ref_sync_id,
-  payment_method_id: order?.payment_method_id,
-  payment_ref: order?.payment_ref,
-  total_payment: order?.total_payment,
-  paid_at: order?.paid_at,
+  paid_session_sync_id: order?.status === 'completed' ? sessionSyncId : '',
+  ref_sync_id: order?.status === 'completed' ? order?.ref_sync_id : '',
+  payment_method_id: order?.status === 'completed' ? order?.payment_method_id : '',
+  payment_ref: order?.status === 'completed' ? order?.payment_ref : '',
+  total_payment: order?.status === 'completed' ? order?.total_payment : '',
+  paid_at: order?.status === 'completed' ? order?.paid_at : '',
 });
 
 const mapItemsToSync = order => {
@@ -460,7 +458,7 @@ export const removeFailedItem = async itemId => {
 
       // Recalculate session summary — remove outstanding bill
       try {
-        updateSessionSummary({ type: 'bill', outstanding_bill: -1 * bill.total_charges });
+        // updateSessionSummary({ type: 'bill', outstanding_bill: -1 * bill.total_charges });
       } catch (_) {}
 
       triggerQueueRefresh();

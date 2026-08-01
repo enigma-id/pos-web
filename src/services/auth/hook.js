@@ -13,8 +13,8 @@ import { $failure } from '../form/action';
 import { ensureDB, STORES, deleteUserDB } from '../offline/queue';
 import { syncPendingSessions } from '../offline/syncManager';
 import { clearSelectedChannel } from '../sales/channel/slice';
-import { invalidateSession } from '../sales/session/slice';
 import { $reset } from '../table/action';
+import { setSummary } from '../sales/session/slice';
 
 const useAuth = () => {
   const dispatch = useDispatch();
@@ -27,6 +27,7 @@ const useAuth = () => {
     try {
       const res = await loginMutation(data).unwrap();
       dispatch(login(res?.data));
+      dispatch(setSummary(res?.data?.sales_session));
 
       getUser();
 

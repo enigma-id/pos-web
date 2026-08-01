@@ -25,12 +25,21 @@ const OrderDetails = ({ data }) => {
           </div>
         )}
         <div className="mb-2 text-sm">
-          <span className="font-semibold">Cashier :</span> {data?.session?.cashier?.name || '-'}
+          <span className="font-semibold">Cashier :</span>{' '}
+          {data?.paid_session ? data?.paid_session?.cashier?.name : data?.session?.cashier?.name}
         </div>
         <div className="mb-2 text-sm">
           <span className="font-semibold">Session time :</span>{' '}
-          {dateFormat(data?.session?.started_at, 'DD MMM YYYY')} -{' '}
-          {dateFormat(data?.session?.finished_at, 'DD MMM YYYY', '(ongoing)')}
+          {dateFormat(
+            data?.paid_session ? data?.paid_session?.started_at : data?.session?.started_at,
+            'DD MMM YYYY'
+          )}{' '}
+          -{' '}
+          {dateFormat(
+            data?.paid_session ? data?.paid_session?.finished_at : data?.session?.finished_at,
+            'DD MMM YYYY',
+            '(ongoing)'
+          )}
         </div>
         {data?.membership?.name && (
           <div className="mb-2 text-sm capitalize">

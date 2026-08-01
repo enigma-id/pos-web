@@ -31,26 +31,35 @@ const ShiftScreen = () => {
   const [detail, setDetail] = React.useState(null);
   const [search, setSearch] = React.useState('');
   const [selectedIndex, setSelectedIndex] = React.useState(0);
+  const [data, setData] = React.useState([]);
+  const [orderDetail, setOrderDetail] = React.useState(null);
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+  const lastSyncTime = useSelector(state => state?.Offline?.lastSyncTime);
+
   const [currentPage, setCurrentPage] = React.useState(1);
   const itemsPerPage = 25;
-  const [orderDetail, setOrderDetail] = React.useState(null);
 
-  const { session, sessionResult, show, showResult } = useSession();
+  const {
+    session,
+    sessionResult,
+    show: showSession,
+    showResult: showSessionResult,
+    sessionData,
+  } = useSession();
 
   const { show: showOrder, showResult: showOrderResult } = useOrder();
 
   const { drawerRef, open: openDrawer, close: closeDrawer } = useDrawer();
   const { openModal, closeModal } = useModal();
 
+  const isOffline = !isOnline || apiReachable === false;
+
+  const meta = sessionResult?.data?.meta || {};
+  const total = meta?.total || 0;
+  const totalPages = meta?.total_pages || 0;
+
   const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
-
-  const isOnline = useSelector(state => state?.Offline?.isOnline !== false);
-  const apiReachable = useSelector(state => state?.Offline?.apiReachable !== false);
-  const lastSyncTime = useSelector(state => state?.Offline?.lastSyncTime);
-  const offlinePendingCount = useSelector(state => state?.Offline?.pendingCount);
-  const authUser = useSelector(state => state?.Auth?.user);
-
-  const isOffline = !isOnline || !apiReachable;
 
   const handleOpenPrint = () => {
     open(<Receipt data={orderDetail} />);
@@ -64,9 +73,16 @@ const ShiftScreen = () => {
     open(<Summary data={detail} />);
   };
 
-  const handleOpen = async v => {
+  const openOrder = async v => {
     openDrawer();
-    showOrder(v);
+
+    console.log('[openOrder]', v);
+
+    if (isOffline) {
+      setOrderDetail(v);
+    } else {
+      showOrder(v?.id);
+    }
   };
 
   const onRefund = async (id, status) => {
@@ -79,7 +95,7 @@ const ShiftScreen = () => {
             // For offline, just close drawer
             closeDrawer();
           } else {
-            show(sessionResult?.data?.data?.[selectedIndex]?.id);
+            showSession(sessionResult?.data?.data?.[selectedIndex]?.id);
           }
           closeModal();
           closeDrawer();
@@ -89,111 +105,73 @@ const ShiftScreen = () => {
     );
   };
 
-  // Fetch on mount & after sync (mirror history/bills pattern)
   React.useEffect(() => {
-    if (isOffline) return;
-    session({ search, limit: itemsPerPage, page: 1 });
+    session({ limit: itemsPerPage, page: 1 });
   }, [lastSyncTime]);
 
-  // Data source: offline baca localStorage cache (kayak history)
-  const [offlineData, setOfflineData] = React.useState([]);
-  const data = React.useMemo(() => {
-    if (isOffline) {
-      return offlineData;
-    }
-    return sessionResult?.data?.data || [];
-  }, [isOffline, sessionResult, offlineData]);
-
+  // Search online → panggil endpoint; kosong → baca cache
   React.useEffect(() => {
-    if (isOffline) {
-      setOfflineData(getCache('cache_shifts') || []);
-    }
-  }, [isOffline, offlinePendingCount]);
+    const t = setTimeout(
+      () => {
+        session(search ? { search } : {});
+      },
+      search ? 1000 : 0
+    );
+    return () => clearTimeout(t);
+  }, [search]);
 
-  // Re-read cache when queue changed (remove from PendingDrawer)
+  // Re-read cache ketika queue berubah (remove/sync dari PendingDrawer)
   const isOnlineRef = React.useRef(isOnline);
   const apiReachableRef = React.useRef(apiReachable);
   isOnlineRef.current = isOnline;
   apiReachableRef.current = apiReachable;
   React.useEffect(() => {
     const handler = () => {
-      if (!isOnlineRef.current || apiReachableRef.current === false) {
-        setOfflineData(getCache('cache_shifts') || []);
-      }
+      if (isOnlineRef.current && apiReachableRef.current !== false) return;
+      session({ limit: itemsPerPage, page: 1 });
     };
     window.addEventListener('pending-queue-changed', handler);
     return () => window.removeEventListener('pending-queue-changed', handler);
   }, []);
 
+  // Sync sessionData from hook into local state
   React.useEffect(() => {
-    setCurrentPage(1);
-  }, [search]);
-
-  React.useEffect(() => {
-    if (isOffline) return;
-
-    const delayDebounceFn = setTimeout(
-      () => {
-        session({ search, limit: itemsPerPage, page: currentPage });
-      },
-      search ? 1000 : 0
-    );
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [search, currentPage, isOffline]);
-
-  React.useEffect(() => {
-    if (sessionResult?.isSuccess) {
+    if (sessionData || sessionResult?.isSuccess) {
       setSelectedIndex(0);
       setDetail(null);
+      setData(sessionData || sessionResult?.data?.data || []);
     }
-  }, [sessionResult]);
+  }, [sessionData, sessionResult]);
+
+  // Fetch or resolve detail
+  React.useEffect(() => {
+    const list = data;
+    const selected = list[selectedIndex];
+    if (!selected) return;
+
+    // Offline / queue item → render from list data
+    if (!isOnline || apiReachable === false) {
+      setDetail(selected);
+      return;
+    }
+
+    // Online → fetch full detail from server
+    if (selected?.id) {
+      showSession(selected.id);
+    }
+  }, [data, selectedIndex]);
 
   React.useEffect(() => {
-    if (isOffline) return;
-    if (sessionResult?.isSuccess && data[0]) {
-      show(data[0]?.id);
+    if (showSessionResult?.isSuccess) {
+      setDetail(showSessionResult?.data?.data);
     }
-  }, [sessionResult, isOffline, data]);
-
-  React.useEffect(() => {
-    if (isOffline) return;
-    if (sessionResult?.isSuccess && data[selectedIndex]) {
-      show(data[selectedIndex]?.id);
-    }
-  }, [selectedIndex, data]);
-
-  React.useEffect(() => {
-    if (showResult?.isSuccess) {
-      setDetail(showResult?.data?.data);
-    }
-  }, [showResult]);
+  }, [showSessionResult]);
 
   React.useEffect(() => {
     if (showOrderResult?.isSuccess) {
       setOrderDetail(showOrderResult?.data?.data);
     }
   }, [showOrderResult]);
-
-  // Cache server data pas online
-  React.useEffect(() => {
-    if (sessionResult?.isSuccess && !isOffline) {
-      const serverData = sessionResult?.data?.data || [];
-      if (!search) setCache('cache_shifts', serverData);
-    }
-  }, [sessionResult]);
-
-  // Offline: set detail from list data (kayak history page)
-  React.useEffect(() => {
-    if (!isOffline) return;
-    const selected = data[selectedIndex];
-    if (!selected) return;
-    setDetail(selected);
-  }, [selectedIndex, isOffline, data]);
-
-  const meta = sessionResult?.data?.meta || {};
-  const total = meta?.total || 0;
-  const totalPages = meta?.total_pages || 0;
 
   return (
     <Drawer.Wrapper>
@@ -221,51 +199,49 @@ const ShiftScreen = () => {
           <div className="flex-1 overflow-y-auto">
             {data.length === 0 && (
               <div className="flex h-full place-content-center place-items-center">
-                <div className="text-base-300 text-sm">
-                  No sessions found.
-                </div>
+                <div className="text-base-300 text-sm">No sessions found.</div>
               </div>
             )}
-            {data.filter(item => {
-              if (!search) return true;
-              const q = search.toLowerCase();
-              return (
-                (item?.cashier?.name || '').toLowerCase().includes(q) ||
-                (item?.started_at || '').toLowerCase().includes(q) ||
-                (item?.finished_at || '').toLowerCase().includes(q)
-              );
-            }).map((item, index) => (
-              <div
-                key={item.id}
-                onClick={() => setSelectedIndex(index)}
-                className={`border-base-200 cursor-pointer border-b p-4 ${
-                  selectedIndex === index ? 'bg-gray-100' : 'hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex place-content-between">
-                  <div className="flex place-items-center gap-4">
-                    <div className={`text-base ${selectedIndex === index ? 'text-primary' : ''}`}>
-                      <WalletIcon />
-                    </div>
-                    <div>
+            {data
+              .filter(item => {
+                if (!search) return true;
+                const q = search.toLowerCase();
+                return (item?.cashier?.name || '').toLowerCase().includes(q);
+              })
+              .map((item, index) => (
+                <div
+                  key={item.id}
+                  onClick={() => setSelectedIndex(index)}
+                  className={`border-base-200 cursor-pointer border-b p-4 ${
+                    selectedIndex === index ? 'bg-gray-100' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex place-content-between">
+                    <div className="flex place-items-center gap-4">
                       <div className={`text-base ${selectedIndex === index ? 'text-primary' : ''}`}>
-                        {item?.cashier?.name}
+                        <WalletIcon />
                       </div>
-                      <div className="text-base-300 text-xs">
-                        {dateFormat(item?.transaction_date, 'DD/MM/YYYY')}{' '}
-                        {dateFormat(item?.started_at, 'HH:mm')} -{' '}
-                        {dateFormat(item?.finished_at, 'HH:mm', '(ongoing)')}
+                      <div>
+                        <div
+                          className={`text-base ${selectedIndex === index ? 'text-primary' : ''}`}
+                        >
+                          {item?.cashier?.name}
+                        </div>
+                        <div className="text-base-300 text-xs">
+                          {dateFormat(item?.transaction_date, 'DD/MM/YYYY')}{' '}
+                          {dateFormat(item?.started_at, 'HH:mm')} -{' '}
+                          {dateFormat(item?.finished_at, 'HH:mm', '(ongoing)')}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div
-                    className={`h-fit w-fit rounded-full px-4 py-1 text-[11px] text-white ${item?.status === 'opened' ? 'bg-primary' : item?.status === 'closed' ? 'bg-success' : 'bg-base-300'}`}
-                  >
-                    {item?.status}
+                    <div
+                      className={`h-fit w-fit rounded-full px-4 py-1 text-[11px] text-white ${item?.status === 'opened' ? 'bg-primary' : item?.status === 'closed' ? 'bg-success' : 'bg-base-300'}`}
+                    >
+                      {item?.status}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
           </div>
 
           {!isOffline && (
@@ -339,14 +315,18 @@ const ShiftScreen = () => {
                     <div>
                       <span className="text-sm">Expected Cash</span>
                     </div>
-                    <span className="text-sm">{currencyFormat(detail?.summary?.cash?.expected_cash)}</span>
+                    <span className="text-sm">
+                      {currencyFormat(detail?.summary?.cash?.expected_cash)}
+                    </span>
                   </div>
 
                   <div className="flex place-content-between place-items-center py-2">
                     <div>
                       <span className="text-sm">Topup Cash</span>
                     </div>
-                    <span className="text-sm">{currencyFormat(detail?.summary?.cash?.topup_cash)}</span>
+                    <span className="text-sm">
+                      {currencyFormat(detail?.summary?.cash?.topup_cash)}
+                    </span>
                   </div>
 
                   <div className="flex place-content-between place-items-center py-2">
@@ -362,7 +342,9 @@ const ShiftScreen = () => {
                     <div>
                       <span className="text-sm">Outstanding Bill Payments</span>
                     </div>
-                    <span className="text-sm">{currencyFormat(detail?.summary?.sales?.outstanding_bill_payment)}</span>
+                    <span className="text-sm">
+                      {currencyFormat(detail?.summary?.sales?.outstanding_bill_payment)}
+                    </span>
                   </div>
 
                   <div className="flex place-content-between place-items-center py-2">
@@ -386,9 +368,7 @@ const ShiftScreen = () => {
                       <span className="text-sm">Total After Discount</span>
                     </div>
                     <span className="text-sm">
-                      {currencyFormat(
-                        detail?.summary?.sales?.total_after_discount
-                      )}
+                      {currencyFormat(detail?.summary?.sales?.total_after_discount)}
                     </span>
                   </div>
                   <div className="flex place-content-between place-items-center py-2">
@@ -407,7 +387,6 @@ const ShiftScreen = () => {
                       {currencyFormat(detail?.summary?.sales?.grand_total)}
                     </span>
                   </div>
-
                 </div>
 
                 <div className="border-base-200 border-b pt-4 pb-2">
@@ -449,25 +428,25 @@ const ShiftScreen = () => {
                   <div className="mb-2 text-sm font-semibold">Sales Order :</div>
 
                   <div className="grid grid-cols-2 gap-2">
-                    {detail?.orders?.map((data, i) => (
+                    {detail?.orders?.map((oi, i) => (
                       <div
                         key={i}
                         className="border-base-200 hover:border-primary hover:text-primary flex cursor-pointer place-content-between place-items-center gap-4 rounded border p-4"
-                        onClick={() => handleOpen(data?.id)}
+                        onClick={() => openOrder(oi)}
                       >
                         <div className="flex place-items-center gap-4">
                           <MoneysIcon />
 
                           <div>
-                            <div className="text-base">{currencyFormat(data?.total_charges)}</div>
+                            <div className="text-base">{currencyFormat(oi?.total_charges)}</div>
                             <div className="text-base-300 text-xs">
-                              {dateFormat(data?.created_at)}
+                              {dateFormat(oi?.created_at)}
                             </div>
                           </div>
                         </div>
 
                         <div className="flex place-items-center gap-4">
-                          <div className="text-base-300 text-base">{data?.code}</div>
+                          <div className="text-base-300 text-base">{oi?.code}</div>
                           <ArrowRightIcon />
                         </div>
                       </div>

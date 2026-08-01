@@ -1,42 +1,32 @@
-import {createSlice} from '@reduxjs/toolkit';
+import { createSlice } from '@reduxjs/toolkit';
 
 const defineInitialState = () => ({
   hasSession: false,
-  activeSyncId: null,
-  offlineStartResult: null,
+  sessionSummary: {
+    summary: {
+      sales: {
+        outstanding_bill: 0,
+      },
+    },
+  },
 });
 
 const sessionSlice = createSlice({
   name: 'salesSession',
   initialState: defineInitialState(),
   reducers: {
-    checkSession: state => {
+    resetSummary: () => defineInitialState(),
+
+    setSummary: (state, action) => {
       state.hasSession = true;
+      state.sessionSummary = action.payload;
     },
-    invalidateSession: state => {
-      state.hasSession = false;
-    },
-    setActiveSyncId: (state, action) => {
-      state.activeSyncId = action.payload || null;
-    },
-    clearActiveSyncId: state => {
-      state.activeSyncId = null;
-    },
-    setOfflineStartResult: (state, action) => {
-      state.offlineStartResult = action.payload || null;
-    },
-    clearOfflineStartResult: state => {
-      state.offlineStartResult = null;
+    updateSummary: (state, action) => {
+      state.sessionSummary = action.payload;
     },
   },
 });
 
-export const {
-  checkSession,
-  invalidateSession,
-  setActiveSyncId,
-  clearActiveSyncId,
-  setOfflineStartResult,
-  clearOfflineStartResult,
-} = sessionSlice.actions;
+export const { setSummary, updateSummary, resetSummary } = sessionSlice.actions;
+
 export const sessionReducer = sessionSlice.reducer;

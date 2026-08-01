@@ -1,6 +1,5 @@
 import { openDB, deleteDB } from 'idb';
 import { v4 as uuidv4 } from 'uuid';
-import { recalculateDiscountCategory } from './helper';
 
 const DB_VERSION = 5;
 
@@ -115,63 +114,46 @@ export const initQueueDB = async userId => {
 
 // ========== SESSIONS ==========
 
-export const createOfflineSession = async (
-  { cash_started, latitude, longitude, battery_health },
-  userId
-) => {
+export const startSession = async (payload, userId) => {
   const db = await ensureDB(userId);
-  const sync_id = uuidv4();
-  const now = getISO();
 
-  const doc = {
-    sync_id,
-    id: null,
-    open_at: now,
-    close_at: null,
-    cash_started: cash_started ?? 0,
-    cash_finished: null,
-    latitude: latitude ?? null,
-    longitude: longitude ?? null,
-    battery_health: battery_health ?? null,
-    syncStatus: 'pending',
-    error: null,
-    createdAt: now,
-  };
+  const doc = { ...payload };
 
   await db.add(STORES.sessions, doc);
   return doc;
 };
 
-export const closeSession = async (syncId, { cash_finished, latitude, longitude }, userId) => {
-  const db = await ensureDB(userId);
-  const existing = await db.get(STORES.sessions, syncId);
-  if (!existing) throw new Error(`Session not found: ${syncId}`);
-
-  existing.close_at = getISO();
-  existing.cash_finished = cash_finished ?? null;
-  if (latitude != null) existing.latitude = latitude;
-  if (longitude != null) existing.longitude = longitude;
-  existing.syncStatus = 'pending';
-
-  await db.put(STORES.sessions, existing);
-  return existing;
-};
-
-export const deleteOfflineSession = async (syncId, userId) => {
+export const closeSession = async (payload, userId) => {
   const db = await ensureDB(userId);
 
-  // Cascade: hapus order_bills, order_payments, topups yg terkait
-  let bills = await db.getAllFromIndex(STORES.orderBills, 'origin_session_sync_id', syncId);
-  for (const b of bills) await db.delete(STORES.orderBills, b.sync_id);
+  // cari index untuk update saat create dari offline juga
+  let existing = payload?.sync_id ? await db.get(STORES.sessions, payload?.sync_id) : null;
 
-  let payments = await db.getAllFromIndex(STORES.orderPayments, 'paid_session_sync_id', syncId);
-  for (const p of payments) await db.delete(STORES.orderPayments, p.sync_id);
+  // jika esxsting sync_id gaada berarti ini updateo order bill dari online bro
+  if (!existing) {
+    existing = await db.get(STORES.sessions, payload?.id);
+    payload.sync_id = payload?.id;
+  }
 
-  let topups = await db.getAllFromIndex(STORES.topups, 'session_sync_id', syncId);
-  for (const t of topups) await db.delete(STORES.topups, t.sync_id);
+  if (!existing) {
+    // Sales Session dari server — insert sebagai referensi
+    const doc = {
+      ...payload,
+      is_synced: false,
+      // sync_id ini tidak perlu nanti dikirim ke api ya bro - karena ini dari update server
+      sync_id: payload?.id,
+    };
 
-  await db.delete(STORES.sessions, syncId);
-  return true;
+    await db.add(STORES.sessions, doc);
+    return doc;
+  }
+
+  await db.put(STORES.sessions, {
+    ...existing,
+    ...data,
+  });
+
+  return data;
 };
 
 // ========== ORDER BILLS ==========
