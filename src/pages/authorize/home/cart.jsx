@@ -83,6 +83,7 @@ const Cart = ({ onUpdate }) => {
 
     const items = CartState?.items?.list?.map(item => {
       const base = {
+        id: uuidv4(), // --- ini untuk mengikuti backend, karena backend mempunyai id
         catalog_id: item.catalog_id,
         category_id: item.category_id,
         quantity: item.quantity,
@@ -290,6 +291,7 @@ const Cart = ({ onUpdate }) => {
 
     const items = allItems?.map(item => {
       const base = {
+        id: item?.order_item_id || uuidv4(), // --- ini untuk mengikuti backend, karena backend mempunyai id. tapi kenapa ada item?.order_item_id (apabila dari create mempunyai itu - kita tidak boleh merubah-nya)
         catalog_id: item.catalog_id,
         category_id: item.category_id,
         quantity: item.quantity,
@@ -443,6 +445,7 @@ const Cart = ({ onUpdate }) => {
 
     const items = allItems?.map(item => {
       const base = {
+        id: item?.order_item_id,
         catalog_id: item.catalog_id,
         quantity: item.quantity,
       };

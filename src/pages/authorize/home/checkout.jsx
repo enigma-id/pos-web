@@ -48,6 +48,8 @@ import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
 import { getMemberCache } from '../../../utils/cache';
 import useSession from '../../../services/sales/session/hook';
+import { isPending } from '@reduxjs/toolkit';
+import { checkPartialPaid } from '../../../services/offline/helper';
 
 const CheckoutScreen = () => {
   const location = useLocation();
@@ -160,6 +162,7 @@ const CheckoutScreen = () => {
 
     const items = CartState?.items?.list?.map(item => {
       const base = {
+        id: uuidv4(), // --- ini untuk mengikuti backend, karena backend mempunyai id
         catalog_id: item.catalog_id,
         category_id: item.category_id,
         quantity: item.quantity,
@@ -356,6 +359,7 @@ const CheckoutScreen = () => {
 
     const items = allItems?.map(item => {
       const base = {
+        id: item?.order_item_id || uuidv4(), // --- ini untuk mengikuti backend, karena backend mempunyai id. tapi kenapa ada item?.order_item_id (apabila dari create mempunyai itu - kita tidak boleh merubah-nya)
         catalog_id: item.catalog_id,
         category_id: item.category_id,
         quantity: item.quantity,
@@ -471,6 +475,7 @@ const CheckoutScreen = () => {
 
     const items = allItems?.map(item => {
       const base = {
+        id: item?.order_item_id,
         catalog_id: item.catalog_id,
         quantity: item.quantity,
       };
@@ -563,7 +568,7 @@ const CheckoutScreen = () => {
 
     const items = allItems?.map(item => {
       const base = {
-        id: item.order_item_id,
+        id: item?.order_item_id || uuidv4(), // --- ini untuk mengikuti backend, karena backend mempunyai id. tapi kenapa ada item?.order_item_id (apabila dari create mempunyai itu - kita tidak boleh merubah-nya)
         catalog_id: item.catalog_id,
         category_id: item.category_id,
         quantity: item.quantity,
@@ -668,44 +673,52 @@ const CheckoutScreen = () => {
 
     const dataOfflineToOnline = makeCompletedOrder(payload);
 
-    try {
-      await createOrderPayment(dataOfflineToOnline, session?.user?.id);
-    } catch (err) {
-      handleModalError();
+    let { itemPending, isPending } = checkPartialPaid(payload.items, CartState?.bill?.items);
 
-      dispatch($failure(err));
-      return;
-    }
+    console.log('=========[DEBUG]======================itemsPending', itemPending);
+    console.log('=========[DEBUG]======================isPending', isPending);
 
-    triggerQueueRefresh();
+    // try {
+    //   await createOrderPayment(dataOfflineToOnline, session?.user?.id);
+    // } catch (err) {
+    //   handleModalError();
 
-    // Push ke localStorage bills cache
-    try {
-      saveOrderHistory(dataOfflineToOnline);
-    } catch (e) {
-      handleModalError();
+    //   dispatch($failure(err));
+    //   return;
+    // }
 
-      console.error('[SAVE ON PAY] cache error:', e);
-    }
+    // triggerQueueRefresh();
 
-    // 🔁 Update sessionSummary incremental
-    updateSessionSummary({
-      type: 'payment',
-      order: dataOfflineToOnline,
-      payment_method: dataOfflineToOnline?.payment_method,
+    // // Push ke localStorage bills cache
+    // try {
+    //   saveOrderHistory(dataOfflineToOnline);
+    // } catch (e) {
+    //   handleModalError();
 
-      total_sales: dataOfflineToOnline?.subtotal_nett,
-      total_discount: dataOfflineToOnline?.subtotal_nett - dataOfflineToOnline?.total_bill,
-      total_after_discount: dataOfflineToOnline?.total_bill,
-      total_service: dataOfflineToOnline?.service_charge_value,
-      total_charges: dataOfflineToOnline?.total_charges,
-    });
+    //   console.error('[SAVE ON PAY] cache error:', e);
+    // }
 
-    handleModalPrint(dataOfflineToOnline);
+    // // 🔁 Update sessionSummary incremental
+    // updateSessionSummary({
+    //   type: 'payment',
+    //   order: dataOfflineToOnline,
+    //   payment_method: dataOfflineToOnline?.payment_method,
 
-    dispatch(resetCart());
-    setDiscountInputs([]);
+    //   total_sales: dataOfflineToOnline?.subtotal_nett,
+    //   total_discount: dataOfflineToOnline?.subtotal_nett - dataOfflineToOnline?.total_bill,
+    //   total_after_discount: dataOfflineToOnline?.total_bill,
+    //   total_service: dataOfflineToOnline?.service_charge_value,
+    //   total_charges: dataOfflineToOnline?.total_charges,
+    // });
+
+    // handleModalPrint(dataOfflineToOnline);
+
+    // dispatch(resetCart());
+    // setDiscountInputs([]);
   };
+
+  const onPayOfflinePay = async data => {};
+  const onPayOfflineSplit = async data => {};
 
   // Pay Online — API
   const onPayOnline = async card => {
