@@ -247,8 +247,6 @@ const CheckoutScreen = () => {
       saveOpenBills(dataOfflineToOnline);
     } catch (e) {
       handleModalError();
-
-      console.error('[SAVE BILL] cache error:', e);
     }
 
     // 🔁 Update sessionSummary incremental
@@ -602,7 +600,7 @@ const CheckoutScreen = () => {
 
     const now = new Date();
 
-    const payload = {
+    let payload = {
       membership_id: CartState?.meta?.customer?.id,
       sales_channel_id: Channel?.selectedChannel?.id,
       payment_method_id: selectedMethod?.id,
@@ -673,10 +671,12 @@ const CheckoutScreen = () => {
 
     const dataOfflineToOnline = makeCompletedOrder(payload);
 
-    let { itemPending, isPending } = checkPartialPaid(payload.items, CartState?.bill?.items);
+    if (CartState?.bill) {
+      let { itemsPending, isPending } = checkPartialPaid(payload.items, CartState?.bill?.items);
 
-    console.log('=========[DEBUG]======================itemsPending', itemPending);
-    console.log('=========[DEBUG]======================isPending', isPending);
+      console.log('=========[DEBUG]======================itemsPending', itemsPending);
+      console.log('=========[DEBUG]======================isPending', isPending);
+    }
 
     // try {
     //   await createOrderPayment(dataOfflineToOnline, session?.user?.id);

@@ -202,8 +202,6 @@ const useSession = () => {
       }
     }
 
-    console.log('[DEBUG] updatedSummary', updatedSummary);
-
     // 3. Dispatch data yang udah jadi ke Redux
     dispatch(updateSummary(updatedSummary));
 

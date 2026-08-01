@@ -52,8 +52,6 @@ const Cart = ({ onUpdate }) => {
 
   const { updateSessionSummary } = useSession();
 
-  console.log(sessionSummary, '===[DEBUG] Cart:====');
-
   const getMode = () => {
     const isOpen =
       data?.length > 0 && CartState?.items?.list?.length === 0 && CartState?.bill === null;

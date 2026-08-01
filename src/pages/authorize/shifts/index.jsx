@@ -76,8 +76,6 @@ const ShiftScreen = () => {
   const openOrder = async v => {
     openDrawer();
 
-    console.log('[openOrder]', v);
-
     if (isOffline) {
       setOrderDetail(v);
     } else {
