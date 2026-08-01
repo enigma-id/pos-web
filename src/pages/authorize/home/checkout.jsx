@@ -595,14 +595,9 @@ const CheckoutScreen = () => {
       return base;
     });
 
-    const orderId = uuidv4();
     const now = new Date();
-    const code = `${now.toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
 
     const payload = {
-      code: code,
-      sync_id: orderId,
-      bill_name: billName,
       membership_id: CartState?.meta?.customer?.id,
       sales_channel_id: Channel?.selectedChannel?.id,
       payment_method_id: selectedMethod?.id,
@@ -614,9 +609,7 @@ const CheckoutScreen = () => {
       items,
 
       // ini untuk kebutuhan standarisasi data Offline to Online
-      created_at: now,
       paid_at: now,
-      session: sessionSummary,
       membership: CartState?.meta?.customer,
       sales_channel: Channel?.selectedChannel,
       payment_method: selectedMethod,
@@ -642,6 +635,35 @@ const CheckoutScreen = () => {
       payload.membership_id = card?.id;
       payload.card_id = card?.card_id;
       payload.payment_ref = card?.reff_code;
+    }
+
+    // untuk payload dibawah ini adalah tambahan payload yang berdasarkan dari savebill
+    if (CartState?.bill) {
+      payload = {
+        ...payload,
+        code: CartState?.bill?.code,
+        id: CartState?.bill?.id,
+        sync_id: CartState?.bill?.sync_id,
+        bill_name: CartState?.bill?.bill_name,
+        session: CartState?.bill?.session,
+        paid_session: sessionSummary,
+        created_at: CartState?.bill?.created_at,
+      };
+    } else {
+      const orderId = uuidv4();
+
+      const code = `${now.toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
+
+      // jika tidak dari save bill maka dibawah ini payload tambahan-nya
+      payload = {
+        ...payload,
+        code: code,
+        sync_id: orderId,
+        bill_name: billName,
+        session: sessionSummary,
+        paid_session: sessionSummary,
+        created_at: now,
+      };
     }
 
     const dataOfflineToOnline = makeCompletedOrder(payload);

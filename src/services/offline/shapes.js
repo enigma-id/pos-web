@@ -117,7 +117,6 @@ export function makeCompletedOrder(payload) {
 
   return {
     ...payload,
-    paid_session: payload.session,
     items: cloneItems,
     is_synced: false,
     original_items: cloneItems,
