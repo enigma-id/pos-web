@@ -3,11 +3,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { BurgerIcon, DeviceIcon, HistoryIcon, ListIcon, MenuIcon, ReceiptIcon, UserIcon, TruckIcon } from './icon';
+import { BurgerIcon, DeviceIcon, HistoryIcon, ListIcon, MenuIcon, ReceiptIcon, UserIcon, TruckIcon, MoneysIcon } from './icon';
 import { OfflineBanner, PendingDrawer, SyncIndicator } from './offline';
 import useSidebar from './sidebar/hook';
 import { loadOfflineBill } from '../../services/cart/slice';
 import { removeFailedItem, retryFailedItem, syncNow } from '../../services/offline';
+import { usePrintWindow } from '../../utils/print';
+import CashDrawerTrigger from './cashdrawer';
 import { setNetworkState } from '../../services/offline/slice';
 import useNetworkStatus from '../../services/offline/useNetworkStatus';
 import useSession from '../../services/sales/session/hook';
@@ -162,6 +164,12 @@ const Navbar = () => {
   const Offline = useSelector(state => state?.Offline);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  const { open: openPrint } = usePrintWindow({ title: 'Open Drawer', autoClose: true });
+
+  const handleOpenCashDrawer = () => {
+    openPrint(<CashDrawerTrigger />);
+  };
+
   const handleOpenBill = queueItem => {
     dispatch(loadOfflineBill(queueItem));
     navigate('/');
@@ -240,6 +248,13 @@ const Navbar = () => {
       </div>
 
       <div className="mb-5">
+        <div
+          className="nav-items mb-3 place-items-center"
+          onClick={handleOpenCashDrawer}
+        >
+          <MoneysIcon />
+          <small>Open Drawer</small>
+        </div>
         <div className="px-2 pb-2">
           <SyncIndicator
             pendingCount={Offline?.pendingCount || 0}
