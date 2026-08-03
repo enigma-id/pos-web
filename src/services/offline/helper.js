@@ -4,28 +4,25 @@ export function recalculateDiscountCategory(discountCategories, items) {
   let result = [];
   discountCategories.map(dc => {
     let totalDiscount = 0;
+    let used = false;
     items.map(item => {
       if (item.category_id === dc.category_id) {
-        let dv = dc.discount_value;
-        let dp = dc.discount_percentage;
-
-        if (dv > 0) {
-          dp = Math.ceil(dv / item.unit_nett) * 100;
-        }
-
-        if (dp > 0) {
-          dv = item.unit_nett * (dp / 100);
-        }
-
-        totalDiscount += dv * item.quantity;
+        totalDiscount += item.unit_discount * item.quantity;
+        used = true;
       }
     });
 
-    if (dc.discount_percentage > 0) {
-      dc.is_discount_percentage = true;
+    if (used) {
+      // Salin objek dc agar aman untuk dimodifikasi (tidak read-only)
+      const updatedDc = { ...dc };
+
+      if (updatedDc.discount_percentage > 0) {
+        updatedDc.is_discount_percentage = true;
+      }
+      updatedDc.total_discount = totalDiscount;
+
+      result.push(updatedDc);
     }
-    dc.total_discount = totalDiscount;
-    result.push(dc);
   });
 
   return result;
@@ -37,8 +34,10 @@ export const checkPartialPaid = (reqItems, oldItems) => {
   let itemsPending = [];
   let isPending = false;
 
-  // Cari item yang pending
-  for (const oldItem of oldItems) {
+  // Clone oldItems agar tidak merusak read-only reference dari Redux/Props
+  const clonedOldItems = JSON.parse(JSON.stringify(oldItems));
+
+  for (const oldItem of clonedOldItems) {
     let notPay = false;
     let change = false;
 
@@ -48,7 +47,6 @@ export const checkPartialPaid = (reqItems, oldItems) => {
 
         // Cari partial bayar
         if (ir.quantity !== oldItem.quantity) {
-          // Buat salinan atau modifikasi (tergantung apakah oldItem mutable)
           oldItem.quantity -= ir.quantity;
           change = true;
         }
@@ -59,12 +57,13 @@ export const checkPartialPaid = (reqItems, oldItems) => {
       if (oldItem.addons && oldItem.addons.length > 0) {
         let pendingAddons = [];
         for (const oldAddon of oldItem.addons) {
-          let cpAdd = { ...oldAddon }; // Shallow copy object di JS
+          let cpAdd = { ...oldAddon };
 
-          // Catatan: di golang oldaddon.Quantity / oldaddon.Quantity hasilnya selalu 1 (kecuali 0/0)
-          // Jika maksudnya untuk reset atau proporsi, pastikan pembagiannya benar.
-          // Di sini kita ikutin logika aslinya:
-          let qty = oldAddon.quantity / oldAddon.quantity;
+          // Fallback / 1 untuk mencegah NaN jika quantity 0
+          let qty =
+            oldAddon.quantity && oldAddon.quantity !== 0
+              ? oldAddon.quantity / oldAddon.quantity
+              : 1;
 
           cpAdd.quantity = qty * oldItem.quantity;
 

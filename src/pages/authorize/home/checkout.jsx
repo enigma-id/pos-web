@@ -25,6 +25,7 @@ import { setWarning } from '../../../services/offline';
 import {
   createOrderBill,
   createOrderPayment,
+  deleteOrderBill,
   updateOrderBill,
 } from '../../../services/offline/queue';
 import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
@@ -35,8 +36,10 @@ import {
   makePendingBill,
   makeCompletedOrder,
   makeIdbBillData,
+  makeUpdatePendingBillFromSplitBill,
 } from '../../../services/offline/shapes';
 import {
+  deleteOpenBills,
   getCache,
   saveOpenBills,
   saveOrderHistory,
@@ -65,8 +68,6 @@ const CheckoutScreen = () => {
   const sessionSummary = useSelector(state => state?.SalesSession?.sessionSummary);
 
   const dropdownRef = React.useRef(null);
-
-  console.log('[DEBUG] Checkout:  CartState', CartState);
 
   const {
     getPaymentMethod,
@@ -547,178 +548,321 @@ const CheckoutScreen = () => {
     );
   };
 
+  console.log('[DEBUG] [CartState]', CartState);
+
   // Pay Offline — Cache and IDB
   const onPayOffline = async card => {
-    const discount_categories = CartState?.discount?.category
-      ?.filter(
-        cat =>
-          cat && cat.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
-      )
-      ?.map(cat => ({
-        category_id: cat.id,
-        category: cat,
-        ...(cat.discount_type === 'nominal'
-          ? { discount_value: cat.discount_value }
-          : { discount_percentage: cat.discount_value }),
-      }));
+    let required = true;
 
-    let allItems = [...(CartState?.items?.bill || []), ...(CartState?.items?.list || [])];
-
-    const items = allItems?.map(item => {
-      const base = {
-        id: item?.order_item_id || uuidv4(), // --- ini untuk mengikuti backend, karena backend mempunyai id. tapi kenapa ada item?.order_item_id (apabila dari create mempunyai itu - kita tidak boleh merubah-nya)
-        catalog_id: item.catalog_id,
-        category_id: item.category_id,
-        quantity: item.quantity,
-        unit_nett: item.unit_nett,
-        catalog_name: item.name,
-        category_name: item.category_name,
-        catalog: {
-          id: item.catalog_id,
-          category_id: item.category_id,
-          code: item.code,
-          name: item.name,
-          is_custom: item.is_custom,
-        },
-        is_discount_percentage: item.is_discount_percentage,
-        discount_percentage: item.discount_percentage,
-        discount_value: item.discount_value,
-        unit_discount: item.unit_discount,
-      };
-
-      if (item?.is_custom) {
-        base.catalog_name = item?.name;
-        base.unit_nett = item?.unit_nett;
-      }
-
-      if (item?.additionals_flat?.length > 0) {
-        base.addons = item?.additionals_flat;
-      }
-
-      return base;
-    });
-
-    const now = new Date();
-
-    let payload = {
-      membership_id: CartState?.meta?.customer?.id,
-      sales_channel_id: Channel?.selectedChannel?.id,
-      payment_method_id: selectedMethod?.id,
-      payment_ref: paymentRef,
-      status: 'completed',
-      is_offline_mode: true,
-      total_payment:
-        selectedMethod?.provider === 'cash' ? Number(pay) || 0 : CartState?.meta?.grand_total || 0,
-      items,
-
-      // ini untuk kebutuhan standarisasi data Offline to Online
-      paid_at: now,
-      membership: CartState?.meta?.customer,
-      sales_channel: Channel?.selectedChannel,
-      payment_method: selectedMethod,
-      is_discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? true : false,
-      discount_value: CartState?.discount?.cart?.amount,
-      service_charge_percentage: CartState?.meta?.service_charge_percentage,
-      service_charge_value: CartState?.meta?.service_charge_value,
-      total_charges: CartState?.meta?.grand_total,
-    };
-
-    if (CartState?.discount?.cart?.type) {
-      if (CartState?.discount?.cart?.type === 'percentage') {
-        payload.discount_percentage = CartState?.discount?.cart?.value;
-      }
-    }
-
-    if (discount_categories?.length > 0) {
-      payload.category_discounts = discount_categories;
-      payload.is_category_discount = true;
-    }
-
-    if (card) {
-      payload.membership_id = card?.id;
-      payload.card_id = card?.card_id;
-      payload.payment_ref = card?.reff_code;
-    }
-
-    // untuk payload dibawah ini adalah tambahan payload yang berdasarkan dari savebill
-    if (CartState?.bill) {
-      payload = {
-        ...payload,
-        code: CartState?.bill?.code,
-        id: CartState?.bill?.id,
-        sync_id: CartState?.bill?.sync_id,
-        bill_name: CartState?.bill?.bill_name,
-        session: CartState?.bill?.session,
-        paid_session: sessionSummary,
-        created_at: CartState?.bill?.created_at,
-      };
+    if (!selectedMethod) {
+      handleModalError('Pembayaran belum dipilih');
+      required = false;
     } else {
-      const orderId = uuidv4();
+      if (selectedMethod?.provider === 'cash' && (pay === 0 || pay === '')) {
+        handleModalError('Nominal dibayar harus diisi');
 
-      const code = `${now.toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
+        required = false;
+      }
+    }
 
-      // jika tidak dari save bill maka dibawah ini payload tambahan-nya
-      payload = {
-        ...payload,
-        code: code,
-        sync_id: orderId,
-        bill_name: billName,
-        session: sessionSummary,
-        paid_session: sessionSummary,
-        created_at: now,
+    if (required) {
+      const discount_categories = CartState?.discount?.category
+        ?.filter(
+          cat =>
+            cat && cat.discount_value > 0 && ['percentage', 'nominal'].includes(cat?.discount_type)
+        )
+        ?.map(cat => ({
+          category_id: cat.id,
+          category: cat,
+          ...(cat.discount_type === 'nominal'
+            ? { discount_value: cat.discount_value }
+            : { discount_percentage: cat.discount_value }),
+        }));
+
+      let allItems = [...(CartState?.items?.bill || []), ...(CartState?.items?.list || [])];
+
+      const items = allItems?.map(item => {
+        const base = {
+          id: item?.order_item_id || uuidv4(), // --- ini untuk mengikuti backend, karena backend mempunyai id. tapi kenapa ada item?.order_item_id (apabila dari create mempunyai itu - kita tidak boleh merubah-nya)
+          catalog_id: item.catalog_id,
+          category_id: item.category_id,
+          quantity: item.quantity,
+          unit_nett: item.unit_nett,
+          catalog_name: item.name,
+          category_name: item.category_name,
+          catalog: {
+            id: item.catalog_id,
+            category_id: item.category_id,
+            code: item.code,
+            name: item.name,
+            is_custom: item.is_custom,
+          },
+          is_discount_percentage: item.is_discount_percentage,
+          discount_percentage: item.discount_percentage,
+          discount_value: item.discount_value,
+          unit_discount: item.unit_discount,
+        };
+
+        if (item?.is_custom) {
+          base.catalog_name = item?.name;
+          base.unit_nett = item?.unit_nett;
+        }
+
+        if (item?.additionals_flat?.length > 0) {
+          base.addons = item?.additionals_flat;
+        }
+
+        return base;
+      });
+
+      const now = new Date();
+
+      let payload = {
+        membership_id: CartState?.meta?.customer?.id,
+        sales_channel_id: Channel?.selectedChannel?.id,
+        payment_method_id: selectedMethod?.id,
+        payment_ref: paymentRef,
+        status: 'completed',
+        is_offline_mode: true,
+        total_payment:
+          selectedMethod?.provider === 'cash'
+            ? Number(pay) || 0
+            : CartState?.meta?.grand_total || 0,
+        items,
+
+        // ini untuk kebutuhan standarisasi data Offline to Online
+        paid_at: now,
+        membership: CartState?.meta?.customer,
+        sales_channel: Channel?.selectedChannel,
+        payment_method: selectedMethod,
+        is_discount_percentage: CartState?.discount?.cart?.type === 'percentage' ? true : false,
+        discount_value: CartState?.discount?.cart?.amount,
+        service_charge_percentage: CartState?.meta?.service_charge_percentage,
+        service_charge_value: CartState?.meta?.service_charge_value,
+        total_charges: CartState?.meta?.grand_total,
       };
+
+      if (CartState?.discount?.cart?.type) {
+        if (CartState?.discount?.cart?.type === 'percentage') {
+          payload.discount_percentage = CartState?.discount?.cart?.value;
+        }
+      }
+
+      if (discount_categories?.length > 0) {
+        payload.category_discounts = discount_categories;
+        payload.is_category_discount = true;
+      }
+
+      if (card) {
+        payload.membership_id = card?.id;
+        payload.card_id = card?.card_id;
+        payload.payment_ref = card?.reff_code;
+      }
+
+      // untuk payload dibawah ini adalah tambahan payload yang berdasarkan dari savebill
+      if (CartState?.bill) {
+        payload = {
+          ...payload,
+          code: CartState?.bill?.code,
+          id: CartState?.bill?.id,
+          sync_id: CartState?.bill?.sync_id,
+          bill_name: CartState?.bill?.bill_name,
+          session: CartState?.bill?.session,
+          paid_session: sessionSummary,
+          created_at: CartState?.bill?.created_at,
+        };
+      } else {
+        const orderId = uuidv4();
+
+        const code = `${now.toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
+
+        // jika tidak dari save bill maka dibawah ini payload tambahan-nya
+        payload = {
+          ...payload,
+          code: code,
+          sync_id: orderId,
+          bill_name: billName,
+          session: sessionSummary,
+          paid_session: sessionSummary,
+          created_at: now,
+        };
+      }
+
+      const dataOfflineToOnline = makeCompletedOrder(payload);
+
+      if (CartState?.bill) {
+        let { itemsPending, isPending } = checkPartialPaid(payload.items, CartState?.bill?.items);
+
+        if (!isPending) {
+          onPayOfflinePayAndDeleteBill(dataOfflineToOnline);
+        } else {
+          onPayOfflineSplit(dataOfflineToOnline, itemsPending);
+        }
+      } else {
+        onPayOfflineDirectPay(dataOfflineToOnline);
+      }
+
+      try {
+        // 🔁 Update sessionSummary incremental
+        updateSessionSummary({
+          type: 'payment',
+          order: dataOfflineToOnline,
+          payment_method: dataOfflineToOnline?.payment_method,
+          total_sales: dataOfflineToOnline?.subtotal_nett,
+          total_discount:
+            dataOfflineToOnline?.subtotal_nett -
+            dataOfflineToOnline?.total_bill +
+            dataOfflineToOnline?.discount_value,
+          total_after_discount:
+            dataOfflineToOnline?.total_bill - dataOfflineToOnline?.discount_value,
+          total_service: dataOfflineToOnline?.service_charge_value,
+          total_charges: dataOfflineToOnline?.total_charges,
+        });
+      } catch (err) {
+        console.log('[DEBUG] updateSessionSummary last payment:', err);
+
+        return;
+      }
+
+      handleModalPrint(dataOfflineToOnline);
+      dispatch(resetCart());
+      setDiscountInputs([]);
     }
-
-    const dataOfflineToOnline = makeCompletedOrder(payload);
-
-    if (CartState?.bill) {
-      let { itemsPending, isPending } = checkPartialPaid(payload.items, CartState?.bill?.items);
-
-      console.log('=========[DEBUG]======================itemsPending', itemsPending);
-      console.log('=========[DEBUG]======================isPending', isPending);
-    }
-
-    // try {
-    //   await createOrderPayment(dataOfflineToOnline, session?.user?.id);
-    // } catch (err) {
-    //   handleModalError();
-
-    //   dispatch($failure(err));
-    //   return;
-    // }
-
-    // triggerQueueRefresh();
-
-    // // Push ke localStorage bills cache
-    // try {
-    //   saveOrderHistory(dataOfflineToOnline);
-    // } catch (e) {
-    //   handleModalError();
-
-    //   console.error('[SAVE ON PAY] cache error:', e);
-    // }
-
-    // // 🔁 Update sessionSummary incremental
-    // updateSessionSummary({
-    //   type: 'payment',
-    //   order: dataOfflineToOnline,
-    //   payment_method: dataOfflineToOnline?.payment_method,
-
-    //   total_sales: dataOfflineToOnline?.subtotal_nett,
-    //   total_discount: dataOfflineToOnline?.subtotal_nett - dataOfflineToOnline?.total_bill,
-    //   total_after_discount: dataOfflineToOnline?.total_bill,
-    //   total_service: dataOfflineToOnline?.service_charge_value,
-    //   total_charges: dataOfflineToOnline?.total_charges,
-    // });
-
-    // handleModalPrint(dataOfflineToOnline);
-
-    // dispatch(resetCart());
-    // setDiscountInputs([]);
   };
 
-  const onPayOfflinePay = async data => {};
-  const onPayOfflineSplit = async data => {};
+  const onPayOfflineDirectPay = async dataOfflineToOnline => {
+    console.log('=========[DEBUG]======================onPayOfflineDirectPay', dataOfflineToOnline);
+    try {
+      await createOrderPayment(dataOfflineToOnline, session?.user?.id);
+    } catch (err) {
+      console.log('[DEBUG] onPayOfflineDirectPay 2:', err);
+
+      handleModalError();
+      dispatch($failure(err));
+      return;
+    }
+    triggerQueueRefresh();
+
+    // Push ke localStorage order history cache
+    try {
+      saveOrderHistory(dataOfflineToOnline);
+    } catch (err) {
+      console.log('[DEBUG] onPayOfflineDirectPay 2:', err);
+
+      handleModalError();
+      console.error('[SAVE ON PAY] cache error:', err);
+    }
+  };
+
+  const onPayOfflinePayAndDeleteBill = async dataOfflineToOnline => {
+    console.log(
+      '=========[DEBUG]======================onPayOfflinePayAndDeleteBill',
+      dataOfflineToOnline
+    );
+
+    try {
+      await createOrderPayment(dataOfflineToOnline, session?.user?.id);
+
+      // kita hapus delete order bill jika ada di IDB
+      await deleteOrderBill(CartState?.bill?.sync_id, session?.user?.id);
+    } catch (err) {
+      handleModalError();
+      dispatch($failure(err));
+      console.log('[DEBUG] onPayOfflinePayAndDeleteBill', err);
+      return;
+    }
+
+    // Push ke localStorage order history cache
+    try {
+      await saveOrderHistory(dataOfflineToOnline);
+    } catch (err) {
+      handleModalError();
+      console.error('[SAVE ON PAY AND Delete Bill] cache error:', err);
+    }
+
+    // delete open bill ke localStorage delete bill cache
+    try {
+      await deleteOpenBills(dataOfflineToOnline);
+    } catch (err) {
+      handleModalError();
+      console.error('[SAVE ON PAY AND Delete Bill] cache error:', err);
+    }
+
+    triggerQueueRefresh();
+
+    // 🔁 Update sessionSummary incremental
+    updateSessionSummary({
+      type: 'update',
+      id: CartState?.bill?.session?.id,
+      sync_id: CartState?.bill?.session?.sync_id,
+      outstanding_bill: -1 * dataOfflineToOnline?.total_charges,
+    });
+  };
+
+  const onPayOfflineSplit = async (dataOfflineToOnline, itemsPending) => {
+    console.log('=========[DEBUG]====onPayOfflineSplit====dataPay:', dataOfflineToOnline);
+    console.log('=========[DEBUG]====onPayOfflineSplit====dataPneding:', itemsPending);
+
+    try {
+      // ini dibutuhkan untuk split bill, karena data sync_id adalah id tsb
+      // ref_sync_id ini dibutuhkan untuk split id dari sync_id
+      dataOfflineToOnline.ref_sync_id = dataOfflineToOnline.sync_id;
+      dataOfflineToOnline.sync_id = uuidv4();
+
+      await createOrderPayment(dataOfflineToOnline, session?.user?.id);
+    } catch (err) {
+      console.log('[DEBUG] onPayOfflineSplit 1:', err);
+
+      handleModalError();
+      dispatch($failure(err));
+      return;
+    }
+
+    // Push ke localStorage order history cache
+    try {
+      saveOrderHistory(dataOfflineToOnline);
+    } catch (err) {
+      handleModalError();
+      console.error('[SAVE ON PAY AND Update Bill] cache error:', err);
+    }
+
+    const dataOfflineToOnlineUpdated = makeUpdatePendingBillFromSplitBill(
+      CartState?.bill,
+      itemsPending
+    );
+
+    console.log('[DEBUG] [DataOfflineToOnlineUpdated]', dataOfflineToOnlineUpdated);
+
+    try {
+      await updateOrderBill(dataOfflineToOnlineUpdated, session?.user?.id);
+    } catch (err) {
+      handleModalError();
+      dispatch($failure(err));
+      console.log('[DEBUG] onPayOfflineSplit 2:', err);
+
+      return;
+    }
+
+    triggerQueueRefresh();
+
+    // Push ke localStorage bills cache
+    try {
+      updateOpenBills(dataOfflineToOnlineUpdated);
+    } catch (err) {
+      console.log('[DEBUG] onPayOfflineSplit 3:', err);
+
+      handleModalError();
+    }
+
+    // 🔁 Update sessionSummary incremental
+    updateSessionSummary({
+      type: 'update',
+      id: CartState?.bill?.session?.id,
+      sync_id: CartState?.bill?.session?.sync_id,
+      outstanding_bill:
+        -1 * (CartState?.bill?.total_charges - dataOfflineToOnlineUpdated?.total_charges || 0),
+    });
+  };
 
   // Pay Online — API
   const onPayOnline = async card => {
@@ -854,19 +998,21 @@ const CheckoutScreen = () => {
     );
   };
 
-  const handleModalError = () => {
+  const handleModalError = customError => {
     openModal(
       <>
         <Modal.Header onClose={closeModal}>
-          <div className="text-lg font-semibold">Can't save bill</div>
+          <div className="text-lg font-semibold">Can't save</div>
         </Modal.Header>
         <Modal.Body full>
           <div className="flex place-content-center place-items-center">
             <img src="./error.png" className="h-64" />
           </div>
           <div className="-mt-5 pb-4 text-center">
-            <div className="text-lg font-semibold capitalize">{FormState?.errors?.billName}</div>
-            <p className="text-base-300 text-xs">Try another bill’s</p>
+            <div className="text-lg font-semibold capitalize">
+              {FormState?.errors?.billName || customError}
+            </div>
+            <p className="text-base-300 text-xs">Try another</p>
           </div>
         </Modal.Body>
       </>,

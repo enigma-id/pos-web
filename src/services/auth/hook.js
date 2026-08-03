@@ -14,7 +14,7 @@ import { ensureDB, STORES, deleteUserDB } from '../offline/queue';
 import { syncPendingSessions } from '../offline/syncManager';
 import { clearSelectedChannel } from '../sales/channel/slice';
 import { $reset } from '../table/action';
-import { setSummary } from '../sales/session/slice';
+import { resetSummary, setSummary } from '../sales/session/slice';
 
 const useAuth = () => {
   const dispatch = useDispatch();
@@ -69,9 +69,9 @@ const useAuth = () => {
     clearCatalogCache();
     clearSalesCache();
     dispatch(resetCart());
+    dispatch(resetSummary());
     dispatch($reset());
     dispatch(clearSelectedChannel());
-    dispatch(invalidateSession());
     dispatch(logout());
 
     // Clean up queue DB if empty

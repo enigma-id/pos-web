@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 
 import { v4 as uuidv4 } from 'uuid';
 import { Input, Modal } from '../../../components/ui';
@@ -14,11 +14,12 @@ import { startSession } from '../../../services/offline';
 import { saveShifts } from '../../../utils/cache';
 
 const OpenSection = () => {
+  const dispatch = useDispatch();
   const isOnline = useSelector(state => state?.Offline?.isOnline);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
   const AuthSession = useSelector(state => state?.Auth?.session);
 
-  const { start, startResult } = useSession();
+  const { start, startResult, summary } = useSession();
   const { refreshCatalog } = useCatalog();
   const { onLogout } = useAuth();
   const { openModal, closeModal } = useModal();
@@ -80,6 +81,7 @@ const OpenSection = () => {
     if (startResult?.isSuccess) {
       refreshCatalog();
       dispatch(resetCart());
+      summary();
     }
   }, [startResult?.isSuccess]);
 

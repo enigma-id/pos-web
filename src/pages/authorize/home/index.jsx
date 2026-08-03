@@ -184,7 +184,7 @@ const CatalogScreen = () => {
                           className="bg-secondary h-full w-full rounded-xl object-cover"
                         />
                       ) : (
-                        <div className="bg-base-200 flex h-full w-full items-center place-content-center rounded-xl text-base-content/40 text-sm font-medium">
+                        <div className="bg-base-200 text-base-content/40 flex h-full w-full place-content-center items-center rounded-xl text-sm font-medium">
                           No Image
                         </div>
                       )}
@@ -215,7 +215,7 @@ const CatalogScreen = () => {
               <RefreshIcon />
             </div>
 
-            {User?.role === "manager" && (
+            {User?.role === 'manager' && (
               <div className="btn btn-circle btn-xl btn-primary" onClick={openDrawer}>
                 <PlusIcon />
               </div>

@@ -76,10 +76,45 @@ export function makePendingBill(payload) {
     ...payload,
     items: cloneItems,
     is_synced: false,
-    original_items: cloneItems,
     category_discounts: recalculateDiscountCategory(payload.category_discounts, payload.items),
     subtotal_nett: subtotal,
     total_bill: totalBill,
+  };
+}
+
+// ── Update Pending bill from split bill for cache_openbills ──
+export function makeUpdatePendingBillFromSplitBill(bill, pendingItems) {
+  console.log('=========makeUpdatePendingBillFromSplitBill===========awal', bill);
+
+  let subtotal = 0;
+  let totalBill = 0;
+  pendingItems.forEach(item => {
+    subtotal += item.quantity * item.unit_nett;
+    totalBill += item.quantity * (item.unit_nett - (item.unit_discount || 0));
+    (item.addons ?? []).forEach(addon => {
+      subtotal += addon.quantity * addon.unit_nett;
+      totalBill += addon.quantity * addon.unit_nett;
+    });
+  });
+
+  const billDValue = bill?.is_discount_percentage
+    ? Math.ceil(totalBill * (bill?.discount_percentage / 100))
+    : bill?.discount_value;
+
+  console.log('=========makeUpdatePendingBillFromSplitBill===========billDValue', billDValue);
+
+  const scv = Math.ceil((totalBill - billDValue) * (bill?.service_charge_percentage / 100));
+
+  return {
+    ...bill,
+    items: pendingItems,
+    is_synced: false,
+    category_discounts: recalculateDiscountCategory(bill.category_discounts, pendingItems),
+    subtotal_nett: subtotal,
+    total_bill: totalBill,
+    service_charge_value: scv,
+    discount_value: billDValue,
+    total_charges: totalBill - billDValue + scv,
   };
 }
 
@@ -119,7 +154,6 @@ export function makeCompletedOrder(payload) {
     ...payload,
     items: cloneItems,
     is_synced: false,
-    original_items: cloneItems,
     category_discounts: recalculateDiscountCategory(payload.category_discounts, payload.items),
     subtotal_nett: subtotal,
     total_bill: totalBill,

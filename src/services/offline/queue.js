@@ -150,10 +150,10 @@ export const closeSession = async (payload, userId) => {
 
   await db.put(STORES.sessions, {
     ...existing,
-    ...data,
+    ...payload,
   });
 
-  return data;
+  return payload;
 };
 
 // ========== ORDER BILLS ==========
@@ -203,10 +203,10 @@ export const updateOrderBill = async (payload, userId) => {
 
   await db.put(STORES.orderBills, {
     ...existing,
-    ...data,
+    ...payload,
   });
 
-  return data;
+  return payload;
 };
 
 export const deleteOrderBill = async (syncId, userId) => {

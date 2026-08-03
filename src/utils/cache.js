@@ -262,6 +262,8 @@ const getOpenBillsCacheRaw = () => {
 export const saveOpenBills = data => {
   const existing = getOpenBillsCacheRaw();
 
+  console.log('[DEBUG] saveOpenBills:', existing);
+
   if (!existing.data) {
     existing.data = [];
   }
@@ -292,10 +294,12 @@ export const updateOpenBills = data => {
   return existing.data[index];
 };
 
-export const deleteOpenBills = id => {
+export const deleteOpenBills = data => {
   const existing = getOpenBillsCacheRaw();
 
-  existing.data = existing.data.filter(item => item.id !== id && item.sync_id !== id);
+  existing.data = existing.data.filter(
+    item => item.id !== data?.id || item.sync_id !== data?.sync_id
+  );
 
   localStorage.setItem(BILLS_CACHE_KEY, JSON.stringify(existing));
 };
@@ -304,7 +308,7 @@ const HISTORY_CACHE_KEY = 'cache_order_history';
 
 const getOrderHistoryCacheRaw = () => {
   try {
-    const raw = localStorage.getItem(BILLS_CACHE_KEY);
+    const raw = localStorage.getItem(HISTORY_CACHE_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -312,7 +316,10 @@ const getOrderHistoryCacheRaw = () => {
 };
 
 export const saveOrderHistory = data => {
+  console.log('[DEBUG] saveOrderHistory', data);
   const existing = getOrderHistoryCacheRaw();
+
+  console.log('[DEBUG] saveOrderHistory existing', existing);
 
   if (!existing.data) {
     existing.data = [];
@@ -356,6 +363,8 @@ export const updateShifts = data => {
   const index = existing.data.findIndex(
     item => item.id === data.id || item.sync_id === data.sync_id
   );
+
+  console.log('[DEBUG] [updateShifts]', index);
 
   if (index === -1) return null;
 
