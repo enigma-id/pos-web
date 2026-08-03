@@ -42,8 +42,6 @@ const shouldRetry = error => {
   return false;
 };
 
-const HISTORY_CACHE_KEY = 'cache_order_history';
-
 // ===== HELPER: map order fields to /sales/sync payload =====
 
 const mapOrderToSync = (order, sessionSyncId) => ({

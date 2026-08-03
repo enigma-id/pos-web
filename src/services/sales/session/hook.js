@@ -114,6 +114,9 @@ const useSession = () => {
     }
 
     if (data.type === 'payment') {
+      console.log('[DEBUG] updateSessionSummary -- data:', data);
+      console.log('[DEBUG] updateSessionSummary -- updatedSummary', updatedSummary);
+
       updatedSummary.summary.sales.total_sales += data.total_sales;
       updatedSummary.summary.sales.total_discount += data.total_discount;
       updatedSummary.summary.sales.total_after_discount += data.total_after_discount;
@@ -199,6 +202,8 @@ const useSession = () => {
         updateShifts(existing);
 
         return;
+      } else {
+        updatedSummary.summary.sales.outstanding_bill += data.outstanding_bill;
       }
     }
 

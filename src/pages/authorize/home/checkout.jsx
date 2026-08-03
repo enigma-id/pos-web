@@ -25,6 +25,7 @@ import { setWarning } from '../../../services/offline';
 import {
   createOrderBill,
   createOrderPayment,
+  deleteOrderBill,
   updateOrderBill,
 } from '../../../services/offline/queue';
 import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
@@ -35,8 +36,10 @@ import {
   makePendingBill,
   makeCompletedOrder,
   makeIdbBillData,
+  makeUpdatePendingBillFromSplitBill,
 } from '../../../services/offline/shapes';
 import {
+  deleteOpenBills,
   getCache,
   saveOpenBills,
   saveOrderHistory,
@@ -674,51 +677,159 @@ const CheckoutScreen = () => {
     if (CartState?.bill) {
       let { itemsPending, isPending } = checkPartialPaid(payload.items, CartState?.bill?.items);
 
-      console.log('=========[DEBUG]======================itemsPending', itemsPending);
-      console.log('=========[DEBUG]======================isPending', isPending);
+      console.log('[DEBUG] [UserId]', session?.user?.id);
+
+      if (!isPending) {
+        onPayOfflinePayAndDeleteBill(dataOfflineToOnline);
+      } else {
+        onPayOfflineSplit(dataOfflineToOnline, itemsPending);
+      }
+    } else {
+      onPayOfflinePay();
     }
 
-    // try {
-    //   await createOrderPayment(dataOfflineToOnline, session?.user?.id);
-    // } catch (err) {
-    //   handleModalError();
+    // 🔁 Update sessionSummary incremental
+    updateSessionSummary({
+      type: 'payment',
+      order: dataOfflineToOnline,
+      payment_method: dataOfflineToOnline?.payment_method,
+      total_sales: dataOfflineToOnline?.subtotal_nett,
+      total_discount: dataOfflineToOnline?.subtotal_nett - dataOfflineToOnline?.total_bill,
+      total_after_discount: dataOfflineToOnline?.total_bill,
+      total_service: dataOfflineToOnline?.service_charge_value,
+      total_charges: dataOfflineToOnline?.total_charges,
+    });
 
-    //   dispatch($failure(err));
-    //   return;
-    // }
-
-    // triggerQueueRefresh();
-
-    // // Push ke localStorage bills cache
-    // try {
-    //   saveOrderHistory(dataOfflineToOnline);
-    // } catch (e) {
-    //   handleModalError();
-
-    //   console.error('[SAVE ON PAY] cache error:', e);
-    // }
-
-    // // 🔁 Update sessionSummary incremental
-    // updateSessionSummary({
-    //   type: 'payment',
-    //   order: dataOfflineToOnline,
-    //   payment_method: dataOfflineToOnline?.payment_method,
-
-    //   total_sales: dataOfflineToOnline?.subtotal_nett,
-    //   total_discount: dataOfflineToOnline?.subtotal_nett - dataOfflineToOnline?.total_bill,
-    //   total_after_discount: dataOfflineToOnline?.total_bill,
-    //   total_service: dataOfflineToOnline?.service_charge_value,
-    //   total_charges: dataOfflineToOnline?.total_charges,
-    // });
-
-    // handleModalPrint(dataOfflineToOnline);
-
-    // dispatch(resetCart());
-    // setDiscountInputs([]);
+    handleModalPrint(dataOfflineToOnline);
+    dispatch(resetCart());
+    setDiscountInputs([]);
   };
 
-  const onPayOfflinePay = async data => {};
-  const onPayOfflineSplit = async data => {};
+  const onPayOfflinePay = async dataOfflineToOnline => {
+    console.log('=========[DEBUG]======================onPayOfflinePay', dataOfflineToOnline);
+    try {
+      await createOrderPayment(dataOfflineToOnline, session?.user?.id);
+    } catch (err) {
+      console.log('[DEBUG] onPayOfflinePay 2:', err);
+
+      handleModalError();
+      dispatch($failure(err));
+      return;
+    }
+    triggerQueueRefresh();
+
+    // Push ke localStorage order history cache
+    try {
+      saveOrderHistory(dataOfflineToOnline);
+    } catch (err) {
+      console.log('[DEBUG] onPayOfflinePay 2:', err);
+
+      handleModalError();
+      console.error('[SAVE ON PAY] cache error:', err);
+    }
+  };
+
+  const onPayOfflinePayAndDeleteBill = async dataOfflineToOnline => {
+    console.log(
+      '=========[DEBUG]======================onPayOfflinePayAndDeleteBill',
+      dataOfflineToOnline
+    );
+
+    try {
+      await createOrderPayment(dataOfflineToOnline, session?.user?.id);
+
+      // kita hapus delete order bill jika ada di IDB
+      await deleteOrderBill(CartState?.bill?.sync_id, session?.user?.id);
+    } catch (err) {
+      handleModalError();
+      dispatch($failure(err));
+      console.log('[DEBUG] onPayOfflinePayAndDeleteBill', err);
+      return;
+    }
+
+    // Push ke localStorage order history cache
+    try {
+      await saveOrderHistory(dataOfflineToOnline);
+    } catch (err) {
+      handleModalError();
+      console.error('[SAVE ON PAY AND Delete Bill] cache error:', err);
+    }
+
+    // delete open bill ke localStorage delete bill cache
+    try {
+      await deleteOpenBills(dataOfflineToOnline);
+    } catch (err) {
+      handleModalError();
+      console.error('[SAVE ON PAY AND Delete Bill] cache error:', err);
+    }
+
+    triggerQueueRefresh();
+
+    // 🔁 Update sessionSummary incremental
+    updateSessionSummary({
+      type: 'update',
+      id: CartState?.bill?.session?.id,
+      sync_id: CartState?.bill?.session?.sync_id,
+      outstanding_bill: -1 * dataOfflineToOnline?.total_charges,
+    });
+  };
+
+  const onPayOfflineSplit = async (dataOfflineToOnline, itemsPending) => {
+    console.log('=========[DEBUG]====onPayOfflineSplit====dataPay:', dataOfflineToOnline);
+    console.log('=========[DEBUG]====onPayOfflineSplit====dataPneding:', itemsPending);
+
+    try {
+      await createOrderPayment(dataOfflineToOnline, session?.user?.id);
+    } catch (err) {
+      console.log('[DEBUG] onPayOfflineSplit 1:', err);
+
+      handleModalError();
+      dispatch($failure(err));
+      return;
+    }
+
+    // Push ke localStorage order history cache
+    try {
+      saveOrderHistory(dataOfflineToOnline);
+    } catch (err) {
+      handleModalError();
+      console.error('[SAVE ON PAY AND Update Bill] cache error:', err);
+    }
+
+    const dataOfflineToOnlineUpdated = makeUpdatePendingBillFromSplitBill(
+      StateCart?.bill,
+      itemsPending
+    );
+
+    try {
+      await updateOrderBill(dataOfflineToOnlineUpdated, session?.user?.id);
+    } catch (err) {
+      handleModalError();
+      dispatch($failure(err));
+      console.log('[DEBUG] onPayOfflineSplit 2:', err);
+
+      return;
+    }
+
+    triggerQueueRefresh();
+
+    // Push ke localStorage bills cache
+    try {
+      updateOpenBills(dataOfflineTodataOfflineToOnlineUpdatedOnline);
+    } catch (err) {
+      console.log('[DEBUG] onPayOfflineSplit 3:', err);
+
+      handleModalError();
+    }
+
+    // 🔁 Update sessionSummary incremental
+    updateSessionSummary({
+      type: 'update',
+      id: CartState?.bill?.session?.id,
+      sync_id: CartState?.bill?.session?.sync_id,
+      outstanding_bill: -1 * dataOfflineToOnlineUpdated?.total_charges,
+    });
+  };
 
   // Pay Online — API
   const onPayOnline = async card => {

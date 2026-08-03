@@ -37,8 +37,10 @@ export const checkPartialPaid = (reqItems, oldItems) => {
   let itemsPending = [];
   let isPending = false;
 
-  // Cari item yang pending
-  for (const oldItem of oldItems) {
+  // Clone oldItems agar tidak merusak read-only reference dari Redux/Props
+  const clonedOldItems = JSON.parse(JSON.stringify(oldItems));
+
+  for (const oldItem of clonedOldItems) {
     let notPay = false;
     let change = false;
 
@@ -48,7 +50,6 @@ export const checkPartialPaid = (reqItems, oldItems) => {
 
         // Cari partial bayar
         if (ir.quantity !== oldItem.quantity) {
-          // Buat salinan atau modifikasi (tergantung apakah oldItem mutable)
           oldItem.quantity -= ir.quantity;
           change = true;
         }
@@ -59,12 +60,13 @@ export const checkPartialPaid = (reqItems, oldItems) => {
       if (oldItem.addons && oldItem.addons.length > 0) {
         let pendingAddons = [];
         for (const oldAddon of oldItem.addons) {
-          let cpAdd = { ...oldAddon }; // Shallow copy object di JS
+          let cpAdd = { ...oldAddon };
 
-          // Catatan: di golang oldaddon.Quantity / oldaddon.Quantity hasilnya selalu 1 (kecuali 0/0)
-          // Jika maksudnya untuk reset atau proporsi, pastikan pembagiannya benar.
-          // Di sini kita ikutin logika aslinya:
-          let qty = oldAddon.quantity / oldAddon.quantity;
+          // Fallback / 1 untuk mencegah NaN jika quantity 0
+          let qty =
+            oldAddon.quantity && oldAddon.quantity !== 0
+              ? oldAddon.quantity / oldAddon.quantity
+              : 1;
 
           cpAdd.quantity = qty * oldItem.quantity;
 

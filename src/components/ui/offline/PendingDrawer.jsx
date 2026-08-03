@@ -107,12 +107,11 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
         code: b.code,
         bill_name: b.bill_name,
         sales_channel: b.sales_channel,
-        payment_method: b.payment_method,
         session: b.session,
         item_count: (b.items || []).length,
         total_charges: b.total_charges || 0,
         items: b.items || [],
-        created_at: b.createdAt,
+        created_at: b.created_at,
       },
     }));
 
@@ -126,19 +125,13 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
       transaction_preview: {
         code: p.code || `OFF-${(p.sync_id || '').slice(0, 8)}`,
         bill_name: p.bill_name,
-        channel: { name: p.sales_channel_name || '-' },
-        payment_method: {
-          name:
-            p.payment_method_name ||
-            (p.payment_method_id === 0 || p.payment_method_id === null
-              ? 'Cash'
-              : '#' + p.payment_method_id),
-        },
-        cashier: { name: p.cashier_name || '-' },
+        sales_channel: p.sales_channel,
+        payment_method: p.payment_method,
+        session: p.paid_session,
         item_count: (p.items || []).length,
-        total_charges: p.total_payment || 0,
+        total_charges: p.total_charges || 0,
         items: p.items || [],
-        created_at: p.paid_at || p.createdAt,
+        created_at: p.paid_at,
       },
     }));
 
