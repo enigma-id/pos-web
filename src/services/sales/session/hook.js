@@ -12,6 +12,7 @@ import { setSummary, updateSummary } from './slice';
 import { $failure } from '../../form/action';
 import { getCache, setCache, updateShifts } from '../../../utils/cache';
 import { useState } from 'react';
+import { store } from '../../store';
 
 const SHIFTS_CACHE_KEY = 'cache_shifts';
 
@@ -52,9 +53,9 @@ const useSession = () => {
       try {
         const res = await triggerSummary().unwrap();
 
-        if (res?.data) {
-          dispatch(setSummary(res.data));
-        }
+        console.log('[DEBUG] triggerSummary', res.data);
+
+        dispatch(setSummary(res.data));
 
         return;
       } catch (err) {
@@ -105,8 +106,18 @@ const useSession = () => {
   };
 
   const updateSessionSummary = async data => {
+    console.log('[DEBUG] updateSessionSummary -- data:', data);
+
+    // 🔍 AMBIL STATE TERBARU LANGSUNG DARI STORE REDUX (Menghindari Stale Closure)
+    const currentState = store.getState();
+    const currentSessionSummary = currentState?.SalesSession?.sessionSummary;
+
     // 1. Buat clone state lama
-    const updatedSummary = JSON.parse(JSON.stringify(sessionSummary));
+    const updatedSummary = JSON.parse(JSON.stringify(currentSessionSummary));
+
+    if (!updatedSummary) {
+      return;
+    }
 
     // 2. Handle logika perubahan
     if (data.type === 'bill') {
@@ -114,8 +125,7 @@ const useSession = () => {
     }
 
     if (data.type === 'payment') {
-      console.log('[DEBUG] updateSessionSummary -- data:', data);
-      console.log('[DEBUG] updateSessionSummary -- updatedSummary', updatedSummary);
+      console.log('[DEBUG] updateSessionSummary -- payment', updatedSummary);
 
       updatedSummary.summary.sales.total_sales += data.total_sales;
       updatedSummary.summary.sales.total_discount += data.total_discount;
@@ -137,8 +147,7 @@ const useSession = () => {
         updatedSummary.summary.payment_methods[pmIdx] = {
           ...updatedSummary.summary.payment_methods[pmIdx],
           total_paid:
-            (updatedSummary.summary.payment_methods[pmIdx].total_paid || 0) +
-            data?.data?.total_charges, // Pastikan nested data aman
+            (updatedSummary.summary.payment_methods[pmIdx].total_paid || 0) + data?.total_charges, // Pastikan nested data aman
           count: (updatedSummary.summary.payment_methods[pmIdx].count || 0) + 1,
         };
       } else {
@@ -195,6 +204,7 @@ const useSession = () => {
 
     if (data.type === 'update') {
       if (!(data.id === updatedSummary.id || data.sync_id === updatedSummary.sync_id)) {
+        console.log('[DEBUG UPDATE] Masuk block shift lain');
         let existing = showShifts(data);
 
         existing.summary.sales.outstanding_bill += data.outstanding_bill;
@@ -203,6 +213,7 @@ const useSession = () => {
 
         return;
       } else {
+        console.log('[DEBUG UPDATE] Masuk block current summary');
         updatedSummary.summary.sales.outstanding_bill += data.outstanding_bill;
       }
     }

@@ -4,28 +4,25 @@ export function recalculateDiscountCategory(discountCategories, items) {
   let result = [];
   discountCategories.map(dc => {
     let totalDiscount = 0;
+    let used = false;
     items.map(item => {
       if (item.category_id === dc.category_id) {
-        let dv = dc.discount_value;
-        let dp = dc.discount_percentage;
-
-        if (dv > 0) {
-          dp = Math.ceil(dv / item.unit_nett) * 100;
-        }
-
-        if (dp > 0) {
-          dv = item.unit_nett * (dp / 100);
-        }
-
-        totalDiscount += dv * item.quantity;
+        totalDiscount += item.unit_discount * item.quantity;
+        used = true;
       }
     });
 
-    if (dc.discount_percentage > 0) {
-      dc.is_discount_percentage = true;
+    if (used) {
+      // Salin objek dc agar aman untuk dimodifikasi (tidak read-only)
+      const updatedDc = { ...dc };
+
+      if (updatedDc.discount_percentage > 0) {
+        updatedDc.is_discount_percentage = true;
+      }
+      updatedDc.total_discount = totalDiscount;
+
+      result.push(updatedDc);
     }
-    dc.total_discount = totalDiscount;
-    result.push(dc);
   });
 
   return result;

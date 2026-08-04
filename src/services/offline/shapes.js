@@ -84,6 +84,8 @@ export function makePendingBill(payload) {
 
 // ── Update Pending bill from split bill for cache_openbills ──
 export function makeUpdatePendingBillFromSplitBill(bill, pendingItems) {
+  console.log('=========makeUpdatePendingBillFromSplitBill===========awal', bill);
+
   let subtotal = 0;
   let totalBill = 0;
   pendingItems.forEach(item => {
@@ -95,7 +97,13 @@ export function makeUpdatePendingBillFromSplitBill(bill, pendingItems) {
     });
   });
 
-  const scv = (totalBill - bill.discount_value) * (bill?.service_charge_percentage / 100);
+  const billDValue = bill?.is_discount_percentage
+    ? Math.ceil(totalBill * (bill?.discount_percentage / 100))
+    : bill?.discount_value;
+
+  console.log('=========makeUpdatePendingBillFromSplitBill===========billDValue', billDValue);
+
+  const scv = Math.ceil((totalBill - billDValue) * (bill?.service_charge_percentage / 100));
 
   return {
     ...bill,
@@ -104,7 +112,9 @@ export function makeUpdatePendingBillFromSplitBill(bill, pendingItems) {
     category_discounts: recalculateDiscountCategory(bill.category_discounts, pendingItems),
     subtotal_nett: subtotal,
     total_bill: totalBill,
-    total_charges: totalBill - bill.discount_value + scv,
+    service_charge_value: scv,
+    discount_value: billDValue,
+    total_charges: totalBill - billDValue + scv,
   };
 }
 

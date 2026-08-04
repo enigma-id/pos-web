@@ -364,6 +364,8 @@ export const updateShifts = data => {
     item => item.id === data.id || item.sync_id === data.sync_id
   );
 
+  console.log('[DEBUG] [updateShifts]', index);
+
   if (index === -1) return null;
 
   existing.data[index] = {
