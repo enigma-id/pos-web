@@ -29,8 +29,6 @@ export function recalculateDiscountCategory(discountCategories, items) {
 }
 
 export const checkPartialPaid = (reqItems, oldItems) => {
-  console.log('===========[DEBUG]==reqItems:================', reqItems);
-  console.log('===========[DEBUG]==oldItems:================', oldItems);
   let itemsPending = [];
   let isPending = false;
 

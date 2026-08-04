@@ -10,38 +10,42 @@ import { ensureDB, STORES } from './queue';
  * Panggil `triggerQueueRefresh()` setelah offline write operations.
  */
 const usePendingQueueCount = () => {
-  const userId = useSelector(state => state?.Auth?.session?.user?.id);
+  const sessionUserId = useSelector(state => state?.Auth?.session?.user?.id);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
-    if (!userId) {
+    if (!sessionUserId) {
       setCount(0);
       return;
     }
     setLoading(true);
     try {
-      const db = await ensureDB(userId);
-      const [bills, payments, topups, sessions] = await Promise.all([
+      const db = await ensureDB(sessionUserId);
+      const [bills, payments, topups, sessions, memberships] = await Promise.all([
         db.getAll(STORES.orderBills),
         db.getAll(STORES.orderPayments),
         db.getAll(STORES.topups),
         db.getAll(STORES.sessions),
+        db.getAll(STORES.memberships),
       ]);
 
       const pendingBills = bills.filter(b => !b.is_synced).length;
       const pendingPayments = payments.filter(p => !p.is_synced).length;
       const pendingTopups = topups.length; // semua topup pending sync
       const pendingSessions = sessions.filter(s => s.syncStatus !== 'synced').length;
+      const pendingMemberships = memberships.length; // semua memberships pending sync
 
-      setCount(pendingBills + pendingPayments + pendingTopups + pendingSessions);
+      setCount(
+        pendingBills + pendingPayments + pendingTopups + pendingSessions + pendingMemberships
+      );
     } catch (err) {
       console.error('[usePendingQueueCount] error:', err);
       setCount(0);
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [sessionUserId]);
 
   useEffect(() => {
     refresh();

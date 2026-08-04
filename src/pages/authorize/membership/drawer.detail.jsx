@@ -9,7 +9,7 @@ import { CloseIcon, HistoryIcon, PlusIcon, RefreshIcon } from '../../../componen
 import useDrawer from '../../../utils/drawer';
 
 const DrawerDetail = ({ type, membership, onClose, onRefresh }) => {
-  const { drawerRef, open: openDrawer, close: closeDrawer, } = useDrawer();
+  const { drawerRef, open: openDrawer, close: closeDrawer } = useDrawer();
 
   const [refType, setRefType] = useState('');
 
@@ -52,8 +52,11 @@ const DrawerDetail = ({ type, membership, onClose, onRefresh }) => {
         <UpdateSession
           id={membership?.id}
           membership={membership}
-          onClose={() => { closeDrawer(); onClose?.(); }}
-          reboot={() => onRefresh?.()}
+          onClose={() => {
+            closeDrawer();
+            onClose?.();
+          }}
+          onRefresh={() => onRefresh?.()}
         />
       )}
     </Drawer.Content>

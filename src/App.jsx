@@ -8,6 +8,8 @@ import { checkAppVersion } from './utils/checkVersion.jsx';
 import useOrder from './services/sales/order/hook.js';
 import useSession from './services/sales/session/hook.js';
 import useCart from './services/cart/hook.js';
+import useMembership from './services/membership/hook.js';
+import useMaster from './services/master/hook.js';
 
 checkAppVersion();
 
@@ -17,7 +19,8 @@ const App = () => {
   const { getUser } = useAuth();
   const { history } = useOrder();
   const { session } = useSession();
-  const { getPaymentMethod } = useCart();
+  const { getPaymentMethods, getSchemaBonus } = useMaster();
+  const { getMember } = useMembership();
 
   React.useEffect(() => {
     if (isAuthenticated) {
@@ -33,7 +36,9 @@ const App = () => {
     const fetchAndCache = async () => {
       history();
       session();
-      getPaymentMethod();
+      getPaymentMethods();
+      getSchemaBonus();
+      getMember();
     };
 
     fetchAndCache();

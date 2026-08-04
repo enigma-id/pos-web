@@ -31,28 +31,23 @@ import {
 import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
 import { $failure } from '../../../services/form/action';
 import { v4 as uuidv4 } from 'uuid';
-import { store } from '../../../services/store';
 import {
   makePendingBill,
   makeCompletedOrder,
-  makeIdbBillData,
   makeUpdatePendingBillFromSplitBill,
 } from '../../../services/offline/shapes';
 import {
   deleteOpenBills,
-  getCache,
   saveOpenBills,
   saveOrderHistory,
-  setCache,
+  showMembership,
   updateOpenBills,
 } from '../../../utils/cache';
-// import useOutlet from '../../../services/outlet/hooks';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
-import { getMemberCache } from '../../../utils/cache';
 import useSession from '../../../services/sales/session/hook';
-import { isPending } from '@reduxjs/toolkit';
 import { checkPartialPaid } from '../../../services/offline/helper';
+import useMaster from '../../../services/master/hook';
 
 const CheckoutScreen = () => {
   const location = useLocation();
@@ -69,8 +64,9 @@ const CheckoutScreen = () => {
 
   const dropdownRef = React.useRef(null);
 
+  const { getPaymentMethods } = useMaster();
+
   const {
-    getPaymentMethod,
     onChangeDiscount,
     onChangeCartDiscount,
     checkout,
@@ -90,8 +86,6 @@ const CheckoutScreen = () => {
 
   const { checkSaldo, checkResult } = useMembership();
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
-  const syncIdOffline = useSelector(state => state?.Offline?.activeSyncId);
-  const syncIdServer = useSelector(state => state?.Auth?.session?.sales_session?.id);
   const { openModal, closeModal } = useModal();
 
   const [isOpen, setIsOpen] = React.useState(false);
@@ -102,6 +96,8 @@ const CheckoutScreen = () => {
   const [billName, setBillName] = React.useState('');
 
   const [selectedMethod, setSelectedMethod] = React.useState(null);
+
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
 
   const renderAdditionals = item => {
     return (item?.addons || [])
@@ -548,8 +544,6 @@ const CheckoutScreen = () => {
     );
   };
 
-  console.log('[DEBUG] [CartState]', CartState);
-
   // Pay Offline — Cache and IDB
   const onPayOffline = async card => {
     let required = true;
@@ -719,8 +713,6 @@ const CheckoutScreen = () => {
           total_charges: dataOfflineToOnline?.total_charges,
         });
       } catch (err) {
-        console.log('[DEBUG] updateSessionSummary last payment:', err);
-
         return;
       }
 
@@ -731,12 +723,9 @@ const CheckoutScreen = () => {
   };
 
   const onPayOfflineDirectPay = async dataOfflineToOnline => {
-    console.log('=========[DEBUG]======================onPayOfflineDirectPay', dataOfflineToOnline);
     try {
       await createOrderPayment(dataOfflineToOnline, session?.user?.id);
     } catch (err) {
-      console.log('[DEBUG] onPayOfflineDirectPay 2:', err);
-
       handleModalError();
       dispatch($failure(err));
       return;
@@ -747,19 +736,12 @@ const CheckoutScreen = () => {
     try {
       saveOrderHistory(dataOfflineToOnline);
     } catch (err) {
-      console.log('[DEBUG] onPayOfflineDirectPay 2:', err);
-
       handleModalError();
       console.error('[SAVE ON PAY] cache error:', err);
     }
   };
 
   const onPayOfflinePayAndDeleteBill = async dataOfflineToOnline => {
-    console.log(
-      '=========[DEBUG]======================onPayOfflinePayAndDeleteBill',
-      dataOfflineToOnline
-    );
-
     try {
       await createOrderPayment(dataOfflineToOnline, session?.user?.id);
 
@@ -768,7 +750,6 @@ const CheckoutScreen = () => {
     } catch (err) {
       handleModalError();
       dispatch($failure(err));
-      console.log('[DEBUG] onPayOfflinePayAndDeleteBill', err);
       return;
     }
 
@@ -800,9 +781,6 @@ const CheckoutScreen = () => {
   };
 
   const onPayOfflineSplit = async (dataOfflineToOnline, itemsPending) => {
-    console.log('=========[DEBUG]====onPayOfflineSplit====dataPay:', dataOfflineToOnline);
-    console.log('=========[DEBUG]====onPayOfflineSplit====dataPneding:', itemsPending);
-
     try {
       // ini dibutuhkan untuk split bill, karena data sync_id adalah id tsb
       // ref_sync_id ini dibutuhkan untuk split id dari sync_id
@@ -811,8 +789,6 @@ const CheckoutScreen = () => {
 
       await createOrderPayment(dataOfflineToOnline, session?.user?.id);
     } catch (err) {
-      console.log('[DEBUG] onPayOfflineSplit 1:', err);
-
       handleModalError();
       dispatch($failure(err));
       return;
@@ -831,14 +807,11 @@ const CheckoutScreen = () => {
       itemsPending
     );
 
-    console.log('[DEBUG] [DataOfflineToOnlineUpdated]', dataOfflineToOnlineUpdated);
-
     try {
       await updateOrderBill(dataOfflineToOnlineUpdated, session?.user?.id);
     } catch (err) {
       handleModalError();
       dispatch($failure(err));
-      console.log('[DEBUG] onPayOfflineSplit 2:', err);
 
       return;
     }
@@ -1030,8 +1003,8 @@ const CheckoutScreen = () => {
 
     if (isOffline || apiReachable === false) {
       // No connection → skip checkSaldo, ambil dari cache kalo ada
-      const cached = getMemberCache(uid);
-      onPay(cached || { card_id: uid });
+      const membership = showMembership(uid);
+      onPay(membership || { card_id: uid });
       return;
     }
 
@@ -1114,14 +1087,15 @@ const CheckoutScreen = () => {
 
   React.useEffect(() => {
     const getMethod = async () => {
-      const res = await getPaymentMethod();
+      const res = await getPaymentMethods();
+
+      console.log(res, '================');
       setPaymentMethod(res);
       setSelectedMethod(res[0]);
     };
 
     getMethod();
-    // getServiceCharge();
-  }, []);
+  }, [isOffline]);
 
   React.useEffect(() => {
     const inputs = {};

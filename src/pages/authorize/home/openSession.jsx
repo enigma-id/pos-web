@@ -12,12 +12,14 @@ import useCatalog from '../../../services/catalog/hooks';
 import { makeStartSession } from '../../../services/offline/shapes';
 import { startSession } from '../../../services/offline';
 import { saveShifts } from '../../../utils/cache';
+import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
+import { setSummary } from '../../../services/sales/session/slice';
 
 const OpenSection = () => {
   const dispatch = useDispatch();
   const isOnline = useSelector(state => state?.Offline?.isOnline);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
-  const AuthSession = useSelector(state => state?.Auth?.session);
+  const sessionAuth = useSelector(state => state?.Auth?.session);
 
   const { start, startResult, summary } = useSession();
   const { refreshCatalog } = useCatalog();
@@ -33,21 +35,22 @@ const OpenSection = () => {
     const payload = {
       cash_started: parseFloat(cash) || 0,
       sync_id: uuidv4(),
-      outlet_id: AuthSession?.outlet?.id,
-      cashier_id: AuthSession?.user?.id,
+      outlet_id: sessionAuth?.outlet?.id,
+      cashier_id: sessionAuth?.user?.id,
       transaction_date: now,
       started_at: now,
-      cash_started: cash,
       status: 'opened',
+      outlet: sessionAuth?.outlet,
+      cashier: sessionAuth?.user,
     };
 
     const dataOfflineToOnline = makeStartSession(payload);
 
     try {
-      await startSession(dataOfflineToOnline, session?.user?.id);
+      await startSession(dataOfflineToOnline, sessionAuth?.user?.id);
     } catch (err) {
-      handleModalError();
-      dispatch($failure(err));
+      handleModalError(err);
+
       return;
     }
 
@@ -56,9 +59,13 @@ const OpenSection = () => {
     // Push ke localStorage session cache
     try {
       saveShifts(dataOfflineToOnline);
-    } catch (e) {
-      handleModalError();
+    } catch (err) {
+      handleModalError(err);
     }
+
+    dispatch(resetCart());
+
+    dispatch(setSummary(dataOfflineToOnline));
   };
 
   const onStartOnline = async () => {
@@ -84,6 +91,26 @@ const OpenSection = () => {
       summary();
     }
   }, [startResult?.isSuccess]);
+
+  const handleModalError = () => {
+    openModal(
+      <>
+        <Modal.Header onClose={closeModal}>
+          <div className="text-lg font-semibold">Can't save</div>
+        </Modal.Header>
+        <Modal.Body full>
+          <div className="flex place-content-center place-items-center">
+            <img src="./error.png" className="h-64" />
+          </div>
+          <div className="-mt-5 pb-4 text-center">
+            <p className="text-base-300 text-xs">Try another</p>
+          </div>
+        </Modal.Body>
+      </>,
+
+      'w-md'
+    );
+  };
 
   const openLogout = () => {
     openModal(

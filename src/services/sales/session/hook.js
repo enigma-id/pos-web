@@ -53,8 +53,6 @@ const useSession = () => {
       try {
         const res = await triggerSummary().unwrap();
 
-        console.log('[DEBUG] triggerSummary', res.data);
-
         dispatch(setSummary(res.data));
 
         return;
@@ -106,8 +104,6 @@ const useSession = () => {
   };
 
   const updateSessionSummary = async data => {
-    console.log('[DEBUG] updateSessionSummary -- data:', data);
-
     // 🔍 AMBIL STATE TERBARU LANGSUNG DARI STORE REDUX (Menghindari Stale Closure)
     const currentState = store.getState();
     const currentSessionSummary = currentState?.SalesSession?.sessionSummary;
@@ -125,13 +121,15 @@ const useSession = () => {
     }
 
     if (data.type === 'payment') {
-      console.log('[DEBUG] updateSessionSummary -- payment', updatedSummary);
-
       updatedSummary.summary.sales.total_sales += data.total_sales;
       updatedSummary.summary.sales.total_discount += data.total_discount;
       updatedSummary.summary.sales.total_after_discount += data.total_after_discount;
       updatedSummary.summary.sales.total_service += data.total_service;
       updatedSummary.summary.sales.grand_total += data.total_charges;
+
+      if (data?.payment_method?.provider === 'cash') {
+        updatedSummary.summary.cash.expected_cash += data.total_charges;
+      }
 
       // --- PAYMENT METHODS ---
       if (!updatedSummary.summary.payment_methods) {
@@ -204,7 +202,6 @@ const useSession = () => {
 
     if (data.type === 'update') {
       if (!(data.id === updatedSummary.id || data.sync_id === updatedSummary.sync_id)) {
-        console.log('[DEBUG UPDATE] Masuk block shift lain');
         let existing = showShifts(data);
 
         existing.summary.sales.outstanding_bill += data.outstanding_bill;
@@ -213,11 +210,35 @@ const useSession = () => {
 
         return;
       } else {
-        console.log('[DEBUG UPDATE] Masuk block current summary');
         updatedSummary.summary.sales.outstanding_bill += data.outstanding_bill;
       }
     }
 
+    if (data.type === 'topup') {
+      if (data.topup_method === 'cash') {
+        updatedSummary.summary.cash.topup_cash += data.topup_nominal;
+      }
+
+      if (!updatedSummary.summary.topups) {
+        updatedSummary.summary.topups = [];
+      }
+
+      const topupIdx = updatedSummary.summary.topups.findIndex(p => p.type === data?.topup_method);
+
+      // Gunakan >= 0 karena indeks ke-0 itu valid!
+      if (topupIdx >= 0) {
+        updatedSummary.summary.topups[topupIdx] = {
+          ...updatedSummary.summary.topups[topupIdx],
+          total_nominal:
+            (updatedSummary.summary.topups[topupIdx].total_nominal || 0) + data?.topup_nominal, // Pastikan nested data aman
+        };
+      } else {
+        updatedSummary.summary.topups.push({
+          type: data?.topup_method,
+          total_nominal: data.topup_nominal,
+        });
+      }
+    }
     // 3. Dispatch data yang udah jadi ke Redux
     dispatch(updateSummary(updatedSummary));
 

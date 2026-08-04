@@ -10,6 +10,7 @@ import rootReducer from './reducer';
 import { salesChannelApi } from './sales/channel/action';
 import { salesOrderApi } from './sales/order/action';
 import { salesSessionApi } from './sales/session/action';
+import { masterApi } from './master/action';
 import { tableApi } from './table/action';
 
 const persistConfig = {
@@ -25,6 +26,7 @@ const persistConfig = {
     'cartApi',
     'tableApi',
     'memberApi',
+    'masterApi',
     '_persist',
   ],
   debug: true,
@@ -41,6 +43,7 @@ const apiMiddleware = [
   cartApi.middleware,
   tableApi.middleware,
   memberApi.middleware,
+  masterApi.middleware,
 ];
 
 const store = configureStore({

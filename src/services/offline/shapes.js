@@ -11,6 +11,8 @@ export function makeStartSession(payload) {
   return {
     ...payload,
     is_synced: false,
+    finished_at: '0000-00-00',
+    cash_finished: 0,
     summary: {
       sales: {
         total_sales: 0,
@@ -84,8 +86,6 @@ export function makePendingBill(payload) {
 
 // ── Update Pending bill from split bill for cache_openbills ──
 export function makeUpdatePendingBillFromSplitBill(bill, pendingItems) {
-  console.log('=========makeUpdatePendingBillFromSplitBill===========awal', bill);
-
   let subtotal = 0;
   let totalBill = 0;
   pendingItems.forEach(item => {
@@ -100,8 +100,6 @@ export function makeUpdatePendingBillFromSplitBill(bill, pendingItems) {
   const billDValue = bill?.is_discount_percentage
     ? Math.ceil(totalBill * (bill?.discount_percentage / 100))
     : bill?.discount_value;
-
-  console.log('=========makeUpdatePendingBillFromSplitBill===========billDValue', billDValue);
 
   const scv = Math.ceil((totalBill - billDValue) * (bill?.service_charge_percentage / 100));
 

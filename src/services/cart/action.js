@@ -29,19 +29,7 @@ export const cartApi = createApi({
         body: payload,
       }),
     }),
-    getMethod: builder.query({
-      query: params => ({
-        url: '/payment-method',
-        method: 'GET',
-        params,
-      }),
-    }),
   }),
 });
 
-export const {
-  useCheckoutMutation,
-  useLazyGetBillQuery,
-  useCloseBillMutation,
-  useLazyGetMethodQuery,
-} = cartApi;
+export const { useCheckoutMutation, useLazyGetBillQuery, useCloseBillMutation } = cartApi;

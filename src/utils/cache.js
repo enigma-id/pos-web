@@ -196,48 +196,6 @@ export const clearCatalogCache = () => {
   localStorage.removeItem(CATALOG_CACHE_KEY);
 };
 
-// Look up a catalog item from the cached pricing list (not detail cache)
-// Used as fallback when server is unreachable and no detail cache exists
-//
-// Grouped cache: cache_members
-//
-
-const MEMBER_CACHE_KEY = 'cache_members';
-
-const getMemberCacheRaw = () => {
-  try {
-    const raw = localStorage.getItem(MEMBER_CACHE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-};
-
-const setMemberCacheRaw = data => {
-  const existing = getMemberCacheRaw();
-  const updated = { ...existing, ...data };
-  localStorage.setItem(MEMBER_CACHE_KEY, JSON.stringify(updated));
-};
-
-export const getMemberCache = cardId => {
-  const cache = getMemberCacheRaw();
-  return cache?.[cardId] ?? null;
-};
-
-export const setMemberCache = (cardId, memberData) => {
-  setMemberCacheRaw({ [cardId]: memberData });
-};
-
-export const updateMemberCacheSaldo = (cardId, newSaldo) => {
-  const existing = getMemberCache(cardId);
-  if (!existing) return;
-  setMemberCacheRaw({ [cardId]: { ...existing, saldo: newSaldo } });
-};
-
-export const clearMemberCache = () => {
-  localStorage.removeItem(MEMBER_CACHE_KEY);
-};
-
 export const getCatalogItemFromPricingCache = (id, channelId) => {
   const key = `catalog_pricing_${channelId}`;
   const list = getCatalogCacheValue(key);
@@ -261,8 +219,6 @@ const getOpenBillsCacheRaw = () => {
 
 export const saveOpenBills = data => {
   const existing = getOpenBillsCacheRaw();
-
-  console.log('[DEBUG] saveOpenBills:', existing);
 
   if (!existing.data) {
     existing.data = [];
@@ -316,10 +272,7 @@ const getOrderHistoryCacheRaw = () => {
 };
 
 export const saveOrderHistory = data => {
-  console.log('[DEBUG] saveOrderHistory', data);
   const existing = getOrderHistoryCacheRaw();
-
-  console.log('[DEBUG] saveOrderHistory existing', existing);
 
   if (!existing.data) {
     existing.data = [];
@@ -364,8 +317,6 @@ export const updateShifts = data => {
     item => item.id === data.id || item.sync_id === data.sync_id
   );
 
-  console.log('[DEBUG] [updateShifts]', index);
-
   if (index === -1) return null;
 
   existing.data[index] = {
@@ -386,6 +337,60 @@ export const showShifts = data => {
   );
 
   if (index === -1) return null;
+
+  return existing.data[index];
+};
+
+const MEMBERSHIP_CACHE_KEY = 'cache_membership';
+
+export const getMembersipCacheRaw = () => {
+  try {
+    const raw = localStorage.getItem(MEMBERSHIP_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const showMembership = id => {
+  const existing = getMembersipCacheRaw();
+
+  const index = existing.data.findIndex(item => item.card_id === id);
+
+  if (index === -1) return null;
+
+  return existing.data[index];
+};
+
+export const saveMembership = data => {
+  const existing = getMembersipCacheRaw();
+
+  if (!existing.data) {
+    existing.data = [];
+  }
+
+  existing.data.unshift(data);
+
+  localStorage.setItem(MEMBERSHIP_CACHE_KEY, JSON.stringify(existing));
+
+  return data;
+};
+
+export const perbaharuiMembership = data => {
+  const existing = getMembersipCacheRaw();
+
+  const index = existing.data.findIndex(
+    item => item.id === data.id || item.card_id === data.card_id
+  );
+
+  if (index === -1) return null;
+
+  existing.data[index] = {
+    ...existing.data[index],
+    ...data,
+  };
+
+  localStorage.setItem(MEMBERSHIP_CACHE_KEY, JSON.stringify(existing));
 
   return existing.data[index];
 };
