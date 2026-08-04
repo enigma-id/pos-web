@@ -459,7 +459,6 @@ export const removeFailedItem = async itemId => {
         // updateSessionSummary({ type: 'bill', outstanding_bill: -1 * bill.total_charges });
       } catch (_) {}
 
-      triggerQueueRefresh();
       return true;
     }
 
@@ -483,6 +482,8 @@ export const removeFailedItem = async itemId => {
       await db.delete(STORES.memberships, itemId);
       return true;
     }
+
+    triggerQueueRefresh();
   } catch (e) {
     console.error('[removeFailedItem] error:', e);
   }

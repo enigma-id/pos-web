@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { redirect, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 
 import { Input } from '../../../components/ui';
@@ -9,75 +9,69 @@ import { BackIcon, PlusIcon } from '../../../components/ui/icon';
 import useMembership from '../../../services/membership/hook';
 import { createMembership } from '../../../services/offline/queue';
 import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
-import { setWarning } from '../../../services/offline/slice';
-import { getCache, setCache, setMemberCache } from '../../../utils/cache';
+import { saveMembership } from '../../../utils/cache';
 
 const CreateManual = () => {
-  const dispatch = useDispatch();
   const navigate = useNavigate();
   const FormState = useSelector(state => state?.Form);
-  const activeSyncId = useSelector(state => state?.Offline?.activeSyncId);
-  const sessoinAuth = useSelector(state => state?.Auth?.session);
-  const authUser = useSelector(state => state?.Auth?.user);
-  const userId = sessoinAuth?.user?.id || authUser?.id;
-  const { create, createResult } = useMembership();
+  const sessionAuth = useSelector(state => state?.Auth?.session);
+
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+  const isOffline = !isOnline || apiReachable === false;
 
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
   const [cardId, setCardId] = React.useState('');
 
-  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+  const { create, createResult } = useMembership();
 
-  const handleCreate = () => {
-    if (!cardId.trim() || !name.trim()) return;
+  // Offline — Cache and IDB
+  const onCreateOffline = async uid => {
+    const payload = {
+      sync_id: uuidv4(),
+      card_id: uid,
+      name,
+      reff_code: phone,
+      saldo: 0,
+    };
+
+    try {
+      await createMembership(payload, sessionAuth?.user?.id);
+    } catch (err) {
+      console.log('[DEBUG] error membership', err);
+    }
+
+    triggerQueueRefresh();
+
+    try {
+      saveMembership(payload);
+    } catch (err) {
+      console.log('[DEBUG] error membership', err);
+    }
+
+    navigate('/membership');
+  };
+
+  // Online — API
+  const onCreateOnline = async uid => {
+    console.log('[DEBUG] [onCreateOnline]');
 
     const payload = {
       reff_code: phone,
       name,
-      card_id: cardId.trim(),
+      card_id: uid,
     };
 
-    // ===== OFFLINE PATH =====
-    if (isOffline) {
-      const handleOffline = async () => {
-        const membershipItem = {
-          sync_id: uuidv4(),
-          card_id: cardId.trim(),
-          name,
-          reff_code: phone,
-        };
-
-        await createMembership(membershipItem, userId);
-
-        // Cache immediately
-        setMemberCache(cardId.trim(), {
-          card_id: cardId.trim(),
-          name,
-          reff_code: phone,
-          saldo: 0,
-        });
-
-        // Update table cache untuk offline fallback
-        const TABLE_CACHE_KEY = 'cache_table_membership';
-        const existing = getCache(TABLE_CACHE_KEY);
-        const tableData = Array.isArray(existing?.data) ? existing.data : [];
-        setCache(TABLE_CACHE_KEY, {
-          ...existing,
-          data: [{ card_id: cardId.trim(), name, reff_code: phone, saldo: 0 }, ...tableData],
-        });
-
-        triggerQueueRefresh();
-
-        dispatch(setWarning('Member created offline. Will sync when online.'));
-        navigate('/membership');
-      };
-
-      handleOffline();
-      return; // skip mutation API
-    }
-
-    // ===== ONLINE PATH =====
     create(payload);
+  };
+
+  const handleCreate = () => {
+    if (isOffline) {
+      onCreateOffline(cardId);
+    } else {
+      onCreateOnline(cardId);
+    }
   };
 
   React.useEffect(() => {
@@ -85,8 +79,6 @@ const CreateManual = () => {
       navigate('/membership');
     }
   }, [createResult]);
-
-  const isValid = name.trim() && cardId.trim();
 
   return (
     <div className="flex h-screen flex-col">
@@ -129,15 +121,13 @@ const CreateManual = () => {
             onChange={e => setCardId(e?.target?.value)}
             placeholder="e.g. 1234567890"
           />
-          {!cardId && createResult?.isError && (
-            <small className="text-error">Card ID is required</small>
-          )}
+          {!cardId && <small className="text-error">Card ID is required</small>}
         </div>
       </div>
 
       <div className="border-base-200 min-h-15 border-t">
         <div
-          className={`btn btn-primary btn-block h-full rounded-none border-0 ${!isValid || createResult?.isLoading ? 'btn-disabled' : ''}`}
+          className={`btn btn-primary btn-block h-full rounded-none border-0 ${createResult?.isLoading ? 'btn-disabled' : ''}`}
           onClick={handleCreate}
         >
           {createResult?.isLoading ? (

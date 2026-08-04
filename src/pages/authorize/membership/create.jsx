@@ -9,63 +9,67 @@ import useModal from '../../../components/ui/modal/hook';
 import useMembership from '../../../services/membership/hook';
 import { createMembership } from '../../../services/offline/queue';
 import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
-import { setWarning } from '../../../services/offline/slice';
-import { setMemberCache, getCache, setCache } from '../../../utils/cache';
+import { saveMembership } from '../../../utils/cache';
 
 const CreateSection = ({ onClose }) => {
-  const dispatch = useDispatch();
   const FormState = useSelector(state => state?.Form);
   const sessionAuth = useSelector(state => state?.Auth?.session);
-  const authUser = useSelector(state => state?.Auth?.user);
-  const userId = sessionAuth?.user?.id || authUser?.id;
-  const { create, createResult } = useMembership();
-  const { openModal, closeModal } = useModal();
+
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+  const isOffline = !isOnline || apiReachable === false;
 
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
 
-  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+  const { openModal, closeModal } = useModal();
+
+  const { create, createResult } = useMembership();
 
   const handleRead = uid => {
+    if (isOffline) {
+      onCreateOffline(uid);
+    } else {
+      onCreateOnline(uid);
+    }
+  };
+
+  // Offline — Cache and IDB
+  const onCreateOffline = async uid => {
+    const payload = {
+      sync_id: uuidv4(),
+      card_id: uid,
+      name,
+      reff_code: phone,
+      saldo: 0,
+    };
+
+    try {
+      await createMembership(payload, sessionAuth?.user?.id);
+    } catch (err) {
+      console.log('[DEBUG] error membership', err);
+    }
+
+    triggerQueueRefresh();
+
+    try {
+      saveMembership(payload);
+    } catch (err) {
+      console.log('[DEBUG] error membership', err);
+    }
+
+    closeModal();
+    onClose();
+  };
+
+  // Online — API
+  const onCreateOnline = async uid => {
     const payload = {
       reff_code: phone,
       name,
       card_id: uid,
     };
 
-    // ===== OFFLINE PATH =====
-    if (isOffline) {
-      const handleOffline = async () => {
-        const membershipItem = {
-          sync_id: uuidv4(),
-          card_id: uid,
-          name,
-          reff_code: phone,
-        };
-
-        await createMembership(membershipItem, userId);
-        setMemberCache(uid, { card_id: uid, name, reff_code: phone, saldo: 0 });
-
-        // Update table cache untuk offline fallback
-        const TABLE_CACHE_KEY = 'cache_table_membership';
-        const existing = getCache(TABLE_CACHE_KEY);
-        const tableData = Array.isArray(existing?.data) ? existing.data : [];
-        setCache(TABLE_CACHE_KEY, {
-          ...existing,
-          data: [{ card_id: uid, name, reff_code: phone, saldo: 0 }, ...tableData],
-        });
-
-        triggerQueueRefresh();
-
-        closeModal();
-        onClose();
-      };
-
-      handleOffline();
-      return; // skip mutation API
-    }
-
-    // ===== ONLINE PATH =====
     create(payload);
   };
 

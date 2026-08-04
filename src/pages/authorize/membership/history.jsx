@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { LuWallet } from 'react-icons/lu';
 
 import CardMockup from '../../../assets/card-mockup.jpg';
@@ -9,8 +9,14 @@ import Input from '../../../components/ui/input';
 import useMembership from '../../../services/membership/hook';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
+import { useSelector } from 'react-redux';
 
 const HistorySection = ({ id, membership }) => {
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+
+  const isOffline = !isOnline || apiReachable === false;
+
   const [logs, setLogs] = React.useState([]);
   const [page, setPage] = React.useState(1);
   const [hasMore, setHasMore] = React.useState(true);
@@ -43,8 +49,8 @@ const HistorySection = ({ id, membership }) => {
     if (showResult.isSuccess) {
       const params = {
         page,
-        limit: LIMIT
-      }
+        limit: LIMIT,
+      };
 
       saldoLog({ id, params });
     }
@@ -172,6 +178,12 @@ const HistorySection = ({ id, membership }) => {
       setSelectedOrder(orderShowResult.data.data);
     }
   }, [orderShowResult?.isSuccess, orderShowResult?.data, selectedOrderId]);
+
+  useEffect(() => {
+    if (isOffline) {
+      setLogs(membership?.saldo_logs || []);
+    }
+  }, [isOffline, membership?.card_id]);
 
   if (showResult?.isLoading) return <div>loading...</div>;
 

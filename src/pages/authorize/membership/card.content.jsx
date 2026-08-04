@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { v4 as uuidv4 } from 'uuid';
 
 import CardMockup from '../../../assets/card-mockup.jpg';
@@ -9,126 +9,145 @@ import TopupReceipt from '../../../components/ui/topup-receipt';
 import useMembership from '../../../services/membership/hook';
 import { createTopup } from '../../../services/offline/queue';
 import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
-import { setWarning } from '../../../services/offline/slice';
-import { updateMemberCacheSaldo, getCache, setCache } from '../../../utils/cache';
+import { perbaharuiMembership } from '../../../utils/cache';
 import { currencyFormat } from '../../../utils/common';
-import { store } from '../../../services/store';
 import { usePrintWindow } from '../../../utils/print';
+import useMaster from '../../../services/master/hook';
+import useSession from '../../../services/sales/session/hook';
 
 const CardContent = ({ data, onClose }) => {
-  const dispatch = useDispatch();
-  const SalesSession = useSelector(state => state?.SalesSession?.hasSession);
+  const sessionSummary = useSelector(state => state?.SalesSession?.sessionSummary);
   const FormState = useSelector(state => state?.Form);
   const sessionAuth = useSelector(state => state?.Auth?.session);
-  const authUser = useSelector(state => state?.Auth?.user);
-  const userId = sessionAuth?.user?.id || authUser?.id;
+
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+  const isOffline = !isOnline || apiReachable === false;
+
   const { topup, topupResult } = useMembership();
+  const { getSchemaBonus, schemaBonus } = useMaster();
+  const { updateSessionSummary } = useSession();
 
   const [value, setValue] = React.useState('');
   const [method, setMethod] = React.useState('');
   const { open: openPrint } = usePrintWindow({ title: 'Topup Receipt', autoClose: true });
-  const topupSubmitted = React.useRef(false);
 
-  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+  const onTopupOffline = async () => {
+    const useBonuses = schemaBonus.filter(sb => sb.min_amount <= value)?.slice(0, 1);
+    console.log('=======[DEBUG]===[useBonus]============', useBonuses);
+    console.log('=======[DEBUG]===[data]============', data);
 
-  const handleTopup = () => {
+    const membership = JSON.parse(JSON.stringify(data));
+    const dataPrint = {
+      membership: data,
+      topup: null,
+      bonus: null,
+    };
+
     const nominal = Number(value) || 0;
+
     const payload = {
-      nominal,
+      sync_id: uuidv4(),
+      membership: data,
+      membership_id: data?.id,
+      nominal: parseFloat(value) || 0,
+      payment_type: method,
+      reference_type: 'top-up',
+      created_at: new Date(),
+      session_sync_id: sessionSummary?.id || sessionSummary?.sync_id,
+    };
+
+    try {
+      await createTopup(payload, sessionAuth?.user?.id);
+
+      if (!membership.saldo_logs) {
+        membership.saldo_logs = [];
+      }
+
+      membership.saldo += payload.nominal;
+      membership.saldo_logs.push(payload);
+      dataPrint.topup = payload;
+    } catch (err) {
+      console.log('[DEBUG] createTopup', err);
+    }
+
+    if (useBonuses?.length > 0) {
+      const nominalBonus = Math.ceil(nominal * (useBonuses[0].bonus_percentage / 100));
+
+      const payloadBonus = {
+        nominal: nominalBonus,
+        membership: data,
+        membership_id: data?.id,
+        reference_type: 'bonus',
+        created_at: new Date(),
+        session_sync_id: sessionSummary?.id || sessionSummary?.sync_id,
+      };
+
+      try {
+        membership.saldo += payloadBonus.nominal;
+        membership.saldo_logs.push(payloadBonus);
+        dataPrint.bonus = payloadBonus;
+      } catch (err) {
+        console.log('[DEBUG] createTopup bonus', err);
+      }
+    }
+
+    triggerQueueRefresh();
+
+    try {
+      perbaharuiMembership(membership);
+    } catch (err) {
+      console.log('[DEBUG] perbaharuiMembership ', err);
+    }
+
+    updateSessionSummary({
+      type: 'topup',
+      topup_method: method,
+      topup_nominal: nominal,
+    });
+
+    console.log('[DEBUG] [DATA PRINT] ', dataPrint);
+
+    handleModalPrint(dataPrint);
+
+    onClose?.();
+  };
+
+  const onTopupOnline = async () => {
+    const nominal = Number(value) || 0;
+
+    const payload = {
+      nominal: parseFloat(nominal) || 0,
       payment_type: method,
     };
 
-    topupSubmitted.current = true;
-
-    // ===== OFFLINE PATH =====
-    if (isOffline) {
-      const handleOffline = async () => {
-        const sessionId = store.getState()?.Offline?.sessionSummary?.id || '';
-        if (!sessionId) {
-          dispatch(setWarning('No active session. Please start a session first.'));
-          topupSubmitted.current = false;
-          return;
-        }
-
-        const topupItem = {
-          sync_id: uuidv4(),
-          session_sync_id: sessionId,
-          membership_id: data?.id,
-          nominal,
-          payment_type: method,
-          member_name: data?.name,
-          member_code: data?.reff_code,
-          card_id: data?.card_id,
-          created_at: new Date().toISOString(),
-        };
-
-        await createTopup(topupItem, userId);
-        // Update cache saldo
-        const newSaldo = (data?.saldo || 0) + nominal;
-        if (data?.card_id) {
-          updateMemberCacheSaldo(data.card_id, newSaldo);
-
-          // Update table cache juga biar list page kebaca
-          const TABLE_CACHE_KEY = 'cache_table_membership';
-          const existing = getCache(TABLE_CACHE_KEY);
-          const tableData = Array.isArray(existing?.data) ? existing.data : [];
-          const updated = tableData.map(m =>
-            String(m.card_id) === String(data.card_id) ? { ...m, saldo: newSaldo } : m
-          );
-          setCache(TABLE_CACHE_KEY, { ...existing, data: updated });
-        }
-
-        // Print receipt lokal
-        openPrint(
-          <TopupReceipt
-            member={data}
-            nominal={nominal}
-            paymentMethod={method}
-            createdAt={topupItem.created_at}
-          />
-        );
-
-        triggerQueueRefresh();
-
-        topupSubmitted.current = false;
-        onClose?.();
-      };
-
-      handleOffline();
-      return; // ⛔️ skip mutation API
-    }
-
-    // ===== ONLINE PATH =====
     topup({ id: data?.id, payload });
+  };
+
+  const onTopup = async () => {
+    if (isOffline) {
+      onTopupOffline();
+    } else {
+      onTopupOnline();
+    }
+  };
+
+  const handleModalPrint = data => {
+    openPrint(<TopupReceipt data={data} />);
   };
 
   // Jika sukses: update cache lokal, print receipt, then close modal
   React.useEffect(() => {
-    if (topupResult?.isSuccess && topupSubmitted.current) {
-      // Skip kalo ini offline — offline path handle sendiri
-      if (topupResult?.data?.data?.is_offline_mode) return;
+    if (topupResult?.isSuccess) {
+      handleModalPrint(topupResult?.data?.data);
 
-      topupSubmitted.current = false;
-      const nominal = Number(value) || 0;
-      const resData = topupResult?.data?.data || {};
-
-      // Update cache with optimistic saldo for offline fallback
-      const newSaldo = (data?.saldo || 0) + nominal;
-      if (data?.card_id) {
-        updateMemberCacheSaldo(data.card_id, newSaldo);
-      }
-
-      openPrint(
-        <TopupReceipt
-          member={data}
-          nominal={nominal}
-          paymentMethod={method}
-          createdAt={resData?.created_at || new Date().toISOString()}
-        />
-      );
       onClose?.();
     }
   }, [topupResult]);
+
+  React.useEffect(() => {
+    getSchemaBonus();
+  }, []);
 
   return (
     <>
@@ -205,9 +224,9 @@ const CardContent = ({ data, onClose }) => {
         <div className="mt-4">
           <div
             className={`btn btn-primary btn-block btn-xl !rounded-none !rounded-b ${
-              topupResult?.isLoading || (!isOffline && !SalesSession) ? 'btn-disabled' : ''
+              topupResult?.isLoading || (!isOffline && !sessionSummary) ? 'btn-disabled' : ''
             }`}
-            onClick={handleTopup}
+            onClick={onTopup}
           >
             Top Up
           </div>

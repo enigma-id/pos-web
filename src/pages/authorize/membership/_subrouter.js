@@ -1,7 +1,6 @@
 import MembershipScreen from '.';
 import TopupManual from './topup-manual';
 import CreateManual from './create-manual';
-import ChangeCardManual from './change-card';
 
 const routes = [
   {
@@ -15,10 +14,6 @@ const routes = [
   {
     path: '/membership/create-manual',
     element: CreateManual,
-  },
-  {
-    path: '/membership/change-card',
-    element: ChangeCardManual,
   },
 ];
 

@@ -1,12 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
-import {
-  useCheckoutMutation,
-  useLazyGetBillQuery,
-  useCloseBillMutation,
-  useLazyGetMethodQuery,
-} from './action';
+import { useCheckoutMutation, useLazyGetBillQuery, useCloseBillMutation } from './action';
 import { useUpdateMutation } from '../sales/order/action';
 import {
   customer,
@@ -24,13 +19,10 @@ import {
   changeBillName,
 } from './slice';
 import {
-  getPaymentMethodsCache,
-  setPaymentMethodsCache,
   getCatalogDetailCache,
   getCatalogDetailCacheByCategory,
   getCatalogCacheValue,
   getCatalogItemFromPricingCache,
-  setSalesCacheValue,
 } from '../../utils/cache';
 import { useLazyGetCatalogDetailQuery } from '../catalog/action';
 import { $failure } from '../form/action';
@@ -49,7 +41,6 @@ const useCart = catalog_id => {
   const [triggerCatalogDetail, catalogDetailResult] = useLazyGetCatalogDetailQuery();
   const [checkoutMutation, checkoutResult] = useCheckoutMutation();
   const [closeBillMutation, closeBillResult] = useCloseBillMutation();
-  const [triggerPaymentMethod] = useLazyGetMethodQuery();
   const [triggerBill, billResult] = useLazyGetBillQuery();
   const [updateMutation, updateResult] = useUpdateMutation();
 
@@ -98,38 +89,6 @@ const useCart = catalog_id => {
       dispatch($failure(error));
     } finally {
       isBillRunning.current = false;
-    }
-  };
-
-  const getPaymentMethod = async () => {
-    const channelId = selectedChannel?.id ?? 'default';
-    const fallback = getPaymentMethodsCache(channelId);
-
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-    const apiDead = apiReachable === false;
-
-    // When offline — use cache, excluding realtime-only providers
-    if (isOffline || apiDead) {
-      if ((fallback || []).length > 0) {
-        const filtered = fallback.filter(m => m?.provider !== 'qris' && m?.provider !== 'midtrans');
-        return filtered.length > 0 ? filtered : fallback;
-      }
-      return [];
-    }
-
-    try {
-      const req = await triggerPaymentMethod().unwrap();
-      const data = req?.data || [];
-      setPaymentMethodsCache(channelId, data);
-      return data;
-    } catch (error) {
-      if ((fallback || []).length > 0) {
-        const filtered = fallback.filter(m => m?.provider !== 'qris' && m?.provider !== 'midtrans');
-        return filtered.length > 0 ? filtered : fallback;
-      }
-
-      dispatch($failure(error));
-      return [];
     }
   };
 
@@ -376,7 +335,6 @@ const useCart = catalog_id => {
     isItemInCart,
     existingItem,
     existingIndex,
-    getPaymentMethod,
     checkout,
     checkoutResult,
     closeBill,

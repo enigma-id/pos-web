@@ -232,15 +232,9 @@ export const createOrderPayment = async (payload, userId) => {
 
 export const createTopup = async (payload, userId) => {
   const db = await ensureDB(userId);
-  const sync_id = data.sync_id || uuidv4();
-  const now = getISO();
-
-  // origin_session_sync_id ini kenapa menggunakan or seperti ini, karena jika session summary/session payload dari online dia tidak mempunyai sync_id (sync_id adalah new id uuid dari client)
-  const session_sync_id = payload?.session?.id || payload?.session?.sync_id;
 
   const doc = {
     ...payload,
-    session_sync_id: session_sync_id,
   };
 
   await db.add(STORES.topups, doc);
@@ -264,7 +258,13 @@ export const updateMembership = async (payload, userId) => {
   const db = await ensureDB(userId);
 
   // cari index untuk update saat create dari offline juga
-  let existing = await db.get(STORES.orderBills, payload?.card_id);
+  let existing = payload?.sync_id ? await db.get(STORES.memberships, payload?.sync_id) : null;
+
+  // jika esxsting sync_id gaada berarti ini updateo membership dari online bro
+  if (!existing) {
+    existing = await db.get(STORES.memberships, payload?.id);
+    payload.sync_id = payload?.id;
+  }
 
   if (!existing) {
     // membership dari server — insert sebagai referensi
@@ -272,11 +272,11 @@ export const updateMembership = async (payload, userId) => {
       ...payload,
     };
 
-    await db.add(STORES.orderBills, doc);
+    await db.add(STORES.memberships, doc);
     return doc;
   }
 
-  await db.put(STORES.orderBills, {
+  await db.put(STORES.memberships, {
     ...existing,
     ...data,
   });

@@ -1,19 +1,20 @@
 import React from 'react';
-import { useSelector } from 'react-redux';
 import CardContent from './card.content';
 import useMembership from '../../../services/membership/hook';
-import { getMemberCache, setMemberCache } from '../../../utils/cache';
+import { showMembership } from '../../../utils/cache';
 import { BackIcon, SearchIcon } from '../../../components/ui/icon';
+import { useSelector } from 'react-redux';
 
 const TopupManual = () => {
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+  const isOffline = !isOnline || apiReachable === false;
+
   const { checkSaldo, checkResult } = useMembership();
   const [cardId, setCardId] = React.useState('');
   const [member, setMember] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
-  const scanConsumed = React.useRef(false);
-
-  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
 
   const handleSearch = () => {
     const uid = cardId.trim();
@@ -21,12 +22,11 @@ const TopupManual = () => {
 
     setError('');
     setLoading(true);
-    scanConsumed.current = false;
 
     if (isOffline) {
-      const cached = getMemberCache(uid);
-      if (cached) {
-        setMember(cached);
+      const membership = showMembership(uid);
+      if (membership) {
+        setMember(membership);
         setLoading(false);
         return;
       }
@@ -39,18 +39,14 @@ const TopupManual = () => {
   };
 
   React.useEffect(() => {
-    if (checkResult?.isSuccess && !scanConsumed.current) {
-      scanConsumed.current = true;
-      const data = checkResult?.data?.data;
-      if (data?.card_id) setMemberCache(data.card_id, data);
-      setMember(data);
+    if (checkResult?.isSuccess) {
+      setMember(checkResult?.data?.data);
       setLoading(false);
     }
   }, [checkResult]);
 
   React.useEffect(() => {
-    if (checkResult?.isError && !scanConsumed.current) {
-      scanConsumed.current = true;
+    if (checkResult?.isError) {
       setError('Member not found. Check card ID or try again later.');
       setLoading(false);
     }
@@ -91,7 +87,7 @@ const TopupManual = () => {
           </div>
         </div>
       </div>
-      <div className="flex-1 flex flex-col place-content-center place-items-center p-8">
+      <div className="flex flex-1 flex-col place-content-center place-items-center p-8">
         <div className="w-full max-w-md space-y-4">
           <label className="text-sm font-semibold">Card ID / Member Code</label>
           <input
@@ -100,19 +96,25 @@ const TopupManual = () => {
             placeholder="e.g. 1234567890"
             value={cardId}
             onChange={e => setCardId(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleSearch(); }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleSearch();
+            }}
             autoFocus
           />
 
-          {error && (
-            <div className="text-sm text-error bg-error/10 rounded px-3 py-2">{error}</div>
-          )}
+          {error && <div className="text-error bg-error/10 rounded px-3 py-2 text-sm">{error}</div>}
 
           <button
             className={`btn btn-primary btn-block btn-xl ${loading ? 'btn-disabled' : ''}`}
             onClick={handleSearch}
           >
-            {loading ? <span className="loading loading-spinner"></span> : <><SearchIcon /> Search Member</>}
+            {loading ? (
+              <span className="loading loading-spinner"></span>
+            ) : (
+              <>
+                <SearchIcon /> Search Member
+              </>
+            )}
           </button>
         </div>
       </div>

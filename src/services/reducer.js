@@ -14,6 +14,7 @@ import { channelReducer } from './sales/channel/slice';
 import { salesOrderApi } from './sales/order/action';
 import { salesSessionApi } from './sales/session/action';
 import { sessionReducer } from './sales/session/slice';
+import { masterApi } from './master/action';
 import { tableApi } from './table/action';
 import { tableReducer } from './table/slice';
 
@@ -26,6 +27,7 @@ const apiReducers = {
   [cartApi.reducerPath]: cartApi.reducer,
   [tableApi.reducerPath]: tableApi.reducer,
   [memberApi.reducerPath]: memberApi.reducer,
+  [masterApi.reducerPath]: masterApi.reducer,
 };
 
 const rootReducer = combineReducers({

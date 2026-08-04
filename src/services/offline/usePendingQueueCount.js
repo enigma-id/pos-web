@@ -22,19 +22,23 @@ const usePendingQueueCount = () => {
     setLoading(true);
     try {
       const db = await ensureDB(sessionUserId);
-      const [bills, payments, topups, sessions] = await Promise.all([
+      const [bills, payments, topups, sessions, memberships] = await Promise.all([
         db.getAll(STORES.orderBills),
         db.getAll(STORES.orderPayments),
         db.getAll(STORES.topups),
         db.getAll(STORES.sessions),
+        db.getAll(STORES.memberships),
       ]);
 
       const pendingBills = bills.filter(b => !b.is_synced).length;
       const pendingPayments = payments.filter(p => !p.is_synced).length;
       const pendingTopups = topups.length; // semua topup pending sync
       const pendingSessions = sessions.filter(s => s.syncStatus !== 'synced').length;
+      const pendingMemberships = memberships.length; // semua memberships pending sync
 
-      setCount(pendingBills + pendingPayments + pendingTopups + pendingSessions);
+      setCount(
+        pendingBills + pendingPayments + pendingTopups + pendingSessions + pendingMemberships
+      );
     } catch (err) {
       console.error('[usePendingQueueCount] error:', err);
       setCount(0);

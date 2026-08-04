@@ -166,9 +166,8 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
         status: 'pending',
         lastError: null,
         transaction_preview: {
-          code: `MEM-${(m.sync_id || '').slice(0, 8)}`,
           member_name: m.name,
-          member_code: m.reff_code,
+          member_phone: m.reff_code,
           created_at: m.created_at,
         },
       });
@@ -281,6 +280,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                       ? '📋'
                       : '💼'}
               </span>
+              transaction_preview
               <span className="text-xs font-medium">No {activeTab} items in queue</span>
             </div>
           )}
@@ -446,6 +446,46 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                       >
                         🗑️ Remove
                       </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            if (apiType === 'create member') {
+              return (
+                <div
+                  key={item.id}
+                  className="border-base-200 bg-base-100 hover:border-base-300 overflow-hidden rounded-lg border transition-colors"
+                >
+                  <div className="bg-info h-1 w-full" />
+                  <div className="p-2.5">
+                    <div className="mb-1.5 flex items-center gap-2">
+                      <span className="badge badge-xs badge-info font-bold tracking-wider uppercase">
+                        Create Member
+                      </span>
+                      <span className="flex-1" />
+                      <span className={`badge badge-xs ${status.badge} gap-0.5`}>
+                        <span className="text-[9px]">{status.icon}</span>
+                        {item.status}
+                      </span>
+                    </div>
+                    <div className="text-base-content/50 mb-2 flex flex-wrap items-center gap-1 text-[10px]">
+                      <span className="whitespace-nowrap">{dateFormat(createdAt)}</span>
+                    </div>
+                    <div className="bg-base-200/30 rounded p-2">
+                      <div className="text-base-content/40 flex justify-between text-[9px] font-bold uppercase">
+                        <span>Name</span>
+                        <span>Phone</span>
+                      </div>
+                      <div className="mt-0.5 flex items-center justify-between">
+                        <span className="text-[13px] font-bold capitalize">
+                          {preview?.member_name || '-'}
+                        </span>
+                        <span className="text-success text-sm font-black">
+                          {preview?.member_phone || '-'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>

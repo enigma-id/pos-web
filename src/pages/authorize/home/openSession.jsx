@@ -51,8 +51,6 @@ const OpenSection = () => {
     } catch (err) {
       handleModalError(err);
 
-      console.log('[DEBUG] [startSession]', err);
-
       return;
     }
 
@@ -63,8 +61,6 @@ const OpenSection = () => {
       saveShifts(dataOfflineToOnline);
     } catch (err) {
       handleModalError(err);
-
-      console.log('[DEBUG] [saveShifts]', err);
     }
 
     dispatch(resetCart());

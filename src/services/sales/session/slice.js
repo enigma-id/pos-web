@@ -18,8 +18,6 @@ const sessionSlice = createSlice({
     resetSummary: () => defineInitialState(),
 
     setSummary: (state, action) => {
-      console.log('[DEBUG] [SET SUMMARY] ', action);
-
       state.hasSession = action.payload === null ? false : true;
       state.sessionSummary = action.payload;
     },

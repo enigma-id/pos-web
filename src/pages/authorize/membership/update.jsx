@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 
 import CardMockup from '../../../assets/card-mockup.jpg';
 import { NFCField, Remove } from '../../../components/ui';
@@ -8,73 +8,33 @@ import { PaypassIcon } from '../../../components/ui/icon';
 import Input from '../../../components/ui/input';
 import useModal from '../../../components/ui/modal/hook';
 import useMembership from '../../../services/membership/hook';
-import { createMembership, updateMembership } from '../../../services/offline/queue';
+import { updateMembership } from '../../../services/offline/queue';
 import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
-import { setWarning } from '../../../services/offline/slice';
-import { setMemberCache, getCache, setCache } from '../../../utils/cache';
 import { currencyFormat } from '../../../utils/common';
+import { perbaharuiMembership } from '../../../utils/cache';
 
-const UpdateSession = ({ id, onClose, isOpen, reboot, membership }) => {
-  const Session = useSelector(state => state?.Auth?.session);
+const UpdateSession = ({ id, onClose, isOpen, onRefresh, membership }) => {
   const FormState = useSelector(state => state?.Form);
-
-  const User = useSelector(state => state?.Auth?.session?.user);
-
-  const dispatch = useDispatch();
   const sessionAuth = useSelector(state => state?.Auth?.session);
-  const authUser = useSelector(state => state?.Auth?.user);
-  const userId = sessionAuth?.user?.id || authUser?.id;
-  const { showResult, update, updateResult } = useMembership(id);
+
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+  const isOffline = !isOnline || apiReachable === false;
+
   const { openModal, closeModal } = useModal();
 
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
   const [saving, setSaving] = React.useState(false);
 
-  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+  const { show, showResult, update, updateResult } = useMembership();
 
   const handleRead = uid => {
-    const payload = {
-      name,
-      reff_code: phone,
-      card_id: uid,
-    };
-
-    // ===== OFFLINE PATH =====
     if (isOffline) {
-      const handleOffline = async () => {
-        // Update in-place: replace card_id lama dengan yang baru
-        const oldCardId = data?.card_id;
-        await updateMembership(oldCardId, { card_id: uid, name, reff_code: phone }, userId);
-
-        // Cache baru + bersihin cache lama
-        setMemberCache(uid, { card_id: uid, name, reff_code: phone, saldo: data?.saldo || 0 });
-        // Hapus entry lama dari cache_members
-        const raw = localStorage.getItem('cache_members');
-        if (raw && oldCardId && oldCardId !== uid) {
-          try {
-            const parsed = JSON.parse(raw);
-            if (parsed?.[oldCardId]) {
-              delete parsed[oldCardId];
-              localStorage.setItem('cache_members', JSON.stringify(parsed));
-            }
-          } catch {}
-        }
-
-        triggerQueueRefresh();
-
-        dispatch(setWarning('Card changed offline. Will sync when online.'));
-        closeModal();
-        onClose?.();
-        reboot?.();
-      };
-
-      handleOffline();
-      return; // skip mutation API
+      onUpdateOffline(uid);
+    } else {
+      onUpdateOnline(uid);
     }
-
-    // ===== ONLINE PATH =====
-    update({ id, payload });
   };
 
   const onScan = () => {
@@ -84,50 +44,56 @@ const UpdateSession = ({ id, onClose, isOpen, reboot, membership }) => {
     );
   };
 
-  const onSave = async () => {
+  const onUpdate = async () => {
+    setSaving(true);
+
+    if (isOffline) {
+      onUpdateOffline(data?.card_id);
+    } else {
+      onUpdateOnline(data?.card_id);
+    }
+
+    setSaving(false);
+  };
+
+  // Offline — Cache and IDB
+  const onUpdateOffline = async uid => {
+    const payload = {
+      ...membership,
+      card_id: uid,
+      name,
+      reff_code: phone,
+    };
+
+    console.log(sessionAuth?.user?.id, '====');
+    try {
+      await updateMembership(payload, sessionAuth?.user?.id);
+    } catch (err) {
+      console.log('[DEBUG] error membership', err);
+    }
+
+    triggerQueueRefresh();
+
+    try {
+      perbaharuiMembership(payload);
+    } catch (err) {
+      console.log('[DEBUG] error membership', err);
+    }
+
+    onClose?.();
+    onRefresh?.();
+    closeModal?.();
+  };
+
+  // Online — API
+  const onUpdateOnline = async uid => {
     const payload = {
       name,
       reff_code: phone,
       card_id: data?.card_id,
     };
 
-    setSaving(true);
-
-    // ===== OFFLINE PATH =====
-    if (isOffline) {
-      if (data?.card_id) {
-        // Update cache lokal
-        setMemberCache(data.card_id, {
-          card_id: data.card_id,
-          name,
-          reff_code: phone,
-          saldo: data?.saldo || 0,
-        });
-
-        // Update table cache
-        const TABLE_CACHE_KEY = 'cache_table_membership';
-        const existing = getCache(TABLE_CACHE_KEY);
-        const tableData = Array.isArray(existing?.data) ? existing.data : [];
-        const updated = tableData.map(m =>
-          String(m.card_id) === String(data.card_id) ? { ...m, name, reff_code: phone } : m
-        );
-        setCache(TABLE_CACHE_KEY, { ...existing, data: updated });
-
-        // Update in-place di IndexedDB
-        await updateMembership(data.card_id, { name, reff_code: phone }, userId);
-        triggerQueueRefresh();
-      }
-
-      dispatch(setWarning('Member updated offline.'));
-      setSaving(false);
-      onClose?.();
-      reboot?.();
-      return; // ⛔️ skip mutation API
-    }
-
-    // ===== ONLINE PATH =====
-    await update({ id, payload });
-    setSaving(false);
+    update({ id, payload });
   };
 
   const onDeleteOpen = () => {
@@ -160,18 +126,22 @@ const UpdateSession = ({ id, onClose, isOpen, reboot, membership }) => {
 
   // Offline fallback: populate dari cache
   React.useEffect(() => {
-    if (!showResult?.isSuccess && membership) {
+    if (isOffline) {
       setName(membership.name || '');
       setPhone(membership.reff_code || '');
     }
   }, [membership]);
 
   React.useEffect(() => {
+    if (!isOffline) {
+      show(id);
+    }
+  }, []);
+
+  React.useEffect(() => {
     if (updateResult?.isSuccess) {
-      // setName(updateResult?.data?.data?.name);
-      // setPhone(updateResult?.data?.data?.reff_code);
       onClose?.();
-      reboot?.();
+      onRefresh?.();
       closeModal?.();
     }
   }, [updateResult]);
@@ -211,7 +181,7 @@ const UpdateSession = ({ id, onClose, isOpen, reboot, membership }) => {
                 {data?.reff_code || '-'}
               </div>
             </div>
-            {User?.role === 'manager' && (
+            {sessionAuth?.user?.role === 'manager' && (
               <div className="mt-2">
                 <button
                   className={`btn btn-primary h-full flex-1 rounded ${!saving ? '' : 'btn-disabled'}`}
@@ -241,11 +211,11 @@ const UpdateSession = ({ id, onClose, isOpen, reboot, membership }) => {
       <div className="border-base-200 flex min-h-15 place-content-center place-items-center border-t">
         <button
           className={`btn btn-primary h-full flex-1 rounded-none ${!saving ? '' : 'btn-disabled'}`}
-          onClick={onSave}
+          onClick={onUpdate}
         >
           Save
         </button>
-        {Session?.user?.role === true && (
+        {sessionAuth?.user?.role === true && !isOffline && (
           <div
             className={`btn btn-error h-full flex-1 rounded-none text-white ${data?.saldo > 0 ? 'btn-disabled' : ''}`}
             onClick={onDeleteOpen}

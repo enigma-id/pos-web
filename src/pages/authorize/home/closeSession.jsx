@@ -117,12 +117,10 @@ const CloseSection = () => {
     };
 
     const dataOfflineToOnline = makeEndSession(payload);
-    console.log('[DEBUG] onCloseOffline', dataOfflineToOnline);
 
     try {
       await closeSession(dataOfflineToOnline, session?.user?.id);
     } catch (err) {
-      console.log('[DEBUG] [closeSession]', err);
       handleModalError();
     }
 
@@ -132,8 +130,6 @@ const CloseSection = () => {
       updateShifts(dataOfflineToOnline);
     } catch (err) {
       handleModalError();
-
-      console.log('[DEBUG] [updateShifts]', err);
     }
 
     handleOpenPrintSummary(dataOfflineToOnline);
