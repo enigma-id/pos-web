@@ -117,7 +117,7 @@ export const initQueueDB = async userId => {
 export const startSession = async (payload, userId) => {
   const db = await ensureDB(userId);
 
-  const doc = { ...payload };
+  const doc = { ...payload, sync_type: 'opened' };
 
   await db.add(STORES.sessions, doc);
   return doc;
@@ -179,7 +179,8 @@ export const updateOrderBill = async (payload, userId) => {
   // jika esxsting sync_id gaada berarti ini updateo order bill dari online bro
   if (!existing) {
     existing = await db.get(STORES.orderBills, payload?.id);
-    payload.sync_id = payload?.id;
+    // sync_id ini tidak perlu nanti dikirim ke api ya bro - karena ini dari update server, tapi kalo sudah ada sync_id kirimkan saja sync_id
+    payload.sync_id = payload?.sync_id || payload?.id;
   }
 
   if (!existing) {
@@ -189,8 +190,6 @@ export const updateOrderBill = async (payload, userId) => {
       is_synced: false,
       // ini data dari session bill server bro
       origin_session_sync_id: payload?.session?.id,
-      // sync_id ini tidak perlu nanti dikirim ke api ya bro - karena ini dari update server
-      sync_id: payload?.id,
     };
 
     await db.add(STORES.orderBills, doc);
@@ -217,7 +216,7 @@ export const createOrderPayment = async (payload, userId) => {
   const db = await ensureDB(userId);
 
   // paid_session_sync_id ini kenapa menggunakan or seperti ini, karena jika session summary/session payload dari online dia tidak mempunyai sync_id (sync_id adalah new id uuid dari client)
-  const paid_session_sync_id = payload?.session?.id || payload?.session?.sync_id;
+  const paid_session_sync_id = payload?.paid_session?.id || payload?.paid_session?.sync_id;
 
   const doc = {
     ...payload,
@@ -226,6 +225,12 @@ export const createOrderPayment = async (payload, userId) => {
 
   await db.add(STORES.orderPayments, doc);
   return doc;
+};
+
+export const deleteOrderPayment = async (syncId, userId) => {
+  const db = await ensureDB(userId);
+  await db.delete(STORES.orderPayments, syncId);
+  return true;
 };
 
 // ========== TOPUPS ==========
@@ -239,6 +244,12 @@ export const createTopup = async (payload, userId) => {
 
   await db.add(STORES.topups, doc);
   return doc;
+};
+
+export const deleteTopup = async (syncId, userId) => {
+  const db = await ensureDB(userId);
+  await db.delete(STORES.topups, syncId);
+  return true;
 };
 
 // ========== MEMBERSHIPS ==========
@@ -278,10 +289,10 @@ export const updateMembership = async (payload, userId) => {
 
   await db.put(STORES.memberships, {
     ...existing,
-    ...data,
+    ...payload,
   });
 
-  return data;
+  return payload;
 };
 
 // ========== METADATA ==========

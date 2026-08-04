@@ -285,6 +285,16 @@ export const saveOrderHistory = data => {
   return data;
 };
 
+export const deleteOrderHistory = data => {
+  const existing = getOrderHistoryCacheRaw();
+
+  existing.data = existing.data.filter(
+    item => item.id !== data?.id || item.sync_id !== data?.sync_id
+  );
+
+  localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(existing));
+};
+
 const SHIFTS_CACHE_KEY = 'cache_shifts';
 
 const getShiftsCacheRaw = () => {

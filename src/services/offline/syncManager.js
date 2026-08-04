@@ -1,14 +1,7 @@
 import { baseQuery } from '../baseQuery';
-import { deleteOpenBills, getCache, setCache } from '../../utils/cache';
 import { ensureDB, STORES, setLastSyncTime as setLastSyncTimeMeta } from './queue';
 import { triggerQueueRefresh } from './usePendingQueueCount';
-import {
-  setApiReachable,
-  setFailedCount,
-  setLastSyncTime,
-  setOfflineError,
-  setSyncing,
-} from './slice';
+import { setFailedCount, setLastSyncTime, setOfflineError, setSyncing } from './slice';
 
 const MAX_RETRY = 5;
 const BASE_DELAY = 1000;
@@ -44,13 +37,13 @@ const shouldRetry = error => {
 
 // ===== HELPER: map order fields to /sales/sync payload =====
 
-const mapOrderToSync = (order, sessionSyncId) => ({
+const mapOrderToSync = order => ({
   sync_id: order?.id ? '' : order?.sync_id,
   id: order?.id,
   code: order?.code,
   bill_name: order?.bill_name,
-  origin_session_sync_id: sessionSyncId,
-  sales_chnanel_id: order?.sales_chnanel_id,
+  origin_session_sync_id: order?.session?.id || order?.session?.sync_id,
+  sales_channel_id: order?.sales_channel_id,
   membership_id: order?.membership_id,
   service_charge_percentage: order?.service_charge_percentage,
   service_charge_value: order?.service_charge_value,
@@ -62,28 +55,26 @@ const mapOrderToSync = (order, sessionSyncId) => ({
   is_offline_mode: order?.is_offline_mode,
 
   // fields dibawah ini untuk order yang dibayar atau history
-  paid_session_sync_id: order?.status === 'completed' ? sessionSyncId : '',
+  paid_session_sync_id:
+    order?.status === 'completed' ? order?.paid_session?.id || order?.paid_session?.sync_id : '',
   ref_sync_id: order?.status === 'completed' ? order?.ref_sync_id : '',
   payment_method_id: order?.status === 'completed' ? order?.payment_method_id : '',
   payment_ref: order?.status === 'completed' ? order?.payment_ref : '',
-  total_payment: order?.status === 'completed' ? order?.total_payment : '',
-  paid_at: order?.status === 'completed' ? order?.paid_at : '',
+  total_payment: order?.status === 'completed' ? order?.total_payment : null,
+  paid_at: order?.status === 'completed' ? order?.paid_at : null,
 });
 
 const mapItemsToSync = order => {
-  const sourceItems =
-    order.status === 'pending' && (order.original_items || [])?.length > 0
-      ? order.original_items || []
-      : order.items || [];
-
-  return sourceItems.map(item => ({
+  return (order?.items || []).map(item => ({
     catalog_id: item.catalog_id,
+    category_id: item.category_id,
     catalog_name: item.catalog_name || '',
+    category_name: item.category_name || '',
     quantity: item.quantity || 0,
     unit_nett: item.unit_nett || 0,
     addons: (item.addons || []).map(a => ({
       addon_group_id: a.addon_group_id,
-      addon_item_id: a.addon_item_id,
+      addon_item_id: a.addon_item_id ?? a.catalog_id,
       catalog_name: a.catalog_name || '',
       unit_nett: a.unit_nett || 0,
       quantity: a.quantity || 1,
@@ -92,19 +83,20 @@ const mapItemsToSync = order => {
 };
 
 const mapCategoryDiscountsToSync = order => {
-  return order.category_discounts.map(cat => ({
+  return (order?.category_discounts || []).map(cat => ({
     category_id: cat.category_id,
-    discount_percentage: item.discount_percentage,
-    discount_value: item.discount_value,
-    total_discount: item.total_discount,
+    discount_percentage: cat.discount_percentage,
+    discount_value: cat.discount_value,
+    total_discount: cat.total_discount,
     is_discount_percentage: cat.is_discount_percentage,
   }));
 };
 
 const mapTopupsToSync = (topups, sessionSyncId) =>
-  topups.map(t => ({
+  (topups || []).map(t => ({
     session_sync_id: sessionSyncId,
-    card_id: t.card_id,
+    card_id: t.card_id || '',
+    membership_id: t.membership_id || '',
     nominal: t.nominal || 0,
     payment_type: t.payment_type || '',
     created_at: t.created_at,
@@ -113,39 +105,54 @@ const mapTopupsToSync = (topups, sessionSyncId) =>
 // ===== MAIN SYNC FUNCTION =====
 
 export const syncPendingSessions = async () => {
-  console.log('[DEBUG] syncPendingSessions');
-  console.log('[DEBUG] storeRef', storeRef);
   if (!storeRef) {
-    return;
-  }
-  if (isSyncingInternal) {
-    isSyncingInternal = false;
-  }
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    console.log('[SyncManager] skip: storeRef belum ready');
     return;
   }
 
   const userId = getCurrentUserId();
   if (!userId) {
+    console.log('[SyncManager] skip: userId belum ada');
+    return;
+  }
+
+  // Anti-reentrant: kalo sync udah jalan, jangan masuk lagi.
+  // Beda dengan jalur lain — panggilan kedua ini di-skip dengan pesan jelas,
+  // bukan silent return (yang bikin kelihatan "mati").
+  if (isSyncingInternal) {
+    console.log('[SyncManager] skip: sync masih berjalan (isSyncingInternal)');
+    return;
+  }
+
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    console.log('[SyncManager] skip: navigator offline');
     return;
   }
 
   isSyncingInternal = true;
   storeRef.dispatch(setSyncing(true));
   storeRef.dispatch(setOfflineError(null));
+  console.log('[SyncManager] sync mulai', { userId });
 
   const fakeApi = {
     ...storeRef,
     getState: storeRef.getState,
     dispatch: storeRef.dispatch,
+    // RTK fetchBaseQuery butuh `api.signal` untuk anySignal(timeout) —
+    // store Redux gak punya. Tanpa ini, sync crash: "Cannot read properties
+    // of undefined (reading 'aborted')".
+    signal: new AbortController().signal,
   };
 
   try {
+    console.log('[SyncManager] ensureDB mulai');
     const db = await ensureDB(userId);
+    console.log('[SyncManager] ensureDB selesai');
     const now = new Date().toISOString();
 
     // ===== 1. MEMBERSHIPS → POST /membership/sync =====
     const memberships = await db.getAll(STORES.memberships);
+    console.log('[SyncManager] memberships di IDB:', memberships.length);
     if (memberships.length > 0) {
       const payload = {
         members: memberships.map(m => ({
@@ -158,11 +165,19 @@ export const syncPendingSessions = async () => {
 
       for (let attempt = 0; attempt < MAX_RETRY; attempt += 1) {
         try {
+          console.log(`[SyncManager] POST /membership/sync attempt ${attempt + 1}`);
           const result = await baseQuery(
-            { url: '/membership/sync', method: 'POST', body: payload, __skipOfflineQueue: true },
+            {
+              url: '/membership/sync',
+              method: 'POST',
+              body: payload,
+              __skipOfflineQueue: true,
+              timeout: 30000,
+            },
             fakeApi,
             {}
           );
+          console.log('[SyncManager] /membership/sync result:', result?.error ? result.error : 'OK');
 
           if (!result?.error) {
             for (const m of memberships) {
@@ -172,7 +187,8 @@ export const syncPendingSessions = async () => {
 
           if (!result?.error || !shouldRetry(result.error)) break;
           await sleep(BASE_DELAY * 2 ** attempt);
-        } catch {
+        } catch (err) {
+          console.log('[SyncManager] /membership/sync catch:', err?.message || err);
           await sleep(BASE_DELAY * 2 ** attempt);
         }
       }
@@ -184,8 +200,6 @@ export const syncPendingSessions = async () => {
     const allPayments = await db.getAll(STORES.orderPayments);
     const allTopups = await db.getAll(STORES.topups);
 
-    console.log('[DEBUG] allBills', allBills);
-
     // Group by session ID (origin_session_id / paid_session_id / session_sync_id / sessions.sync_id)
     const grouped = {};
     for (const session of allSessions) {
@@ -193,7 +207,13 @@ export const syncPendingSessions = async () => {
       if (!sid) continue;
       if (!grouped[sid]) grouped[sid] = { session: null, orders: [], topups: [] };
       const hasReference = !!session.id;
-      const isClosed = !!session.close_at;
+      // Closed session = status 'closed' ATAU finished_at bukan zero date
+      // ("0001-01-01T00:00:00Z"). Stored doc pakai field finished_at, bukan
+      // close_at — session yang baru open punya finished_at zero date sentinel
+      // dari makeStartSession.
+      const isClosed =
+        session.status === 'closed' ||
+        (!!session.finished_at && session.finished_at !== '0001-01-01T00:00:00Z');
       if (isClosed || !hasReference) {
         grouped[sid].session = session;
       }
@@ -218,40 +238,50 @@ export const syncPendingSessions = async () => {
     }
 
     for (const [sessionSyncId, group] of Object.entries(grouped)) {
-      let success = false;
-
+      console.log('[SyncManager] sync group:', {
+        sessionSyncId,
+        orders: group.orders.length,
+        topups: group.topups.length,
+        hasSession: !!group.session,
+      });
       for (let attempt = 0; attempt < MAX_RETRY; attempt += 1) {
         try {
           const payload = {};
 
           // Session — include kalo ada close_at atau start offline (tanpa id)
           if (group.session) {
-            const hasRef = !!group.session.id;
-            const isClosed = !!group.session.close_at;
-            if (isClosed || !hasRef) {
-              payload.session = {
-                sync_id: group.session.sync_id,
-                open_at: group.session.open_at,
-                close_at: group.session.close_at,
-                cash_started: group.session.cash_started,
-                cash_finished: group.session.cash_finished,
-                latitude: group.session.latitude,
-                longitude: group.session.longitude,
-                battery_health: group.session.battery_health,
-              };
+            payload.session = {
+              id: group?.session?.id,
+              sync_id: group.session.sync_id,
+            };
+
+            if (group.session.sync_type === 'both' || group.session.sync_type === 'opened') {
+              payload.session.open_at = group.session.started_at;
+              payload.session.cash_started = group.session.cash_started;
+            }
+
+            if (group.session.sync_type === 'both' || group.session.sync_type === 'closed') {
+              payload.session.close_at = group.session.finished_at;
+              payload.session.cash_finished = group.session.cash_finished;
             }
           }
 
-          payload.orders = group.orders.map(o => mapOrderToSync(o, sessionSyncId));
-          payload.topups = group.topups.map(t => mapTopupsToSync(t, sessionSyncId));
+          payload.orders = group.orders.map(o => mapOrderToSync(o));
+          payload.topups = mapTopupsToSync(group.topups, sessionSyncId);
+          console.log(`[SyncManager] POST /sales/sync attempt ${attempt + 1}`);
 
           const result = await baseQuery(
-            { url: '/sales/sync', method: 'POST', body: payload, __skipOfflineQueue: true },
+            {
+              url: '/sales/sync',
+              method: 'POST',
+              body: payload,
+              __skipOfflineQueue: true,
+              timeout: 30000,
+            },
             fakeApi,
             {}
           );
-
-          consoel.log('[DEBUG] syncPendingSessions Hit', result);
+          console.log('[SyncManager] /sales/sync result:', result?.error ? result.error : 'OK');
 
           if (!result?.error) {
             for (const o of group.orders) {
@@ -260,23 +290,29 @@ export const syncPendingSessions = async () => {
             for (const t of group.topups) {
               await db.delete(STORES.topups, t.sync_id);
             }
-            cleanupLocalStorageCache();
+            // Session yang udah synced ga perlu disimpen di IDB —
+            // nanti bakal di-fetch ulang dari server pas online.
+            if (group.session) {
+              await db.delete(STORES.sessions, group.session.sync_id);
+            }
             triggerQueueRefresh();
-            success = true;
             break;
           }
 
           const status = getStatusCode(result.error);
           if (status === 401) {
+            console.log('[SyncManager] /sales/sync 401 — berhenti');
             break;
           }
 
           if (!shouldRetry(result.error)) {
+            console.log('[SyncManager] /sales/sync non-retry error — berhenti');
             break;
           }
 
           await sleep(BASE_DELAY * 2 ** attempt);
         } catch (err) {
+          console.log('[SyncManager] /sales/sync catch:', err?.message || err);
           await sleep(BASE_DELAY * 2 ** attempt);
         }
       }
@@ -330,6 +366,10 @@ export const initSyncManager = async store => {
 
       if (reconnectTimer) clearTimeout(reconnectTimer);
       reconnectTimer = setTimeout(() => {
+        console.log('[SyncManager] online event → trigger sync');
+        // Gak reset isSyncingInternal di sini — anti-reentrant harus dijaga.
+        // Kalau sync masih jalan beneran, skip via guard (log jelas).
+        // Kalau ke-stuck (hang), timeout 30s di baseQuery udah jamin lock lepas.
         syncPendingSessions();
       }, RECONNECT_DELAY);
     };
@@ -362,132 +402,17 @@ const stopHeartbeat = () => {
 
 // ===== EXPORTS =====
 
+/**
+ * Force sync — dipakai tombol Retry (layout banner) & PendingDrawer refresh.
+ * Reset lock dulu biar sync bener-bener jalan, walau `isSyncingInternal`
+ * ke-stuck `true` dari sync sebelumnya yang hang (timeout 30s biar gak hang selamanya).
+ */
 export const syncNow = async () => {
+  if (isSyncingInternal) {
+    console.log('[SyncManager] syncNow: reset lock stuck sebelum retry');
+    isSyncingInternal = false;
+  }
   await syncPendingSessions();
-};
-
-export const retryFailedItem = async itemId => {
-  if (!storeRef || !itemId) return false;
-  const userId = getCurrentUserId();
-  if (!userId) return false;
-
-  try {
-    const db = await ensureDB(userId);
-
-    // Cari di sessions
-    const sessions = await db.getAll(STORES.sessions);
-    const found = sessions.find(s => s.sync_id === itemId);
-    if (found) {
-      found.syncStatus = 'pending';
-      await db.put(STORES.sessions, found);
-      syncPendingSessions();
-      return true;
-    }
-
-    // Cari di orders — cek parent session
-    const bills = await db.getAll(STORES.orderBills);
-    const bill = bills.find(b => b.sync_id === itemId);
-    if (bill) {
-      const parent = sessions.find(s => s.sync_id === bill.origin_session_sync_id);
-      if (parent) {
-        parent.syncStatus = 'pending';
-        await db.put(STORES.sessions, parent);
-        syncPendingSessions();
-        return true;
-      }
-    }
-
-    const payments = await db.getAll(STORES.orderPayments);
-    const payment = payments.find(p => p.sync_id === itemId);
-    if (payment) {
-      const parent = sessions.find(s => s.sync_id === payment.paid_session_sync_id);
-      if (parent) {
-        parent.syncStatus = 'pending';
-        await db.put(STORES.sessions, parent);
-        syncPendingSessions();
-        return true;
-      }
-    }
-  } catch (e) {
-    console.error('[retryFailedItem] error:', e);
-  }
-  return false;
-};
-
-export const removeFailedItem = async itemId => {
-  const userId = storeRef?.getState()?.Auth?.session?.user?.id;
-  if (!userId || !itemId) return false;
-
-  try {
-    const db = await ensureDB(userId);
-
-    // Cek di sessions
-    const session = await db.get(STORES.sessions, itemId);
-    if (session) {
-      // Cascade hapus semua yg terkait
-      const bills = await db.getAllFromIndex(STORES.orderBills, 'origin_session_sync_id', itemId);
-      for (const b of bills) await db.delete(STORES.orderBills, b.sync_id);
-      const payments = await db.getAllFromIndex(
-        STORES.orderPayments,
-        'paid_session_sync_id',
-        itemId
-      );
-      for (const p of payments) await db.delete(STORES.orderPayments, p.sync_id);
-      const topups = await db.getAllFromIndex(STORES.topups, 'session_sync_id', itemId);
-      for (const t of topups) await db.delete(STORES.topups, t.sync_id);
-      await db.delete(STORES.sessions, itemId);
-      return true;
-    }
-
-    // Cek di order_bills
-    const bill = await db.get(STORES.orderBills, itemId);
-    if (bill) {
-      await db.delete(STORES.orderBills, itemId);
-      // Hapus juga dari cache_openbills kalo ada
-      try {
-        if (bill?.id) {
-          console.log(
-            '[DEBUG]: Pikirin gimana cara-nya, karena ini bukan dihapus data-nya, tapi kemablikan ke semua'
-          );
-        } else {
-          deleteOpenBills(itemId);
-        }
-      } catch (_) {}
-
-      // Recalculate session summary — remove outstanding bill
-      try {
-        // updateSessionSummary({ type: 'bill', outstanding_bill: -1 * bill.total_charges });
-      } catch (_) {}
-
-      return true;
-    }
-
-    // Cek di order_payments
-    const payment = await db.get(STORES.orderPayments, itemId);
-    if (payment) {
-      await db.delete(STORES.orderPayments, itemId);
-      return true;
-    }
-
-    // Cek di topups
-    const topup = await db.get(STORES.topups, itemId);
-    if (topup) {
-      await db.delete(STORES.topups, itemId);
-      return true;
-    }
-
-    // Cek di memberships
-    const membership = await db.get(STORES.memberships, itemId);
-    if (membership) {
-      await db.delete(STORES.memberships, itemId);
-      return true;
-    }
-
-    triggerQueueRefresh();
-  } catch (e) {
-    console.error('[removeFailedItem] error:', e);
-  }
-  return false;
 };
 
 export { getSyncingState, startHeartbeat, stopHeartbeat };

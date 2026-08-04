@@ -22,6 +22,11 @@ const CatalogScreen = () => {
   const selectedChannel = useSelector(state => state?.SalesChannel?.selectedChannel);
   const sessionUser = useSelector(state => state?.Auth?.session?.user);
 
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+
+  const isOffline = !isOnline || apiReachable === false;
+
   const {
     refreshCatalog,
     catalog,
@@ -174,7 +179,7 @@ const CatalogScreen = () => {
                   <div
                     key={cat?.id}
                     className="catalog-card"
-                    onClick={mode === 'open_session' ? false : () => onShow(cat, null)}
+                    onClick={mode === 'open_session' ? () => {} : () => onShow(cat, null)}
                   >
                     <div className="catalog-img">
                       {cat?.image ? (
@@ -207,20 +212,22 @@ const CatalogScreen = () => {
             </div>
           </div>
 
-          <div className="absolute bottom-5 left-5 flex flex-col gap-2">
-            <div
-              className="btn btn-circle btn-xl btn-info btn-outline hover:!text-info bg-base-100 shadow-lg"
-              onClick={() => refreshCatalog()}
-            >
-              <RefreshIcon />
-            </div>
-
-            {sessionUser?.role === 'manager' && (
-              <div className="btn btn-circle btn-xl btn-primary" onClick={openDrawer}>
-                <PlusIcon />
+          {!isOffline && (
+            <div className="absolute bottom-5 left-5 flex flex-col gap-2">
+              <div
+                className="btn btn-circle btn-xl btn-info btn-outline hover:!text-info bg-base-100 shadow-lg"
+                onClick={() => refreshCatalog()}
+              >
+                <RefreshIcon />
               </div>
-            )}
-          </div>
+
+              {sessionUser?.role === 'manager' && (
+                <div className="btn btn-circle btn-xl btn-primary" onClick={openDrawer}>
+                  <PlusIcon />
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="w-100 transition-all duration-300 ease-in-out">

@@ -62,6 +62,11 @@ const CheckoutScreen = () => {
   const session = useSelector(s => s.Auth?.session);
   const sessionSummary = useSelector(state => state?.SalesSession?.sessionSummary);
 
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+
+  const isOffline = !isOnline || apiReachable === false;
+
   const dropdownRef = React.useRef(null);
 
   const { getPaymentMethods } = useMaster();
@@ -85,7 +90,6 @@ const CheckoutScreen = () => {
   // const { getServiceCharge } = useOutlet();
 
   const { checkSaldo, checkResult } = useMembership();
-  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
   const { openModal, closeModal } = useModal();
 
   const [isOpen, setIsOpen] = React.useState(false);
@@ -96,8 +100,6 @@ const CheckoutScreen = () => {
   const [billName, setBillName] = React.useState('');
 
   const [selectedMethod, setSelectedMethod] = React.useState(null);
-
-  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
 
   const renderAdditionals = item => {
     return (item?.addons || [])
@@ -326,8 +328,6 @@ const CheckoutScreen = () => {
   };
 
   const onCreateBill = async billName => {
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-
     if (isOffline) {
       onCreateBillOffline(billName);
     } else {
@@ -523,8 +523,6 @@ const CheckoutScreen = () => {
   };
 
   const onUpdateBill = async billName => {
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-
     if (isOffline) {
       onUpdateBillOffline(billName);
     } else {
@@ -653,6 +651,8 @@ const CheckoutScreen = () => {
         payload.payment_ref = card?.reff_code;
       }
 
+      let outstandingBillPayment = 0;
+
       // untuk payload dibawah ini adalah tambahan payload yang berdasarkan dari savebill
       if (CartState?.bill) {
         payload = {
@@ -665,6 +665,15 @@ const CheckoutScreen = () => {
           paid_session: sessionSummary,
           created_at: CartState?.bill?.created_at,
         };
+
+        if (
+          !(
+            CartState?.bill?.session?.id === sessionSummary?.id ||
+            CartState?.bill?.session?.sync_id === sessionSummary?.sync_id
+          )
+        ) {
+          outstandingBillPayment = CartState?.meta?.grand_total;
+        }
       } else {
         const orderId = uuidv4();
 
@@ -711,6 +720,7 @@ const CheckoutScreen = () => {
             dataOfflineToOnline?.total_bill - dataOfflineToOnline?.discount_value,
           total_service: dataOfflineToOnline?.service_charge_value,
           total_charges: dataOfflineToOnline?.total_charges,
+          outstanding_bill_payment: outstandingBillPayment,
         });
       } catch (err) {
         return;
@@ -784,8 +794,9 @@ const CheckoutScreen = () => {
     try {
       // ini dibutuhkan untuk split bill, karena data sync_id adalah id tsb
       // ref_sync_id ini dibutuhkan untuk split id dari sync_id
-      dataOfflineToOnline.ref_sync_id = dataOfflineToOnline.sync_id;
+      dataOfflineToOnline.ref_sync_id = dataOfflineToOnline?.id || dataOfflineToOnline.sync_id;
       dataOfflineToOnline.sync_id = uuidv4();
+      dataOfflineToOnline.id = '';
 
       await createOrderPayment(dataOfflineToOnline, session?.user?.id);
     } catch (err) {
@@ -925,7 +936,6 @@ const CheckoutScreen = () => {
   };
 
   const onPay = async card => {
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     if (isOffline) {
       onPayOffline(card);
     } else {
@@ -999,9 +1009,7 @@ const CheckoutScreen = () => {
   };
 
   const handleRead = uid => {
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-
-    if (isOffline || apiReachable === false) {
+    if (isOffline) {
       // No connection → skip checkSaldo, ambil dari cache kalo ada
       const membership = showMembership(uid);
       onPay(membership || { card_id: uid });
@@ -1089,7 +1097,6 @@ const CheckoutScreen = () => {
     const getMethod = async () => {
       const res = await getPaymentMethods();
 
-      console.log(res, '================');
       setPaymentMethod(res);
       setSelectedMethod(res[0]);
     };

@@ -34,8 +34,6 @@ const CardContent = ({ data, onClose }) => {
 
   const onTopupOffline = async () => {
     const useBonuses = schemaBonus.filter(sb => sb.min_amount <= value)?.slice(0, 1);
-    console.log('=======[DEBUG]===[useBonus]============', useBonuses);
-    console.log('=======[DEBUG]===[data]============', data);
 
     const membership = JSON.parse(JSON.stringify(data));
     const dataPrint = {
@@ -50,6 +48,7 @@ const CardContent = ({ data, onClose }) => {
       sync_id: uuidv4(),
       membership: data,
       membership_id: data?.id,
+      card_id: data?.card_id,
       nominal: parseFloat(value) || 0,
       payment_type: method,
       reference_type: 'top-up',
@@ -105,8 +104,6 @@ const CardContent = ({ data, onClose }) => {
       topup_method: method,
       topup_nominal: nominal,
     });
-
-    console.log('[DEBUG] [DATA PRINT] ', dataPrint);
 
     handleModalPrint(dataPrint);
 

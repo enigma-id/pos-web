@@ -6,15 +6,20 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { BurgerIcon, HistoryIcon, ListIcon, MenuIcon, ReceiptIcon, UserIcon } from './icon';
 import { OfflineBanner, PendingDrawer, SyncIndicator } from './offline';
 import useSidebar from './sidebar/hook';
-import { removeFailedItem, retryFailedItem, syncNow } from '../../services/offline';
+import { deleteOrderBill, deleteOrderPayment, deleteTopup, syncNow } from '../../services/offline';
 import { setNetworkState } from '../../services/offline/slice';
 import useNetworkStatus from '../../services/offline/useNetworkStatus';
-import usePendingQueueCount from '../../services/offline/usePendingQueueCount';
+import usePendingQueueCount, {
+  triggerQueueRefresh,
+} from '../../services/offline/usePendingQueueCount';
 import useSession from '../../services/sales/session/hook';
 import { isActive } from '../../utils/common';
+import useCart from '../../services/cart/hook';
+import { deleteOpenBills, deleteOrderHistory } from '../../utils/cache';
 
 const Layout = ({ children }) => {
   const dispatch = useDispatch();
+  const sessionAuth = useSelector(state => state?.Auth?.session);
   const Offline = useSelector(state => state?.Offline);
   const { isOnline, wasOffline } = useNetworkStatus();
   const { count: queueCount, refresh: refreshQueueCount } = usePendingQueueCount();
@@ -23,6 +28,9 @@ const Layout = ({ children }) => {
   const [backOnline, setBackOnline] = useState(false);
   const prevOnlineRef = useRef(isOnline);
   const prevApiReachableRef = useRef(Offline?.apiReachable);
+
+  const { onBillSelected } = useCart();
+  const { updateSessionSummary } = useSession();
 
   // Wire network status to Redux
   useEffect(() => {
@@ -77,6 +85,32 @@ const Layout = ({ children }) => {
 
   const handleOpenBill = queueItem => {
     console.log('[DEBUG] pikirin ini harus-nya ke selectedBill agar konsisten');
+    onBillSelected(queueItem);
+    navigate('/');
+  };
+
+  const handleRemoveOffline = (type, queueItem) => {
+    console.log('[DEBUG] remove disini per item bro');
+    if (type === 'bill') {
+      try {
+        deleteOrderBill(queueItem?.sync_id, sessionAuth?.user?.id);
+      } catch (err) {
+        console.log('[DEBUG] remove idb delete open bills', err);
+      }
+
+      try {
+        deleteOpenBills(queueItem);
+      } catch (err) {
+        console.log('[DEBUG] remove cache delete open bills', err);
+      }
+
+      updateSessionSummary({
+        type: 'update',
+        outstanding_bill: -1 * queueItem.total_charges,
+      });
+    }
+
+    triggerQueueRefresh();
   };
 
   const refreshQueue = useCallback(async () => {
@@ -148,9 +182,8 @@ const Layout = ({ children }) => {
       <PendingDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        onRetry={retryFailedItem}
-        onRemove={removeFailedItem}
         onOpenBill={handleOpenBill}
+        onRemove={handleRemoveOffline}
       />
     </div>
   );
@@ -158,7 +191,7 @@ const Layout = ({ children }) => {
 
 const Navbar = () => {
   const navigate = useNavigate();
-  const sessionUser = useSelector(state => state?.Auth?.session?.user);
+  const sessionAuth = useSelector(state => state?.Auth?.session);
   const SalesSession = useSelector(state => state?.SalesSession);
 
   const { summary } = useSession();
@@ -171,8 +204,95 @@ const Navbar = () => {
   const Offline = useSelector(state => state?.Offline);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  const { onBillSelected } = useCart();
+  const { updateSessionSummary } = useSession();
+
   const handleOpenBill = queueItem => {
+    console.log('[DEBUG] pikirin ini harus-nya ke selectedBill agar konsisten');
+    onBillSelected(queueItem);
     navigate('/');
+  };
+
+  const handleRemoveOffline = (type, queueItem) => {
+    console.log('[DEBUG] remove disini per item bro');
+    if (type === 'bill') {
+      try {
+        deleteOrderBill(queueItem?.sync_id, sessionAuth?.user?.id);
+      } catch (err) {
+        console.log('[DEBUG] remove idb delete open bills', err);
+      }
+
+      try {
+        deleteOpenBills(queueItem);
+      } catch (err) {
+        console.log('[DEBUG] remove cache delete open bills', err);
+      }
+
+      updateSessionSummary({
+        type: 'update',
+        outstanding_bill: -1 * queueItem.total_charges,
+      });
+    }
+
+    if (type === 'payment') {
+      try {
+        deleteOrderPayment(queueItem?.sync_id, sessionAuth?.user?.id);
+      } catch (err) {
+        console.log('[DEBUG] remove idb delete payment', err);
+      }
+
+      try {
+        deleteOrderHistory(queueItem);
+      } catch (err) {
+        console.log('[DEBUG] remove cache delete payment', err);
+      }
+
+      let outstandingBillPayment = 0;
+
+      if (
+        !(
+          queueItem?.session?.id === queueItem?.paid_session?.id ||
+          queueItem?.session?.sync_id === queueItem?.paid_session?.sync_id
+        )
+      ) {
+        outstandingBillPayment = -1 * queueItem?.total_charges;
+      }
+
+      updateSessionSummary({
+        type: 'deleted_payment',
+        payment_method: queueItem?.payment_method,
+        total_sales: -1 * queueItem?.subtotal_nett,
+        total_discount:
+          -1 * (queueItem?.subtotal_nett - queueItem?.total_bill + queueItem?.discount_value),
+        total_after_discount: -1 * (queueItem?.total_bill - queueItem?.discount_value),
+        total_service: -1 * queueItem?.service_charge_value,
+        total_charges: -1 * queueItem?.total_charges,
+        outstanding_bill_payment: outstandingBillPayment,
+        order: queueItem,
+      });
+    }
+
+    if (type === 'topup') {
+      try {
+        deleteTopup(queueItem?.sync_id, sessionAuth?.user?.id);
+      } catch (err) {
+        console.log('[DEBUG] remove idb delete topup', err);
+      }
+
+      try {
+        deleteOrderHistory(queueItem);
+      } catch (err) {
+        console.log('[DEBUG] remove cache delete delete topup', err);
+      }
+
+      updateSessionSummary({
+        type: 'delete_topup',
+        topup_method: queueItem?.payment_type,
+        topup_nominal: -1 * nominal,
+      });
+    }
+
+    triggerQueueRefresh();
   };
 
   const refreshQueue = async () => {
@@ -207,7 +327,7 @@ const Navbar = () => {
           <small>Member</small>
         </div>
 
-        {sessionUser?.role === 'manager' && (
+        {sessionAuth?.user?.role === 'manager' && (
           <div
             className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'shifts')}`}
             onClick={() => navigate('/shifts')}
@@ -259,7 +379,7 @@ const Navbar = () => {
             ></span>
             <div className={`-ms-2 flex flex-col place-items-center`}>
               <UserIcon />
-              <small>{sessionUser?.name}</small>
+              <small>{sessionAuth?.user?.name}</small>
             </div>
           </div>
         </div>
@@ -267,10 +387,8 @@ const Navbar = () => {
       <PendingDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        onRetry={retryFailedItem}
-        onRemove={removeFailedItem}
         onOpenBill={handleOpenBill}
-        onRefresh={refreshQueue}
+        onRemove={handleRemoveOffline}
       />
     </div>
   );

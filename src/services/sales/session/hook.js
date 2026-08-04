@@ -120,12 +120,14 @@ const useSession = () => {
       updatedSummary.summary.sales.outstanding_bill += data.outstanding_bill;
     }
 
-    if (data.type === 'payment') {
+    if (data.type === 'payment' || data.type === 'deleted_payment') {
       updatedSummary.summary.sales.total_sales += data.total_sales;
       updatedSummary.summary.sales.total_discount += data.total_discount;
       updatedSummary.summary.sales.total_after_discount += data.total_after_discount;
       updatedSummary.summary.sales.total_service += data.total_service;
       updatedSummary.summary.sales.grand_total += data.total_charges;
+
+      updatedSummary.summary.sales.outstanding_bill_payment += data.outstanding_bill_payment;
 
       if (data?.payment_method?.provider === 'cash') {
         updatedSummary.summary.cash.expected_cash += data.total_charges;
@@ -137,20 +139,30 @@ const useSession = () => {
       }
 
       const pmIdx = updatedSummary.summary.payment_methods.findIndex(
-        p => p.payment_method_id === data?.payment_method?.id
+        p => p.name === data?.payment_method?.name
       );
 
       // Gunakan >= 0 karena indeks ke-0 itu valid!
       if (pmIdx >= 0) {
-        updatedSummary.summary.payment_methods[pmIdx] = {
-          ...updatedSummary.summary.payment_methods[pmIdx],
-          total_paid:
-            (updatedSummary.summary.payment_methods[pmIdx].total_paid || 0) + data?.total_charges, // Pastikan nested data aman
-          count: (updatedSummary.summary.payment_methods[pmIdx].count || 0) + 1,
-        };
+        const newTotalPaid =
+          (updatedSummary.summary.payment_methods[pmIdx].total_paid || 0) + data?.total_charges;
+        const newCount =
+          (updatedSummary.summary.payment_methods[pmIdx].count || 0) +
+          (data.type === 'deleted_payment' ? -1 : 1);
+
+        if (newTotalPaid <= 0 || newCount <= 0) {
+          // Hapus dari array jika total_paid atau count sudah habis/0
+          updatedSummary.summary.payment_methods.splice(pmIdx, 1);
+        } else {
+          // Update jika masih ada sisa
+          updatedSummary.summary.payment_methods[pmIdx] = {
+            ...updatedSummary.summary.payment_methods[pmIdx],
+            total_paid: newTotalPaid,
+            count: newCount,
+          };
+        }
       } else {
         updatedSummary.summary.payment_methods.push({
-          payment_method_id: data?.payment_method?.id,
           total_paid: data.total_charges,
           count: 1,
           name: data?.payment_method?.name,
@@ -171,14 +183,27 @@ const useSession = () => {
 
           // Gunakan >= 0
           if (categoryIdx >= 0) {
-            updatedSummary.summary.category_solds[categoryIdx] = {
-              ...updatedSummary.summary.category_solds[categoryIdx],
-              total_charges:
-                (updatedSummary.summary.category_solds[categoryIdx].total_charges || 0) +
-                item.quantity * (item.unit_nett - item.unit_discount),
-              total_qty:
-                (updatedSummary.summary.category_solds[categoryIdx].total_qty || 0) + item.quantity, // Perbaikan: sebelumnya 'count' padahal propertinya total_qty
-            };
+            const itemCharges = item.quantity * (item.unit_nett - item.unit_discount);
+            const qtyMultiplier = data.type === 'deleted_payment' ? -1 : 1;
+
+            const newTotalCharges =
+              (updatedSummary.summary.category_solds[categoryIdx].total_charges || 0) +
+              itemCharges * qtyMultiplier;
+            const newTotalQty =
+              (updatedSummary.summary.category_solds[categoryIdx].total_qty || 0) +
+              item.quantity * qtyMultiplier;
+
+            // Jika quantity atau total charges habis (<= 0), hapus dari array category_solds
+            if (newTotalQty <= 0 || newTotalCharges <= 0) {
+              updatedSummary.summary.category_solds.splice(categoryIdx, 1);
+            } else {
+              // Update jika masih ada sisa
+              updatedSummary.summary.category_solds[categoryIdx] = {
+                ...updatedSummary.summary.category_solds[categoryIdx],
+                total_charges: newTotalCharges,
+                total_qty: newTotalQty,
+              };
+            }
           } else {
             updatedSummary.summary.category_solds.push({
               category_name: item.category_name,
@@ -195,8 +220,22 @@ const useSession = () => {
         updatedSummary.orders = [];
       }
 
-      if (data?.order) {
-        updatedSummary.orders.push(data.order);
+      if (data?.type === 'payment') {
+        if (data?.order) {
+          updatedSummary.orders.push(data.order);
+        }
+      } else if (data?.type === 'deleted_payment') {
+        // --- REMOVE ORDER BERDASARKAN ID ATAU SYNC_ID ---
+        const targetId = data?.order?.id;
+        const targetSyncId = data?.order?.sync_id;
+
+        updatedSummary.orders = updatedSummary.orders.filter(o => {
+          const matchId = targetId && o.id === targetId;
+          const matchSyncId = targetSyncId && o.sync_id === targetSyncId;
+
+          // Hapus order jika salah satu cocok (kembalikan false agar terfilter keluar)
+          return !(matchId || matchSyncId);
+        });
       }
     }
 
@@ -227,11 +266,19 @@ const useSession = () => {
 
       // Gunakan >= 0 karena indeks ke-0 itu valid!
       if (topupIdx >= 0) {
-        updatedSummary.summary.topups[topupIdx] = {
-          ...updatedSummary.summary.topups[topupIdx],
-          total_nominal:
-            (updatedSummary.summary.topups[topupIdx].total_nominal || 0) + data?.topup_nominal, // Pastikan nested data aman
-        };
+        const newTotalNominal =
+          (updatedSummary.summary.topups[topupIdx].total_paid || 0) + data?.total_charges;
+
+        if (newTotalPaid <= 0 || newCount <= 0) {
+          // Hapus dari array jika total_paid atau count sudah habis/0
+          updatedSummary.summary.topups.splice(topupIdx, 1);
+        } else {
+          // Update jika masih ada sisa
+          updatedSummary.summary.topups[topupIdx] = {
+            ...updatedSummary.summary.topups[topupIdx],
+            total_nominal: newTotalNominal,
+          };
+        }
       } else {
         updatedSummary.summary.topups.push({
           type: data?.topup_method,
