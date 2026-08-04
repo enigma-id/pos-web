@@ -18,7 +18,7 @@ import { resetSummary, setSummary } from '../sales/session/slice';
 
 const useAuth = () => {
   const dispatch = useDispatch();
-  const stateUser = useSelector(state => state?.Auth?.session?.user?.id);
+  const sessionUserId = useSelector(state => state?.Auth?.session?.user?.id);
   const [loginMutation, loginResult] = useLoginMutation();
   const [triggerGetUser, getUserResult] = useLazyGetUserQuery();
   const [updateMutation, updateResult] = useUpdateMutation();
@@ -63,7 +63,7 @@ const useAuth = () => {
 
   const onLogout = async () => {
     // Capture userId before dispatch(logout) clears state
-    const userId = stateUser;
+    const userId = sessionUserId;
 
     // Device tracking removed — no-op
     clearCatalogCache();

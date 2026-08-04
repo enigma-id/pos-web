@@ -129,23 +129,21 @@ export const closeSession = async (payload, userId) => {
   // cari index untuk update saat create dari offline juga
   let existing = payload?.sync_id ? await db.get(STORES.sessions, payload?.sync_id) : null;
 
-  // jika esxsting sync_id gaada berarti ini updateo order bill dari online bro
-  if (!existing) {
-    existing = await db.get(STORES.sessions, payload?.id);
-    payload.sync_id = payload?.id;
-  }
-
   if (!existing) {
     // Sales Session dari server — insert sebagai referensi
     const doc = {
       ...payload,
       is_synced: false,
+      // sync_id ini tidak perlu nanti dikirim ke api ya bro - karena ini dari update server
+      sync_id: payload?.id,
+      sync_type: 'closed',
     };
 
     await db.add(STORES.sessions, doc);
     return doc;
   }
 
+  payload.sync_type = 'both'; // both ini berarti dari open dan close offline
   await db.put(STORES.sessions, {
     ...existing,
     ...payload,

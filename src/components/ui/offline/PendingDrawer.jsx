@@ -13,7 +13,7 @@ const statusConfig = {
 };
 
 const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh }) => {
-  const userId = useSelector(state => state?.Auth?.session?.user?.id);
+  const sessionUserId = useSelector(state => state?.Auth?.session?.user?.id);
   const [activeTab, setActiveTab] = useState('order');
   const [refreshKey, setRefreshKey] = useState(0);
   const [data, setData] = useState({
@@ -26,11 +26,11 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
 
   // Fetch data from IndexedDB directly when drawer opens
   useEffect(() => {
-    if (!open || !userId) return;
+    if (!open || !sessionUserId) return;
 
     const fetchData = async () => {
       try {
-        const db = await ensureDB(userId);
+        const db = await ensureDB(sessionUserId);
 
         const sessions = await db.getAll(STORES.sessions);
         const bills = await db.getAll(STORES.orderBills);
@@ -51,7 +51,7 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
     };
 
     fetchData();
-  }, [open, userId, refreshKey]);
+  }, [open, sessionUserId, refreshKey]);
 
   const hasPendingOrFailed = useMemo(() => {
     return data.sessions.some(s => s.syncStatus === 'pending' || s.syncStatus === 'failed');
@@ -69,12 +69,12 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
           sync_id: s.sync_id,
           _type: 'session',
           status: s.syncStatus || 'pending',
+          sync_type: s.sync_type,
           lastError: s.error || null,
           createdAt: isClosed ? s.close_at : s.createdAt || s.open_at,
           body: {
-            cash: isClosed ? s.cash_finished || s.cash_started : s.cash_started,
-            cash_started: s.cash_started,
             cash_finished: s.cash_finished,
+            cash_started: s.cash_started,
             open_at: s.open_at,
             close_at: s.close_at,
             orderCount:
@@ -299,9 +299,9 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                 : item._type === 'membership'
                   ? 'create member'
                   : item._type === 'session'
-                    ? item.body?.cash_started != null && item.body?.cash_finished != null
+                    ? item.sync_type === 'both'
                       ? 'both'
-                      : item.body?.cash_finished
+                      : item.sync_type === 'closed'
                         ? 'close'
                         : 'start'
                     : item.status === 'pending'
@@ -324,7 +324,6 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                   : apiType === 'start'
                     ? 'badge-success'
                     : 'badge-warning';
-              const cashAmount = item?.body?.cash || 0;
 
               return (
                 <div
@@ -359,27 +358,23 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove, onRefresh
                     )}
                     <div className="bg-base-200/30 flex items-center justify-between rounded p-2">
                       <div className="flex flex-col gap-1">
-                        <span className="text-base-content/40 text-[9px] font-bold uppercase">
-                          {apiType === 'both'
-                            ? 'Starting Cash'
-                            : apiType === 'start'
-                              ? 'Starting Cash'
-                              : 'Ending Cash'}
-                        </span>
-                        <span className="text-base-content text-sm font-black">
-                          {currencyFormat(
-                            apiType === 'both'
-                              ? item?.body?.cash_started || item?.body?.cash
-                              : cashAmount
-                          )}
-                        </span>
-                        {apiType === 'both' && (
+                        {item?.body?.cash_started > 0 && (
+                          <>
+                            <span className="text-base-content/40 text-[9px] font-bold uppercase">
+                              Starting Cash
+                            </span>
+                            <span className="text-base-content text-sm font-black">
+                              {currencyFormat(item?.body?.cash_started)}
+                            </span>
+                          </>
+                        )}
+                        {item?.body?.cash_finished > 0 && (
                           <>
                             <span className="text-base-content/40 text-[9px] font-bold uppercase">
                               Ending Cash
                             </span>
                             <span className="text-base-content text-sm font-black">
-                              {currencyFormat(item?.body?.cash || 0)}
+                              {currencyFormat(item?.body?.cash_finished)}
                             </span>
                           </>
                         )}

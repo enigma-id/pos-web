@@ -11,6 +11,8 @@ export function makeStartSession(payload) {
   return {
     ...payload,
     is_synced: false,
+    finished_at: '0000-00-00',
+    cash_finished: 0,
     summary: {
       sales: {
         total_sales: 0,

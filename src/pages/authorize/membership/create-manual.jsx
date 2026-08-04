@@ -17,9 +17,9 @@ const CreateManual = () => {
   const navigate = useNavigate();
   const FormState = useSelector(state => state?.Form);
   const activeSyncId = useSelector(state => state?.Offline?.activeSyncId);
-  const authSession = useSelector(state => state?.Auth?.session);
+  const sessoinAuth = useSelector(state => state?.Auth?.session);
   const authUser = useSelector(state => state?.Auth?.user);
-  const userId = authSession?.user?.id || authUser?.id;
+  const userId = sessoinAuth?.user?.id || authUser?.id;
   const { create, createResult } = useMembership();
 
   const [name, setName] = React.useState('');
@@ -93,7 +93,10 @@ const CreateManual = () => {
       <div className="border-base-200 bg-base-100 flex h-16 border-t border-b">
         <div className="border-base-200 flex-1 place-content-center border-r border-l">
           <div className="flex place-items-center gap-6 px-4">
-            <div className="btn btn-circle btn-md btn-outline" onClick={() => navigate('/membership')}>
+            <div
+              className="btn btn-circle btn-md btn-outline"
+              onClick={() => navigate('/membership')}
+            >
               <BackIcon />
             </div>
             <div className="text-lg font-semibold">New Membership (Manual)</div>
@@ -103,7 +106,7 @@ const CreateManual = () => {
 
       <div className="flex-1 overflow-y-auto p-6">
         <div className="mb-3">
-          <div className="text-sm mb-1">Member name</div>
+          <div className="mb-1 text-sm">Member name</div>
           <Input
             value={name}
             onChange={e => setName(e?.target?.value)}
@@ -112,7 +115,7 @@ const CreateManual = () => {
           />
         </div>
         <div className="mb-3">
-          <div className="text-sm mb-1">Phone number</div>
+          <div className="mb-1 text-sm">Phone number</div>
           <Input
             value={phone}
             onChange={e => setPhone(e?.target?.value)}
@@ -120,7 +123,7 @@ const CreateManual = () => {
           />
         </div>
         <div className="mb-3">
-          <div className="text-sm mb-1">Card ID</div>
+          <div className="mb-1 text-sm">Card ID</div>
           <Input
             value={cardId}
             onChange={e => setCardId(e?.target?.value)}
@@ -140,7 +143,9 @@ const CreateManual = () => {
           {createResult?.isLoading ? (
             <span className="loading loading-spinner"></span>
           ) : (
-            <><PlusIcon /> Create Membership</>
+            <>
+              <PlusIcon /> Create Membership
+            </>
           )}
         </div>
       </div>

@@ -19,9 +19,9 @@ const CardContent = ({ data, onClose }) => {
   const dispatch = useDispatch();
   const SalesSession = useSelector(state => state?.SalesSession?.hasSession);
   const FormState = useSelector(state => state?.Form);
-  const authSession = useSelector(state => state?.Auth?.session);
+  const sessionAuth = useSelector(state => state?.Auth?.session);
   const authUser = useSelector(state => state?.Auth?.user);
-  const userId = authSession?.user?.id || authUser?.id;
+  const userId = sessionAuth?.user?.id || authUser?.id;
   const { topup, topupResult } = useMembership();
 
   const [value, setValue] = React.useState('');
@@ -73,9 +73,7 @@ const CardContent = ({ data, onClose }) => {
           const existing = getCache(TABLE_CACHE_KEY);
           const tableData = Array.isArray(existing?.data) ? existing.data : [];
           const updated = tableData.map(m =>
-            String(m.card_id) === String(data.card_id)
-              ? { ...m, saldo: newSaldo }
-              : m
+            String(m.card_id) === String(data.card_id) ? { ...m, saldo: newSaldo } : m
           );
           setCache(TABLE_CACHE_KEY, { ...existing, data: updated });
         }

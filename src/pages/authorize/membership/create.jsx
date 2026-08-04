@@ -15,9 +15,9 @@ import { setMemberCache, getCache, setCache } from '../../../utils/cache';
 const CreateSection = ({ onClose }) => {
   const dispatch = useDispatch();
   const FormState = useSelector(state => state?.Form);
-  const authSession = useSelector(state => state?.Auth?.session);
+  const sessionAuth = useSelector(state => state?.Auth?.session);
   const authUser = useSelector(state => state?.Auth?.user);
-  const userId = authSession?.user?.id || authUser?.id;
+  const userId = sessionAuth?.user?.id || authUser?.id;
   const { create, createResult } = useMembership();
   const { openModal, closeModal } = useModal();
 

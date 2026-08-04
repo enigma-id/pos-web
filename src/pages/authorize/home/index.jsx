@@ -20,7 +20,7 @@ const CatalogScreen = () => {
   const dropdownRef = React.useRef(null);
   const dropdownRefs = React.useRef(null);
   const selectedChannel = useSelector(state => state?.SalesChannel?.selectedChannel);
-  const User = useSelector(state => state?.Auth?.session?.user);
+  const sessionUser = useSelector(state => state?.Auth?.session?.user);
 
   const {
     refreshCatalog,
@@ -215,7 +215,7 @@ const CatalogScreen = () => {
               <RefreshIcon />
             </div>
 
-            {User?.role === 'manager' && (
+            {sessionUser?.role === 'manager' && (
               <div className="btn btn-circle btn-xl btn-primary" onClick={openDrawer}>
                 <PlusIcon />
               </div>

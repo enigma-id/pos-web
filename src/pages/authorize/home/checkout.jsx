@@ -90,8 +90,6 @@ const CheckoutScreen = () => {
 
   const { checkSaldo, checkResult } = useMembership();
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
-  const syncIdOffline = useSelector(state => state?.Offline?.activeSyncId);
-  const syncIdServer = useSelector(state => state?.Auth?.session?.sales_session?.id);
   const { openModal, closeModal } = useModal();
 
   const [isOpen, setIsOpen] = React.useState(false);

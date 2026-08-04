@@ -10,18 +10,18 @@ import { ensureDB, STORES } from './queue';
  * Panggil `triggerQueueRefresh()` setelah offline write operations.
  */
 const usePendingQueueCount = () => {
-  const userId = useSelector(state => state?.Auth?.session?.user?.id);
+  const sessionUserId = useSelector(state => state?.Auth?.session?.user?.id);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
-    if (!userId) {
+    if (!sessionUserId) {
       setCount(0);
       return;
     }
     setLoading(true);
     try {
-      const db = await ensureDB(userId);
+      const db = await ensureDB(sessionUserId);
       const [bills, payments, topups, sessions] = await Promise.all([
         db.getAll(STORES.orderBills),
         db.getAll(STORES.orderPayments),
@@ -41,7 +41,7 @@ const usePendingQueueCount = () => {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [sessionUserId]);
 
   useEffect(() => {
     refresh();

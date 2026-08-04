@@ -21,9 +21,9 @@ const UpdateSession = ({ id, onClose, isOpen, reboot, membership }) => {
   const User = useSelector(state => state?.Auth?.session?.user);
 
   const dispatch = useDispatch();
-  const authSession = useSelector(state => state?.Auth?.session);
+  const sessionAuth = useSelector(state => state?.Auth?.session);
   const authUser = useSelector(state => state?.Auth?.user);
-  const userId = authSession?.user?.id || authUser?.id;
+  const userId = sessionAuth?.user?.id || authUser?.id;
   const { showResult, update, updateResult } = useMembership(id);
   const { openModal, closeModal } = useModal();
 
@@ -109,9 +109,7 @@ const UpdateSession = ({ id, onClose, isOpen, reboot, membership }) => {
         const existing = getCache(TABLE_CACHE_KEY);
         const tableData = Array.isArray(existing?.data) ? existing.data : [];
         const updated = tableData.map(m =>
-          String(m.card_id) === String(data.card_id)
-            ? { ...m, name, reff_code: phone }
-            : m
+          String(m.card_id) === String(data.card_id) ? { ...m, name, reff_code: phone } : m
         );
         setCache(TABLE_CACHE_KEY, { ...existing, data: updated });
 
@@ -213,7 +211,7 @@ const UpdateSession = ({ id, onClose, isOpen, reboot, membership }) => {
                 {data?.reff_code || '-'}
               </div>
             </div>
-            {User?.role === "manager" && (
+            {User?.role === 'manager' && (
               <div className="mt-2">
                 <button
                   className={`btn btn-primary h-full flex-1 rounded ${!saving ? '' : 'btn-disabled'}`}

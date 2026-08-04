@@ -14,9 +14,9 @@ import { setMemberCache, getCache, setCache } from '../../../utils/cache';
 const ChangeCardManual = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const authSession = useSelector(state => state?.Auth?.session);
+  const sessoinAuth = useSelector(state => state?.Auth?.session);
   const authUser = useSelector(state => state?.Auth?.user);
-  const userId = authSession?.user?.id || authUser?.id;
+  const userId = sessoinAuth?.user?.id || authUser?.id;
   const [triggerCheck, checkResult] = useLazyCheckSaldoQuery();
   const [updateMember, updateResult] = useUpdateMutation();
 
@@ -89,7 +89,11 @@ const ChangeCardManual = () => {
 
       setLoading(true);
 
-      await updateMembership(oldCardId, { card_id: uid, name: member.name, reff_code: member.reff_code }, userId);
+      await updateMembership(
+        oldCardId,
+        { card_id: uid, name: member.name, reff_code: member.reff_code },
+        userId
+      );
 
       // Cache baru
       setMemberCache(uid, { ...member, card_id: uid });
@@ -111,9 +115,7 @@ const ChangeCardManual = () => {
       const existing = getCache(TABLE_CACHE_KEY);
       const tableData = Array.isArray(existing?.data) ? existing.data : [];
       const updated = tableData.map(m =>
-        String(m.card_id) === String(oldCardId)
-          ? { ...m, card_id: uid }
-          : m
+        String(m.card_id) === String(oldCardId) ? { ...m, card_id: uid } : m
       );
       setCache(TABLE_CACHE_KEY, { ...existing, data: updated });
 
@@ -147,7 +149,13 @@ const ChangeCardManual = () => {
         <div className="border-base-200 bg-base-100 flex h-16 border-t border-b">
           <div className="border-base-200 flex-1 place-content-center border-r border-l">
             <div className="flex place-items-center gap-6 px-4">
-              <div className="btn btn-circle btn-md btn-outline" onClick={() => { setMember(null); setNewCardId(''); }}>
+              <div
+                className="btn btn-circle btn-md btn-outline"
+                onClick={() => {
+                  setMember(null);
+                  setNewCardId('');
+                }}
+              >
                 <BackIcon />
               </div>
               <div className="text-lg font-semibold">Change Card — {member.name}</div>
@@ -155,15 +163,17 @@ const ChangeCardManual = () => {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="mb-4 rounded-lg bg-base-200/30 p-4">
-            <div className="text-sm text-base-content/50">Current Card ID</div>
+          <div className="bg-base-200/30 mb-4 rounded-lg p-4">
+            <div className="text-base-content/50 text-sm">Current Card ID</div>
             <div className="text-lg font-bold">{member.card_id || '-'}</div>
-            <div className="mt-2 text-sm text-base-content/50">Member</div>
-            <div className="text-base font-semibold">{member.name} ({member.reff_code || '-'})</div>
+            <div className="text-base-content/50 mt-2 text-sm">Member</div>
+            <div className="text-base font-semibold">
+              {member.name} ({member.reff_code || '-'})
+            </div>
           </div>
 
           <div className="mb-3">
-            <div className="text-sm mb-1 font-semibold">New Card ID</div>
+            <div className="mb-1 text-sm font-semibold">New Card ID</div>
             <Input
               value={newCardId}
               onChange={e => setNewCardId(e?.target?.value)}
@@ -171,9 +181,7 @@ const ChangeCardManual = () => {
             />
           </div>
 
-          {error && (
-            <div className="text-sm text-error bg-error/10 rounded px-3 py-2">{error}</div>
-          )}
+          {error && <div className="text-error bg-error/10 rounded px-3 py-2 text-sm">{error}</div>}
 
           <div className="mt-4">
             <div
@@ -193,14 +201,17 @@ const ChangeCardManual = () => {
       <div className="border-base-200 bg-base-100 flex h-16 border-t border-b">
         <div className="border-base-200 flex-1 place-content-center border-r border-l">
           <div className="flex place-items-center gap-6 px-4">
-            <div className="btn btn-circle btn-md btn-outline" onClick={() => navigate('/membership')}>
+            <div
+              className="btn btn-circle btn-md btn-outline"
+              onClick={() => navigate('/membership')}
+            >
               <BackIcon />
             </div>
             <div className="text-lg font-semibold">Change Card</div>
           </div>
         </div>
       </div>
-      <div className="flex-1 flex flex-col place-content-center place-items-center p-8">
+      <div className="flex flex-1 flex-col place-content-center place-items-center p-8">
         <div className="w-full max-w-md space-y-4">
           <label className="text-sm font-semibold">Current Card ID</label>
           <input
@@ -209,13 +220,13 @@ const ChangeCardManual = () => {
             placeholder="e.g. 1234567890"
             value={cardId}
             onChange={e => setCardId(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleSearch(); }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleSearch();
+            }}
             autoFocus
           />
 
-          {error && (
-            <div className="text-sm text-error bg-error/10 rounded px-3 py-2">{error}</div>
-          )}
+          {error && <div className="text-error bg-error/10 rounded px-3 py-2 text-sm">{error}</div>}
 
           <button
             className={`btn btn-primary btn-block btn-xl ${loading ? 'btn-disabled' : ''}`}

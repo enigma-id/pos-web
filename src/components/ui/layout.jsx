@@ -16,7 +16,6 @@ import { isActive } from '../../utils/common';
 const Layout = ({ children }) => {
   const dispatch = useDispatch();
   const Offline = useSelector(state => state?.Offline);
-  const authUser = useSelector(state => state?.Auth?.user);
   const { isOnline, wasOffline } = useNetworkStatus();
   const { count: queueCount, refresh: refreshQueueCount } = usePendingQueueCount();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -158,9 +157,8 @@ const Layout = ({ children }) => {
 };
 
 const Navbar = () => {
-  const dispatch = useDispatch();
   const navigate = useNavigate();
-  const User = useSelector(state => state?.Auth?.session?.user);
+  const sessionUser = useSelector(state => state?.Auth?.session?.user);
   const SalesSession = useSelector(state => state?.SalesSession);
 
   const { summary } = useSession();
@@ -209,7 +207,7 @@ const Navbar = () => {
           <small>Member</small>
         </div>
 
-        {User?.role === 'manager' && (
+        {sessionUser?.role === 'manager' && (
           <div
             className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'shifts')}`}
             onClick={() => navigate('/shifts')}
@@ -261,7 +259,7 @@ const Navbar = () => {
             ></span>
             <div className={`-ms-2 flex flex-col place-items-center`}>
               <UserIcon />
-              <small>{User?.name}</small>
+              <small>{sessionUser?.name}</small>
             </div>
           </div>
         </div>

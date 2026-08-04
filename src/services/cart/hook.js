@@ -42,10 +42,9 @@ const BILLS_CACHE_KEY = 'cache_openbills';
 
 const useCart = catalog_id => {
   const dispatch = useDispatch();
-  const AuthOutlet = useSelector(state => state?.Auth?.session?.outlet);
+  const sessionOutlet = useSelector(state => state?.Auth?.session?.outlet);
   const selectedChannel = useSelector(state => state?.SalesChannel?.selectedChannel);
   const CartState = useSelector(state => state?.Cart);
-  const userId = useSelector(state => state?.Auth?.session?.user?.id);
 
   const [triggerCatalogDetail, catalogDetailResult] = useLazyGetCatalogDetailQuery();
   const [checkoutMutation, checkoutResult] = useCheckoutMutation();
@@ -366,7 +365,7 @@ const useCart = catalog_id => {
 
   useEffect(() => {
     if (CartState.meta.service_charge_value === 0) {
-      dispatch(changeServiceCharge(AuthOutlet?.service_charges));
+      dispatch(changeServiceCharge(sessionOutlet?.service_charges));
     }
   }, []);
 
