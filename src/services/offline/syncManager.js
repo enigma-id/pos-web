@@ -113,8 +113,6 @@ const mapTopupsToSync = (topups, sessionSyncId) =>
 // ===== MAIN SYNC FUNCTION =====
 
 export const syncPendingSessions = async () => {
-  console.log('[DEBUG] syncPendingSessions');
-  console.log('[DEBUG] storeRef', storeRef);
   if (!storeRef) {
     return;
   }
@@ -183,8 +181,6 @@ export const syncPendingSessions = async () => {
     const allBills = await db.getAll(STORES.orderBills);
     const allPayments = await db.getAll(STORES.orderPayments);
     const allTopups = await db.getAll(STORES.topups);
-
-    console.log('[DEBUG] allBills', allBills);
 
     // Group by session ID (origin_session_id / paid_session_id / session_sync_id / sessions.sync_id)
     const grouped = {};

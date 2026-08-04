@@ -30,6 +30,11 @@ const Cart = ({ onUpdate }) => {
   const session = useSelector(s => s.Auth?.session);
   const sessionSummary = useSelector(state => state?.SalesSession?.sessionSummary);
 
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+
+  const isOffline = !isOnline || apiReachable === false;
+
   const dataModalSuccess = React.useRef(null);
   const hasChangeBillName = React.useRef(false);
 
@@ -257,8 +262,6 @@ const Cart = ({ onUpdate }) => {
   };
 
   const onCreateBill = async billName => {
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-
     if (isOffline) {
       onCreateBillOffline(billName);
     } else {
@@ -533,8 +536,6 @@ const Cart = ({ onUpdate }) => {
   };
 
   const onUpdateBill = async billName => {
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-
     if (isOffline) {
       onUpdateBillOffline(billName);
     } else {

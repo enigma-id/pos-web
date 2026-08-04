@@ -34,8 +34,6 @@ const CardContent = ({ data, onClose }) => {
 
   const onTopupOffline = async () => {
     const useBonuses = schemaBonus.filter(sb => sb.min_amount <= value)?.slice(0, 1);
-    console.log('=======[DEBUG]===[useBonus]============', useBonuses);
-    console.log('=======[DEBUG]===[data]============', data);
 
     const membership = JSON.parse(JSON.stringify(data));
     const dataPrint = {
@@ -105,8 +103,6 @@ const CardContent = ({ data, onClose }) => {
       topup_method: method,
       topup_nominal: nominal,
     });
-
-    console.log('[DEBUG] [DATA PRINT] ', dataPrint);
 
     handleModalPrint(dataPrint);
 

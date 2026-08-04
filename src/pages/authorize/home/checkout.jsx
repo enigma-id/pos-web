@@ -62,6 +62,11 @@ const CheckoutScreen = () => {
   const session = useSelector(s => s.Auth?.session);
   const sessionSummary = useSelector(state => state?.SalesSession?.sessionSummary);
 
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+
+  const isOffline = !isOnline || apiReachable === false;
+
   const dropdownRef = React.useRef(null);
 
   const { getPaymentMethods } = useMaster();
@@ -85,7 +90,6 @@ const CheckoutScreen = () => {
   // const { getServiceCharge } = useOutlet();
 
   const { checkSaldo, checkResult } = useMembership();
-  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
   const { openModal, closeModal } = useModal();
 
   const [isOpen, setIsOpen] = React.useState(false);
@@ -96,8 +100,6 @@ const CheckoutScreen = () => {
   const [billName, setBillName] = React.useState('');
 
   const [selectedMethod, setSelectedMethod] = React.useState(null);
-
-  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
 
   const renderAdditionals = item => {
     return (item?.addons || [])
@@ -326,8 +328,6 @@ const CheckoutScreen = () => {
   };
 
   const onCreateBill = async billName => {
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-
     if (isOffline) {
       onCreateBillOffline(billName);
     } else {
@@ -523,8 +523,6 @@ const CheckoutScreen = () => {
   };
 
   const onUpdateBill = async billName => {
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-
     if (isOffline) {
       onUpdateBillOffline(billName);
     } else {
@@ -925,7 +923,6 @@ const CheckoutScreen = () => {
   };
 
   const onPay = async card => {
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     if (isOffline) {
       onPayOffline(card);
     } else {
@@ -999,9 +996,7 @@ const CheckoutScreen = () => {
   };
 
   const handleRead = uid => {
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-
-    if (isOffline || apiReachable === false) {
+    if (isOffline) {
       // No connection → skip checkSaldo, ambil dari cache kalo ada
       const membership = showMembership(uid);
       onPay(membership || { card_id: uid });
@@ -1089,7 +1084,6 @@ const CheckoutScreen = () => {
     const getMethod = async () => {
       const res = await getPaymentMethods();
 
-      console.log(res, '================');
       setPaymentMethod(res);
       setSelectedMethod(res[0]);
     };

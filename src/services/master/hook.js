@@ -50,7 +50,6 @@ const useMaster = () => {
 
         return serverData;
       } catch (err) {
-        console.log('==================', err);
         // fetch error
       }
     }

@@ -38,7 +38,6 @@ const useMembership = id => {
     if (!isOffline && !apiDead) {
       try {
         const res = await triggerGet(params).unwrap();
-        console.log('[DEBUG] === ada tigger get', res?.data);
         const serverData = res?.data || [];
 
         // Online search → simpan di cache search; online no-search → simpan di cache utama
@@ -51,7 +50,6 @@ const useMembership = id => {
         return;
       } catch (err) {
         // fetch error
-        console.log('[DEBUG] get membership', err);
       }
     }
 

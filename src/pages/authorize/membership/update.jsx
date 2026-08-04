@@ -65,7 +65,6 @@ const UpdateSession = ({ id, onClose, isOpen, onRefresh, membership }) => {
       reff_code: phone,
     };
 
-    console.log(sessionAuth?.user?.id, '====');
     try {
       await updateMembership(payload, sessionAuth?.user?.id);
     } catch (err) {
