@@ -16,21 +16,24 @@ import usePendingQueueCount, {
 import { currencyFormat, dateFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
 import { resetSummary } from '../../../services/sales/session/slice';
+import { makeEndSession } from '../../../services/offline/shapes';
+import { closeSession } from '../../../services/offline';
+import { updateShifts } from '../../../utils/cache';
 
 const CloseSection = () => {
   const dispatch = useDispatch();
 
   const sessionSummary = useSelector(state => state?.SalesSession?.sessionSummary);
+  const session = useSelector(s => s.Auth?.session);
+
   const isOnline = useSelector(state => state?.Offline?.isOnline);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
 
   const isOffline = !isOnline || apiReachable === false;
 
-  const { summary, summaryResult, end, endResult } = useSession();
+  const { summary, end, endResult } = useSession();
   const { count: pendingCount, refresh: refreshQueueCount } = usePendingQueueCount();
   const { onLogout } = useAuth();
-
-  const userId = useSelector(state => state?.Auth?.session?.user?.id);
 
   const { showCart } = useSidebar();
   const { openModal, closeModal } = useModal();
@@ -48,8 +51,6 @@ const CloseSection = () => {
   const handleOpenPrintSummary = v => {
     open(<Summary data={v} />);
   };
-
-  const doEndSession = () => {};
 
   const showFailoverModal = (count = pendingCount) => {
     openModal(
@@ -108,7 +109,34 @@ const CloseSection = () => {
   };
 
   const onCloseOffline = async () => {
-    handleOpenPrintSummary(sessionSummary);
+    const payload = {
+      ...sessionSummary,
+      cash_finished: Number(cash),
+      status: 'closed',
+      finished_at: new Date(),
+    };
+
+    const dataOfflineToOnline = makeEndSession(payload);
+    console.log('[DEBUG] onCloseOffline', dataOfflineToOnline);
+
+    try {
+      await closeSession(dataOfflineToOnline, session?.user?.id);
+    } catch (err) {
+      console.log('[DEBUG] [closeSession]', err);
+      handleModalError();
+    }
+
+    triggerQueueRefresh();
+
+    try {
+      updateShifts(dataOfflineToOnline);
+    } catch (err) {
+      handleModalError();
+
+      console.log('[DEBUG] [updateShifts]', err);
+    }
+
+    handleOpenPrintSummary(dataOfflineToOnline);
     dispatch(resetSummary());
   };
 
@@ -117,12 +145,32 @@ const CloseSection = () => {
     end(payload);
   };
 
-  const onClose = async () => {
+  const doOnClose = async () => {
     if (isOffline) {
       onCloseOffline();
     } else {
       onCloseOnline();
     }
+  };
+
+  const handleModalError = () => {
+    openModal(
+      <>
+        <Modal.Header onClose={closeModal}>
+          <div className="text-lg font-semibold">Can't save</div>
+        </Modal.Header>
+        <Modal.Body full>
+          <div className="flex place-content-center place-items-center">
+            <img src="./error.png" className="h-64" />
+          </div>
+          <div className="-mt-5 pb-4 text-center">
+            <p className="text-base-300 text-xs">Try another</p>
+          </div>
+        </Modal.Body>
+      </>,
+
+      'w-md'
+    );
   };
 
   const openEndSessionConfirm = () => {
@@ -141,7 +189,7 @@ const CloseSection = () => {
                 className="btn btn-primary btn-lg px-6 text-white"
                 onClick={() => {
                   closeModal();
-                  onClose();
+                  doOnClose();
                 }}
               >
                 Yes

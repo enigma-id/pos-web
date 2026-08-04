@@ -140,8 +140,6 @@ export const closeSession = async (payload, userId) => {
     const doc = {
       ...payload,
       is_synced: false,
-      // sync_id ini tidak perlu nanti dikirim ke api ya bro - karena ini dari update server
-      sync_id: payload?.id,
     };
 
     await db.add(STORES.sessions, doc);

@@ -133,6 +133,10 @@ const useSession = () => {
       updatedSummary.summary.sales.total_service += data.total_service;
       updatedSummary.summary.sales.grand_total += data.total_charges;
 
+      if (data?.payment_method?.provider === 'cash') {
+        updatedSummary.summary.cash.expected_cash += data.total_charges;
+      }
+
       // --- PAYMENT METHODS ---
       if (!updatedSummary.summary.payment_methods) {
         updatedSummary.summary.payment_methods = [];
