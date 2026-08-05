@@ -50,7 +50,7 @@ const mapOrderToSync = (order, sessionSyncId) => ({
   code: order?.code,
   bill_name: order?.bill_name,
   origin_session_sync_id: sessionSyncId,
-  sales_chnanel_id: order?.sales_chnanel_id,
+  sales_channel_id: order?.sales_channel_id,
   membership_id: order?.membership_id,
   service_charge_percentage: order?.service_charge_percentage,
   service_charge_value: order?.service_charge_value,
@@ -66,20 +66,21 @@ const mapOrderToSync = (order, sessionSyncId) => ({
   ref_sync_id: order?.status === 'completed' ? order?.ref_sync_id : '',
   payment_method_id: order?.status === 'completed' ? order?.payment_method_id : '',
   payment_ref: order?.status === 'completed' ? order?.payment_ref : '',
-  total_payment: order?.status === 'completed' ? order?.total_payment : '',
-  paid_at: order?.status === 'completed' ? order?.paid_at : '',
+  total_payment: order?.status === 'completed' ? order?.total_payment : null,
+  paid_at: order?.status === 'completed' ? order?.paid_at : null,
 });
 
 const mapItemsToSync = order => {
   return order?.items.map(item => ({
     catalog_id: item.catalog_id,
+    category_id: item.category_id,
     catalog_name: item.catalog_name || '',
-    categroy_name: item.categroy_name || '',
+    category_name: item.category_name || '',
     quantity: item.quantity || 0,
     unit_nett: item.unit_nett || 0,
     addons: (item.addons || []).map(a => ({
       addon_group_id: a.addon_group_id,
-      addon_item_id: a.addon_item_id,
+      addon_item_id: a.addon_item_id ?? a.catalog_id,
       catalog_name: a.catalog_name || '',
       unit_nett: a.unit_nett || 0,
       quantity: a.quantity || 1,
@@ -90,9 +91,9 @@ const mapItemsToSync = order => {
 const mapCategoryDiscountsToSync = order => {
   return order.category_discounts.map(cat => ({
     category_id: cat.category_id,
-    discount_percentage: item.discount_percentage,
-    discount_value: item.discount_value,
-    total_discount: item.total_discount,
+    discount_percentage: cat.discount_percentage,
+    discount_value: cat.discount_value,
+    total_discount: cat.total_discount,
     is_discount_percentage: cat.is_discount_percentage,
   }));
 };
@@ -100,7 +101,8 @@ const mapCategoryDiscountsToSync = order => {
 const mapTopupsToSync = (topups, sessionSyncId) =>
   topups.map(t => ({
     session_sync_id: sessionSyncId,
-    card_id: t.card_id,
+    card_id: t.card_id || '',
+    membership_id: t.membership_id || '',
     nominal: t.nominal || 0,
     payment_type: t.payment_type || '',
     created_at: t.created_at,
@@ -113,7 +115,7 @@ export const syncPendingSessions = async () => {
     return;
   }
   if (isSyncingInternal) {
-    isSyncingInternal = false;
+    return;
   }
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     return;
@@ -185,7 +187,13 @@ export const syncPendingSessions = async () => {
       if (!sid) continue;
       if (!grouped[sid]) grouped[sid] = { session: null, orders: [], topups: [] };
       const hasReference = !!session.id;
-      const isClosed = !!session.close_at;
+      // Closed session = status 'closed' ATAU finished_at bukan zero date
+      // ("0001-01-01T00:00:00Z"). Stored doc pakai field finished_at, bukan
+      // close_at — session yang baru open punya finished_at zero date sentinel
+      // dari makeStartSession.
+      const isClosed =
+        session.status === 'closed' ||
+        (!!session.finished_at && session.finished_at !== '0001-01-01T00:00:00Z');
       if (isClosed || !hasReference) {
         grouped[sid].session = session;
       }
@@ -219,17 +227,26 @@ export const syncPendingSessions = async () => {
           // Session — include kalo ada close_at atau start offline (tanpa id)
           if (group.session) {
             const hasRef = !!group.session.id;
-            const isClosed = !!group.session.close_at;
+            // Sama seperti grouping di atas: closed ditandai status 'closed' atau
+            // finished_at bukan zero date sentinel.
+            const isClosed =
+              group.session.status === 'closed' ||
+              (!!group.session.finished_at && group.session.finished_at !== '0001-01-01T00:00:00Z');
             if (isClosed || !hasRef) {
               payload.session = {
                 sync_id: group.session.sync_id,
                 open_at: group.session.started_at,
-                close_at: group.session.finished_at,
                 cash_started: group.session.cash_started,
                 cash_finished: group.session.cash_finished,
                 latitude: group.session.latitude,
                 longitude: group.session.longitude,
                 battery_health: group.session.battery_health,
+                // Hanya kirim close_at kalo session beneran ditutup.
+                // Session yang baru open punya finished_at = zero date
+                // ("0001-01-01T00:00:00Z") dari makeStartSession — itu sentinel
+                // "masih open", bukan timestamp close. Kalo ikut dikirim, backend
+                // auto-close session yang baru dibuka.
+                ...(isClosed && { close_at: group.session.finished_at }),
               };
             }
           }
@@ -243,14 +260,17 @@ export const syncPendingSessions = async () => {
             {}
           );
 
-          consoel.log('[DEBUG] syncPendingSessions Hit', result);
-
           if (!result?.error) {
             for (const o of group.orders) {
               await db.delete(o._store, o.sync_id);
             }
             for (const t of group.topups) {
               await db.delete(STORES.topups, t.sync_id);
+            }
+            // Session yang udah synced ga perlu disimpen di IDB —
+            // nanti bakal di-fetch ulang dari server pas online.
+            if (group.session) {
+              await db.delete(STORES.sessions, group.session.sync_id);
             }
             cleanupLocalStorageCache();
             triggerQueueRefresh();

@@ -36,6 +36,10 @@ export const checkPartialPaid = (reqItems, oldItems) => {
   const clonedOldItems = JSON.parse(JSON.stringify(oldItems));
 
   for (const oldItem of clonedOldItems) {
+    // ini untuk masukan category_id bro
+    oldItem.category_id = oldItem.catalog?.category_id;
+    oldItem.unit_discount = oldItem.discount_value;
+
     let notPay = false;
     let change = false;
 

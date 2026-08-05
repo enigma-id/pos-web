@@ -10,6 +10,7 @@ function flattenAdditionals(additionals = []) {
   const result = [];
 
   additionals.forEach(add => {
+    console.log('[DEBUG] flattenAdditionals', add);
     const { id: addonGroupId, type, name: addonGroupName, items = [] } = add;
 
     items.forEach(child => {
@@ -18,6 +19,7 @@ function flattenAdditionals(additionals = []) {
       if (isSelected) {
         const entry = {
           addon_group: { id: addonGroupId, name: addonGroupName || '', type: type || '' },
+          addon_group_id: addonGroupId,
           addon_item_id: child.catalog_id ?? child.addon_item_id ?? child.id,
           name: child.catalog_name ?? child.name,
           unit_nett: Number(child.unit_nett ?? 0) || 0,
@@ -220,12 +222,12 @@ function convertApiOrderToCartItem(item) {
     const addonGroup = add.addon_group || {};
     const grpType = addonGroup.type || '';
     const entry = {
-      id: add.id,
       addon_group: {
         id: addonGroup.id || add.addon_group_id,
         name: addonGroup.name || '',
         type: grpType,
       },
+      addon_group_id: addonGroup.id || add.addon_group_id,
       addon_item_id: add.catalog?.id || add.catalog_id,
       name: add.catalog_name || add.catalog?.name || '',
       unit_nett: Number(add.unit_nett ?? 0) || 0,

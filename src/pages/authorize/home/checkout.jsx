@@ -693,6 +693,9 @@ const CheckoutScreen = () => {
 
       const dataOfflineToOnline = makeCompletedOrder(payload);
 
+      console.log('[DEBUG] onPayOffline payload.items', payload.items);
+      console.log('[DEBUG] onPayOffline CartState?.bill?.items', CartState?.bill?.items);
+
       if (CartState?.bill) {
         let { itemsPending, isPending } = checkPartialPaid(payload.items, CartState?.bill?.items);
 
@@ -794,8 +797,9 @@ const CheckoutScreen = () => {
     try {
       // ini dibutuhkan untuk split bill, karena data sync_id adalah id tsb
       // ref_sync_id ini dibutuhkan untuk split id dari sync_id
-      dataOfflineToOnline.ref_sync_id = dataOfflineToOnline.sync_id;
+      dataOfflineToOnline.ref_sync_id = dataOfflineToOnline?.id || dataOfflineToOnline.sync_id;
       dataOfflineToOnline.sync_id = uuidv4();
+      dataOfflineToOnline.id = '';
 
       await createOrderPayment(dataOfflineToOnline, session?.user?.id);
     } catch (err) {

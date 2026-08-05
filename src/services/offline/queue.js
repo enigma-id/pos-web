@@ -179,7 +179,8 @@ export const updateOrderBill = async (payload, userId) => {
   // jika esxsting sync_id gaada berarti ini updateo order bill dari online bro
   if (!existing) {
     existing = await db.get(STORES.orderBills, payload?.id);
-    payload.sync_id = payload?.id;
+    // sync_id ini tidak perlu nanti dikirim ke api ya bro - karena ini dari update server, tapi kalo sudah ada sync_id kirimkan saja sync_id
+    payload.sync_id = payload?.sync_id || payload?.id;
   }
 
   if (!existing) {
@@ -189,8 +190,6 @@ export const updateOrderBill = async (payload, userId) => {
       is_synced: false,
       // ini data dari session bill server bro
       origin_session_sync_id: payload?.session?.id,
-      // sync_id ini tidak perlu nanti dikirim ke api ya bro - karena ini dari update server
-      sync_id: payload?.id,
     };
 
     await db.add(STORES.orderBills, doc);
@@ -290,10 +289,10 @@ export const updateMembership = async (payload, userId) => {
 
   await db.put(STORES.memberships, {
     ...existing,
-    ...data,
+    ...payload,
   });
 
-  return data;
+  return payload;
 };
 
 // ========== METADATA ==========

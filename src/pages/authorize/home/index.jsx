@@ -179,7 +179,7 @@ const CatalogScreen = () => {
                   <div
                     key={cat?.id}
                     className="catalog-card"
-                    onClick={mode === 'open_session' ? false : () => onShow(cat, null)}
+                    onClick={mode === 'open_session' ? () => {} : () => onShow(cat, null)}
                   >
                     <div className="catalog-img">
                       {cat?.image ? (

@@ -98,11 +98,11 @@ const OrderDetails = ({ data }) => {
           <div className="flex place-content-between place-items-center text-base">
             <div>Subtotal Before Discount</div>
             <div>
-              {data?.subtotal_gross > data?.subtotal_nett && (
+              {/* {data?.subtotal_gross > data?.subtotal_nett && (
                 <span className="text-base-300 me-2 text-xs font-thin line-through">
                   {currencyFormat(data?.subtotal_gross)}
                 </span>
-              )}
+              )} */}
               {currencyFormat(data?.subtotal_nett)}
             </div>
           </div>

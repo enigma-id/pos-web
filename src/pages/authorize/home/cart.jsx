@@ -185,6 +185,8 @@ const Cart = ({ onUpdate }) => {
     dispatch(resetCart());
   };
 
+  console.log('[DEBUG] [CART]', CartState);
+
   // Online — API
   const onCreateBillOnline = async billName => {
     const discount_categories = CartState?.discount?.category
@@ -309,6 +311,7 @@ const Cart = ({ onUpdate }) => {
         is_discount_percentage: item.is_discount_percentage,
         discount_percentage: item.discount_percentage,
         discount_value: item.discount_value,
+        unit_discount: item.unit_discount,
       };
 
       if (item?.is_custom) {

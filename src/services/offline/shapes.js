@@ -51,6 +51,7 @@ export function makePendingBill(payload) {
       addons: item.addons.map(addon => ({
         ...addon,
         addon_group_id: addon?.addon_group?.id,
+        catalog_id: addon?.addon_item_id, // ini perlu kita copy ke catalog_id
         catalog_name: addon.name,
         quantity: (addon.quantity || 1) * item.quantity,
       })),
@@ -86,6 +87,8 @@ export function makePendingBill(payload) {
 
 // ── Update Pending bill from split bill for cache_openbills ──
 export function makeUpdatePendingBillFromSplitBill(bill, pendingItems) {
+  console.log('[DEBUG] makeUpdatePendingBillFromSplitBill - bill', bill);
+  console.log('[DEBUG] makeUpdatePendingBillFromSplitBill - bill', pendingItems);
   let subtotal = 0;
   let totalBill = 0;
   pendingItems.forEach(item => {
@@ -125,6 +128,7 @@ export function makeCompletedOrder(payload) {
       addons: item.addons.map(addon => ({
         ...addon,
         addon_group_id: addon?.addon_group?.id,
+        catalog_id: addon?.addon_item_id, // ini perlu kita copy ke catalog_id
         catalog_name: addon.name,
         quantity: (addon.quantity || 1) * item.quantity,
       })),
@@ -155,51 +159,5 @@ export function makeCompletedOrder(payload) {
     category_discounts: recalculateDiscountCategory(payload.category_discounts, payload.items),
     subtotal_nett: subtotal,
     total_bill: totalBill,
-  };
-}
-
-// ── IDB input for createOrderBill / updateOrderBill ──
-export function makeIdbBillData({
-  orderId,
-  code,
-  billName,
-  items,
-  cartState,
-  channel,
-  session,
-  discountCategories,
-  originSessionSyncId,
-  paidSessionSyncId,
-}) {
-  const orderItems = Array.isArray(items) ? items : [];
-  return {
-    sync_id: orderId,
-    code: code || '',
-    origin_session_sync_id: originSessionSyncId || null,
-    paid_session_sync_id: paidSessionSyncId || null,
-    is_offline_mode: true,
-    is_synced: false,
-    sales_channel_id: channel?.id || null,
-    sales_channel_name: channel?.name || null,
-    payment_method_id: null,
-    membership_id: cartState?.meta?.customer?.id || null,
-    payment_ref: '',
-    bill_name: billName || '',
-    cashier_name: session?.user?.name || '',
-    service_charge_value: toNum(cartState?.meta?.service_charge_value),
-    service_charge_percentage: toNum(cartState?.meta?.service_charge_percentage),
-    discount_percentage:
-      cartState?.discount?.cart?.type === 'percentage'
-        ? toNum(cartState?.discount?.cart?.value)
-        : 0,
-    discount_value:
-      cartState?.discount?.cart?.type === 'nominal' ? toNum(cartState?.discount?.cart?.value) : 0,
-    category_discounts: (Array.isArray(discountCategories) ? discountCategories : []).map(
-      makeCategoryDiscount
-    ),
-    items: orderItems.map((it, idx) => makeBillItem(it, orderId, idx)),
-    status: 'pending',
-    total_payment: 0,
-    paid_at: null,
   };
 }
