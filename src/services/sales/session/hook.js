@@ -139,7 +139,7 @@ const useSession = () => {
       }
 
       const pmIdx = updatedSummary.summary.payment_methods.findIndex(
-        p => p.payment_method_id === data?.payment_method?.id
+        p => p.name === data?.payment_method?.name
       );
 
       // Gunakan >= 0 karena indeks ke-0 itu valid!
@@ -163,7 +163,6 @@ const useSession = () => {
         }
       } else {
         updatedSummary.summary.payment_methods.push({
-          payment_method_id: data?.payment_method?.id,
           total_paid: data.total_charges,
           count: 1,
           name: data?.payment_method?.name,

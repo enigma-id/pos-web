@@ -216,7 +216,7 @@ export const createOrderPayment = async (payload, userId) => {
   const db = await ensureDB(userId);
 
   // paid_session_sync_id ini kenapa menggunakan or seperti ini, karena jika session summary/session payload dari online dia tidak mempunyai sync_id (sync_id adalah new id uuid dari client)
-  const paid_session_sync_id = payload?.session?.id || payload?.session?.sync_id;
+  const paid_session_sync_id = payload?.paid_session?.id || payload?.paid_session?.sync_id;
 
   const doc = {
     ...payload,

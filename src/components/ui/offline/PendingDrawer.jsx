@@ -328,9 +328,9 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
                           </span>
                         </div>
                       </div>
-                      <div className="mt-2 flex gap-1">
+                      <div className="mt-2 flex gap-1 p-2.5 pt-0">
                         <button
-                          className="btn btn-ghost btn-xs text-base-content/50"
+                          className="btn btn-error btn-ghost btn-xs text-base-content/50"
                           onClick={async () => {
                             await onRemove?.('topup', item);
                             setRefreshKey(k => k + 1);

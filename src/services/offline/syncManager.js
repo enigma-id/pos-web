@@ -1,14 +1,7 @@
 import { baseQuery } from '../baseQuery';
-import { deleteOpenBills, getCache, setCache } from '../../utils/cache';
-import { ensureDB, STORES, setLastSyncTime as setLastSyncTimeMeta, deleteOrderBill } from './queue';
+import { ensureDB, STORES, setLastSyncTime as setLastSyncTimeMeta } from './queue';
 import { triggerQueueRefresh } from './usePendingQueueCount';
-import {
-  setApiReachable,
-  setFailedCount,
-  setLastSyncTime,
-  setOfflineError,
-  setSyncing,
-} from './slice';
+import { setFailedCount, setLastSyncTime, setOfflineError, setSyncing } from './slice';
 
 const MAX_RETRY = 5;
 const BASE_DELAY = 1000;
@@ -44,12 +37,12 @@ const shouldRetry = error => {
 
 // ===== HELPER: map order fields to /sales/sync payload =====
 
-const mapOrderToSync = (order, sessionSyncId) => ({
+const mapOrderToSync = order => ({
   sync_id: order?.id ? '' : order?.sync_id,
   id: order?.id,
   code: order?.code,
   bill_name: order?.bill_name,
-  origin_session_sync_id: sessionSyncId,
+  origin_session_sync_id: order?.session?.id || order?.session?.sync_id,
   sales_channel_id: order?.sales_channel_id,
   membership_id: order?.membership_id,
   service_charge_percentage: order?.service_charge_percentage,
@@ -62,7 +55,8 @@ const mapOrderToSync = (order, sessionSyncId) => ({
   is_offline_mode: order?.is_offline_mode,
 
   // fields dibawah ini untuk order yang dibayar atau history
-  paid_session_sync_id: order?.status === 'completed' ? sessionSyncId : '',
+  paid_session_sync_id:
+    order?.status === 'completed' ? order?.paid_session?.id || order?.paid_session?.sync_id : '',
   ref_sync_id: order?.status === 'completed' ? order?.ref_sync_id : '',
   payment_method_id: order?.status === 'completed' ? order?.payment_method_id : '',
   payment_ref: order?.status === 'completed' ? order?.payment_ref : '',
@@ -218,40 +212,29 @@ export const syncPendingSessions = async () => {
     }
 
     for (const [sessionSyncId, group] of Object.entries(grouped)) {
-      let success = false;
-
       for (let attempt = 0; attempt < MAX_RETRY; attempt += 1) {
         try {
           const payload = {};
 
           // Session — include kalo ada close_at atau start offline (tanpa id)
           if (group.session) {
-            const hasRef = !!group.session.id;
-            // Sama seperti grouping di atas: closed ditandai status 'closed' atau
-            // finished_at bukan zero date sentinel.
-            const isClosed =
-              group.session.status === 'closed' ||
-              (!!group.session.finished_at && group.session.finished_at !== '0001-01-01T00:00:00Z');
-            if (isClosed || !hasRef) {
-              payload.session = {
-                sync_id: group.session.sync_id,
-                open_at: group.session.started_at,
-                cash_started: group.session.cash_started,
-                cash_finished: group.session.cash_finished,
-                latitude: group.session.latitude,
-                longitude: group.session.longitude,
-                battery_health: group.session.battery_health,
-                // Hanya kirim close_at kalo session beneran ditutup.
-                // Session yang baru open punya finished_at = zero date
-                // ("0001-01-01T00:00:00Z") dari makeStartSession — itu sentinel
-                // "masih open", bukan timestamp close. Kalo ikut dikirim, backend
-                // auto-close session yang baru dibuka.
-                ...(isClosed && { close_at: group.session.finished_at }),
-              };
+            payload.session = {
+              id: group?.session?.id,
+              sync_id: group.session.sync_id,
+            };
+
+            if (group.session.sync_type === 'both' || group.session.sync_type === 'opened') {
+              payload.session.open_at = group.session.started_at;
+              payload.session.cash_started = group.session.cash_started;
+            }
+
+            if (group.session.sync_type === 'both' || group.session.sync_type === 'closed') {
+              payload.session.close_at = group.session.finished_at;
+              payload.session.cash_finished = group.session.cash_finished;
             }
           }
 
-          payload.orders = group.orders.map(o => mapOrderToSync(o, sessionSyncId));
+          payload.orders = group.orders.map(o => mapOrderToSync(o));
           payload.topups = group.topups.map(t => mapTopupsToSync(t, sessionSyncId));
 
           const result = await baseQuery(
@@ -272,9 +255,7 @@ export const syncPendingSessions = async () => {
             if (group.session) {
               await db.delete(STORES.sessions, group.session.sync_id);
             }
-            cleanupLocalStorageCache();
             triggerQueueRefresh();
-            success = true;
             break;
           }
 
