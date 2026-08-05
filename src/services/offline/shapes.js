@@ -87,8 +87,6 @@ export function makePendingBill(payload) {
 
 // ── Update Pending bill from split bill for cache_openbills ──
 export function makeUpdatePendingBillFromSplitBill(bill, pendingItems) {
-  console.log('[DEBUG] makeUpdatePendingBillFromSplitBill - bill', bill);
-  console.log('[DEBUG] makeUpdatePendingBillFromSplitBill - bill', pendingItems);
   let subtotal = 0;
   let totalBill = 0;
   pendingItems.forEach(item => {

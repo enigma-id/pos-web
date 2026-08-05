@@ -48,6 +48,7 @@ const CardContent = ({ data, onClose }) => {
       sync_id: uuidv4(),
       membership: data,
       membership_id: data?.id,
+      card_id: data?.card_id,
       nominal: parseFloat(value) || 0,
       payment_type: method,
       reference_type: 'top-up',

@@ -693,9 +693,6 @@ const CheckoutScreen = () => {
 
       const dataOfflineToOnline = makeCompletedOrder(payload);
 
-      console.log('[DEBUG] onPayOffline payload.items', payload.items);
-      console.log('[DEBUG] onPayOffline CartState?.bill?.items', CartState?.bill?.items);
-
       if (CartState?.bill) {
         let { itemsPending, isPending } = checkPartialPaid(payload.items, CartState?.bill?.items);
 

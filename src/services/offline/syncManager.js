@@ -65,7 +65,7 @@ const mapOrderToSync = order => ({
 });
 
 const mapItemsToSync = order => {
-  return order?.items.map(item => ({
+  return (order?.items || []).map(item => ({
     catalog_id: item.catalog_id,
     category_id: item.category_id,
     catalog_name: item.catalog_name || '',
@@ -83,7 +83,7 @@ const mapItemsToSync = order => {
 };
 
 const mapCategoryDiscountsToSync = order => {
-  return order.category_discounts.map(cat => ({
+  return (order?.category_discounts || []).map(cat => ({
     category_id: cat.category_id,
     discount_percentage: cat.discount_percentage,
     discount_value: cat.discount_value,
@@ -93,7 +93,7 @@ const mapCategoryDiscountsToSync = order => {
 };
 
 const mapTopupsToSync = (topups, sessionSyncId) =>
-  topups.map(t => ({
+  (topups || []).map(t => ({
     session_sync_id: sessionSyncId,
     card_id: t.card_id || '',
     membership_id: t.membership_id || '',
@@ -106,36 +106,53 @@ const mapTopupsToSync = (topups, sessionSyncId) =>
 
 export const syncPendingSessions = async () => {
   if (!storeRef) {
-    return;
-  }
-  if (isSyncingInternal) {
-    return;
-  }
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    console.log('[SyncManager] skip: storeRef belum ready');
     return;
   }
 
   const userId = getCurrentUserId();
   if (!userId) {
+    console.log('[SyncManager] skip: userId belum ada');
+    return;
+  }
+
+  // Anti-reentrant: kalo sync udah jalan, jangan masuk lagi.
+  // Beda dengan jalur lain — panggilan kedua ini di-skip dengan pesan jelas,
+  // bukan silent return (yang bikin kelihatan "mati").
+  if (isSyncingInternal) {
+    console.log('[SyncManager] skip: sync masih berjalan (isSyncingInternal)');
+    return;
+  }
+
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    console.log('[SyncManager] skip: navigator offline');
     return;
   }
 
   isSyncingInternal = true;
   storeRef.dispatch(setSyncing(true));
   storeRef.dispatch(setOfflineError(null));
+  console.log('[SyncManager] sync mulai', { userId });
 
   const fakeApi = {
     ...storeRef,
     getState: storeRef.getState,
     dispatch: storeRef.dispatch,
+    // RTK fetchBaseQuery butuh `api.signal` untuk anySignal(timeout) —
+    // store Redux gak punya. Tanpa ini, sync crash: "Cannot read properties
+    // of undefined (reading 'aborted')".
+    signal: new AbortController().signal,
   };
 
   try {
+    console.log('[SyncManager] ensureDB mulai');
     const db = await ensureDB(userId);
+    console.log('[SyncManager] ensureDB selesai');
     const now = new Date().toISOString();
 
     // ===== 1. MEMBERSHIPS → POST /membership/sync =====
     const memberships = await db.getAll(STORES.memberships);
+    console.log('[SyncManager] memberships di IDB:', memberships.length);
     if (memberships.length > 0) {
       const payload = {
         members: memberships.map(m => ({
@@ -148,11 +165,19 @@ export const syncPendingSessions = async () => {
 
       for (let attempt = 0; attempt < MAX_RETRY; attempt += 1) {
         try {
+          console.log(`[SyncManager] POST /membership/sync attempt ${attempt + 1}`);
           const result = await baseQuery(
-            { url: '/membership/sync', method: 'POST', body: payload, __skipOfflineQueue: true },
+            {
+              url: '/membership/sync',
+              method: 'POST',
+              body: payload,
+              __skipOfflineQueue: true,
+              timeout: 30000,
+            },
             fakeApi,
             {}
           );
+          console.log('[SyncManager] /membership/sync result:', result?.error ? result.error : 'OK');
 
           if (!result?.error) {
             for (const m of memberships) {
@@ -162,7 +187,8 @@ export const syncPendingSessions = async () => {
 
           if (!result?.error || !shouldRetry(result.error)) break;
           await sleep(BASE_DELAY * 2 ** attempt);
-        } catch {
+        } catch (err) {
+          console.log('[SyncManager] /membership/sync catch:', err?.message || err);
           await sleep(BASE_DELAY * 2 ** attempt);
         }
       }
@@ -212,6 +238,12 @@ export const syncPendingSessions = async () => {
     }
 
     for (const [sessionSyncId, group] of Object.entries(grouped)) {
+      console.log('[SyncManager] sync group:', {
+        sessionSyncId,
+        orders: group.orders.length,
+        topups: group.topups.length,
+        hasSession: !!group.session,
+      });
       for (let attempt = 0; attempt < MAX_RETRY; attempt += 1) {
         try {
           const payload = {};
@@ -235,13 +267,21 @@ export const syncPendingSessions = async () => {
           }
 
           payload.orders = group.orders.map(o => mapOrderToSync(o));
-          payload.topups = group.topups.map(t => mapTopupsToSync(t, sessionSyncId));
+          payload.topups = mapTopupsToSync(group.topups, sessionSyncId);
+          console.log(`[SyncManager] POST /sales/sync attempt ${attempt + 1}`);
 
           const result = await baseQuery(
-            { url: '/sales/sync', method: 'POST', body: payload, __skipOfflineQueue: true },
+            {
+              url: '/sales/sync',
+              method: 'POST',
+              body: payload,
+              __skipOfflineQueue: true,
+              timeout: 30000,
+            },
             fakeApi,
             {}
           );
+          console.log('[SyncManager] /sales/sync result:', result?.error ? result.error : 'OK');
 
           if (!result?.error) {
             for (const o of group.orders) {
@@ -261,15 +301,18 @@ export const syncPendingSessions = async () => {
 
           const status = getStatusCode(result.error);
           if (status === 401) {
+            console.log('[SyncManager] /sales/sync 401 — berhenti');
             break;
           }
 
           if (!shouldRetry(result.error)) {
+            console.log('[SyncManager] /sales/sync non-retry error — berhenti');
             break;
           }
 
           await sleep(BASE_DELAY * 2 ** attempt);
         } catch (err) {
+          console.log('[SyncManager] /sales/sync catch:', err?.message || err);
           await sleep(BASE_DELAY * 2 ** attempt);
         }
       }
@@ -323,6 +366,10 @@ export const initSyncManager = async store => {
 
       if (reconnectTimer) clearTimeout(reconnectTimer);
       reconnectTimer = setTimeout(() => {
+        console.log('[SyncManager] online event → trigger sync');
+        // Gak reset isSyncingInternal di sini — anti-reentrant harus dijaga.
+        // Kalau sync masih jalan beneran, skip via guard (log jelas).
+        // Kalau ke-stuck (hang), timeout 30s di baseQuery udah jamin lock lepas.
         syncPendingSessions();
       }, RECONNECT_DELAY);
     };
@@ -355,7 +402,16 @@ const stopHeartbeat = () => {
 
 // ===== EXPORTS =====
 
+/**
+ * Force sync — dipakai tombol Retry (layout banner) & PendingDrawer refresh.
+ * Reset lock dulu biar sync bener-bener jalan, walau `isSyncingInternal`
+ * ke-stuck `true` dari sync sebelumnya yang hang (timeout 30s biar gak hang selamanya).
+ */
 export const syncNow = async () => {
+  if (isSyncingInternal) {
+    console.log('[SyncManager] syncNow: reset lock stuck sebelum retry');
+    isSyncingInternal = false;
+  }
   await syncPendingSessions();
 };
 

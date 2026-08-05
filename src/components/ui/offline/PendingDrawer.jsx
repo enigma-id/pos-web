@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 
-import { syncPendingSessions } from '../../../services/offline';
+import { syncNow } from '../../../services/offline';
 import { ensureDB, STORES } from '../../../services/offline/queue';
 import { FiRefreshCw } from 'react-icons/fi';
 import { currencyFormat, dateFormat } from '../../../utils/common';
@@ -147,7 +147,7 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
             {hasPendingOrFailed && (
               <button
                 className="btn btn-ghost btn-xs btn-circle"
-                onClick={() => syncPendingSessions()}
+                onClick={() => syncNow()}
               >
                 <FiRefreshCw className="h-4 w-4" />
               </button>
@@ -264,8 +264,6 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
             }
 
             if (activeTab === 'member') {
-              console.log('[DEBUG] [ITEM DATE MEMBER]', item);
-
               if (item.sync_type === 'membership') {
                 return (
                   <div

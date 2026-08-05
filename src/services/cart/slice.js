@@ -10,7 +10,6 @@ function flattenAdditionals(additionals = []) {
   const result = [];
 
   additionals.forEach(add => {
-    console.log('[DEBUG] flattenAdditionals', add);
     const { id: addonGroupId, type, name: addonGroupName, items = [] } = add;
 
     items.forEach(child => {

@@ -185,8 +185,6 @@ const Cart = ({ onUpdate }) => {
     dispatch(resetCart());
   };
 
-  console.log('[DEBUG] [CART]', CartState);
-
   // Online — API
   const onCreateBillOnline = async billName => {
     const discount_categories = CartState?.discount?.category
