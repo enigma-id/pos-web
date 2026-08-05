@@ -32,7 +32,7 @@ const HistorySection = ({ id, membership }) => {
   const processedIdsRef = React.useRef(new Set());
   const hasMoreRef = React.useRef(true);
 
-  const { saldoLog, showResult, saldoLogResult } = useMembership(id);
+  const { saldoLog, show: showMember, showResult, saldoLogResult } = useMembership();
   const { show: orderShow, showResult: orderShowResult } = useOrder();
 
   const LIMIT = 25;
@@ -185,6 +185,12 @@ const HistorySection = ({ id, membership }) => {
     }
   }, [isOffline, membership?.card_id]);
 
+  useEffect(() => {
+    if (!isOffline) {
+      showMember(membership?.id);
+    }
+  }, []);
+
   if (showResult?.isLoading) return <div>loading...</div>;
 
   const data = showResult?.data?.data || membership;
@@ -212,6 +218,8 @@ const HistorySection = ({ id, membership }) => {
       </div>
     );
   }
+
+  console.log('[History] [DEBUG]', logs);
 
   return (
     // tambahkan disini css meggunakan daiysiui dan css tailwind
