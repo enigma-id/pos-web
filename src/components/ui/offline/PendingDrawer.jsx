@@ -196,15 +196,15 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
               const sessionLabel =
                 item.sync_type === 'both'
                   ? 'Open & Close Session'
-                  : item.sync_type === 'start'
+                  : item.sync_type === 'opened'
                     ? 'Open Session'
                     : 'Close Session';
               const sessionIcon =
-                item.sync_type === 'both' ? '🔄' : item.sync_type === 'start' ? '🚪' : '🏁';
+                item.sync_type === 'both' ? '🔄' : item.sync_type === 'opened' ? '🚪' : '🏁';
               const sessionColor =
                 item.sync_type === 'both'
                   ? 'badge-info'
-                  : item.sync_type === 'start'
+                  : item.sync_type === 'opened'
                     ? 'badge-success'
                     : 'badge-warning';
 
@@ -214,7 +214,7 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
                   className="border-base-200 bg-base-100 hover:border-base-300 overflow-hidden rounded-lg border transition-colors"
                 >
                   <div
-                    className={`h-1 w-full ${item.sync_type === 'start' ? 'bg-success' : 'bg-warning'}`}
+                    className={`h-1 w-full ${item.sync_type === 'opened' ? 'bg-success' : 'bg-warning'}`}
                   />
                   <div className="p-2.5">
                     <div className="mb-1.5 flex items-center gap-2">
@@ -229,33 +229,32 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
                         </span>
                       )}
                     </div>
-                    {apiType === 'both' && (
+                    {item.sync_type === 'both' && (
                       <div className="text-base-content/50 mb-1.5 flex gap-3 text-[10px] font-bold">
                         <span>Open: {dateFormat(item?.started_at)}</span>
                         <span>Close: {dateFormat(item?.finished_at)}</span>
                       </div>
                     )}
-                    <div className="bg-base-200/30 flex items-center justify-between rounded p-2">
-                      <div className="flex flex-col gap-1">
-                        {item?.body?.cash_started > 0 && (
-                          <>
-                            <span className="text-base-content/40 text-[9px] font-bold uppercase">
-                              Starting Cash
-                            </span>
-                            <span className="text-base-content text-sm font-black">
-                              {currencyFormat(item?.body?.cash_started)}
-                            </span>
-                          </>
+                    <div className="bg-base-200/30 rounded p-2">
+                      <div className="text-base-content/40 flex justify-between text-[9px] font-bold uppercase">
+                        {(item?.sync_type === 'opened' || item?.sync_type === 'both') && (
+                          <span>Starting Cash</span>
                         )}
-                        {item?.body?.cash_finished > 0 && (
-                          <>
-                            <span className="text-base-content/40 text-[9px] font-bold uppercase">
-                              Ending Cash
-                            </span>
-                            <span className="text-base-content text-sm font-black">
-                              {currencyFormat(item?.body?.cash_finished)}
-                            </span>
-                          </>
+                        {(item?.sync_type === 'closed' || item?.sync_type === 'both') && (
+                          <span>Ending Cash</span>
+                        )}
+                      </div>
+                      <div className="mt-0.5 flex items-center justify-between">
+                        {(item?.sync_type === 'opened' || item?.sync_type === 'both') && (
+                          <span className="text-base-content text-sm font-black">
+                            {currencyFormat(item?.cash_started)}
+                          </span>
+                        )}
+
+                        {(item?.sync_type === 'closed' || item?.sync_type === 'both') && (
+                          <span className="text-base-content text-sm font-black">
+                            {currencyFormat(item?.cash_finished)}
+                          </span>
                         )}
                       </div>
                     </div>

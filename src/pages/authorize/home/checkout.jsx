@@ -651,6 +651,8 @@ const CheckoutScreen = () => {
         payload.payment_ref = card?.reff_code;
       }
 
+      let outstandingBillPayment = 0;
+
       // untuk payload dibawah ini adalah tambahan payload yang berdasarkan dari savebill
       if (CartState?.bill) {
         payload = {
@@ -663,6 +665,15 @@ const CheckoutScreen = () => {
           paid_session: sessionSummary,
           created_at: CartState?.bill?.created_at,
         };
+
+        if (
+          !(
+            CartState?.bill?.session?.id === sessionSummary?.id ||
+            CartState?.bill?.session?.sync_id === sessionSummary?.sync_id
+          )
+        ) {
+          outstandingBillPayment = CartState?.meta?.grand_total;
+        }
       } else {
         const orderId = uuidv4();
 
@@ -709,6 +720,7 @@ const CheckoutScreen = () => {
             dataOfflineToOnline?.total_bill - dataOfflineToOnline?.discount_value,
           total_service: dataOfflineToOnline?.service_charge_value,
           total_charges: dataOfflineToOnline?.total_charges,
+          outstanding_bill_payment: outstandingBillPayment,
         });
       } catch (err) {
         return;

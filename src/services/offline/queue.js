@@ -117,7 +117,7 @@ export const initQueueDB = async userId => {
 export const startSession = async (payload, userId) => {
   const db = await ensureDB(userId);
 
-  const doc = { ...payload };
+  const doc = { ...payload, sync_type: 'opened' };
 
   await db.add(STORES.sessions, doc);
   return doc;

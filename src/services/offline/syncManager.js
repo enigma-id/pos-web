@@ -223,8 +223,8 @@ export const syncPendingSessions = async () => {
             if (isClosed || !hasRef) {
               payload.session = {
                 sync_id: group.session.sync_id,
-                open_at: group.session.open_at,
-                close_at: group.session.close_at,
+                open_at: group.session.started_at,
+                close_at: group.session.finished_at,
                 cash_started: group.session.cash_started,
                 cash_finished: group.session.cash_finished,
                 latitude: group.session.latitude,

@@ -247,6 +247,17 @@ const Navbar = () => {
         console.log('[DEBUG] remove cache delete payment', err);
       }
 
+      let outstandingBillPayment = 0;
+
+      if (
+        !(
+          queueItem?.session?.id === queueItem?.paid_session?.id ||
+          queueItem?.session?.sync_id === queueItem?.paid_session?.sync_id
+        )
+      ) {
+        outstandingBillPayment = -1 * queueItem?.total_charges;
+      }
+
       updateSessionSummary({
         type: 'deleted_payment',
         payment_method: queueItem?.payment_method,
@@ -256,6 +267,7 @@ const Navbar = () => {
         total_after_discount: -1 * (queueItem?.total_bill - queueItem?.discount_value),
         total_service: -1 * queueItem?.service_charge_value,
         total_charges: -1 * queueItem?.total_charges,
+        outstanding_bill_payment: outstandingBillPayment,
         order: queueItem,
       });
     }
