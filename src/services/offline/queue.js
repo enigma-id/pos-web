@@ -228,6 +228,12 @@ export const createOrderPayment = async (payload, userId) => {
   return doc;
 };
 
+export const deleteOrderPayment = async (syncId, userId) => {
+  const db = await ensureDB(userId);
+  await db.delete(STORES.orderPayments, syncId);
+  return true;
+};
+
 // ========== TOPUPS ==========
 
 export const createTopup = async (payload, userId) => {
@@ -239,6 +245,12 @@ export const createTopup = async (payload, userId) => {
 
   await db.add(STORES.topups, doc);
   return doc;
+};
+
+export const deleteTopup = async (syncId, userId) => {
+  const db = await ensureDB(userId);
+  await db.delete(STORES.topups, syncId);
+  return true;
 };
 
 // ========== MEMBERSHIPS ==========

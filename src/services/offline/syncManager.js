@@ -1,6 +1,6 @@
 import { baseQuery } from '../baseQuery';
 import { deleteOpenBills, getCache, setCache } from '../../utils/cache';
-import { ensureDB, STORES, setLastSyncTime as setLastSyncTimeMeta } from './queue';
+import { ensureDB, STORES, setLastSyncTime as setLastSyncTimeMeta, deleteOrderBill } from './queue';
 import { triggerQueueRefresh } from './usePendingQueueCount';
 import {
   setApiReachable,
@@ -71,14 +71,10 @@ const mapOrderToSync = (order, sessionSyncId) => ({
 });
 
 const mapItemsToSync = order => {
-  const sourceItems =
-    order.status === 'pending' && (order.original_items || [])?.length > 0
-      ? order.original_items || []
-      : order.items || [];
-
-  return sourceItems.map(item => ({
+  return order?.items.map(item => ({
     catalog_id: item.catalog_id,
     catalog_name: item.catalog_name || '',
+    categroy_name: item.categroy_name || '',
     quantity: item.quantity || 0,
     unit_nett: item.unit_nett || 0,
     addons: (item.addons || []).map(a => ({
@@ -360,130 +356,6 @@ const stopHeartbeat = () => {
 
 export const syncNow = async () => {
   await syncPendingSessions();
-};
-
-export const retryFailedItem = async itemId => {
-  if (!storeRef || !itemId) return false;
-  const userId = getCurrentUserId();
-  if (!userId) return false;
-
-  try {
-    const db = await ensureDB(userId);
-
-    // Cari di sessions
-    const sessions = await db.getAll(STORES.sessions);
-    const found = sessions.find(s => s.sync_id === itemId);
-    if (found) {
-      found.syncStatus = 'pending';
-      await db.put(STORES.sessions, found);
-      syncPendingSessions();
-      return true;
-    }
-
-    // Cari di orders — cek parent session
-    const bills = await db.getAll(STORES.orderBills);
-    const bill = bills.find(b => b.sync_id === itemId);
-    if (bill) {
-      const parent = sessions.find(s => s.sync_id === bill.origin_session_sync_id);
-      if (parent) {
-        parent.syncStatus = 'pending';
-        await db.put(STORES.sessions, parent);
-        syncPendingSessions();
-        return true;
-      }
-    }
-
-    const payments = await db.getAll(STORES.orderPayments);
-    const payment = payments.find(p => p.sync_id === itemId);
-    if (payment) {
-      const parent = sessions.find(s => s.sync_id === payment.paid_session_sync_id);
-      if (parent) {
-        parent.syncStatus = 'pending';
-        await db.put(STORES.sessions, parent);
-        syncPendingSessions();
-        return true;
-      }
-    }
-  } catch (e) {
-    console.error('[retryFailedItem] error:', e);
-  }
-  return false;
-};
-
-export const removeFailedItem = async itemId => {
-  const userId = storeRef?.getState()?.Auth?.session?.user?.id;
-  if (!userId || !itemId) return false;
-
-  try {
-    const db = await ensureDB(userId);
-
-    // Cek di sessions
-    const session = await db.get(STORES.sessions, itemId);
-    if (session) {
-      // Cascade hapus semua yg terkait
-      const bills = await db.getAllFromIndex(STORES.orderBills, 'origin_session_sync_id', itemId);
-      for (const b of bills) await db.delete(STORES.orderBills, b.sync_id);
-      const payments = await db.getAllFromIndex(
-        STORES.orderPayments,
-        'paid_session_sync_id',
-        itemId
-      );
-      for (const p of payments) await db.delete(STORES.orderPayments, p.sync_id);
-      const topups = await db.getAllFromIndex(STORES.topups, 'session_sync_id', itemId);
-      for (const t of topups) await db.delete(STORES.topups, t.sync_id);
-      await db.delete(STORES.sessions, itemId);
-      return true;
-    }
-
-    // Cek di order_bills
-    const bill = await db.get(STORES.orderBills, itemId);
-    if (bill) {
-      await db.delete(STORES.orderBills, itemId);
-      // Hapus juga dari cache_openbills kalo ada
-      try {
-        if (bill?.id) {
-          console.log(
-            '[DEBUG]: Pikirin gimana cara-nya, karena ini bukan dihapus data-nya, tapi kemablikan ke semua'
-          );
-        } else {
-          deleteOpenBills(itemId);
-        }
-      } catch (_) {}
-
-      // Recalculate session summary — remove outstanding bill
-      try {
-        // updateSessionSummary({ type: 'bill', outstanding_bill: -1 * bill.total_charges });
-      } catch (_) {}
-
-      return true;
-    }
-
-    // Cek di order_payments
-    const payment = await db.get(STORES.orderPayments, itemId);
-    if (payment) {
-      await db.delete(STORES.orderPayments, itemId);
-      return true;
-    }
-
-    // Cek di topups
-    const topup = await db.get(STORES.topups, itemId);
-    if (topup) {
-      await db.delete(STORES.topups, itemId);
-      return true;
-    }
-
-    // Cek di memberships
-    const membership = await db.get(STORES.memberships, itemId);
-    if (membership) {
-      await db.delete(STORES.memberships, itemId);
-      return true;
-    }
-
-    triggerQueueRefresh();
-  } catch (e) {
-    console.error('[removeFailedItem] error:', e);
-  }
-  return false;
 };
 
 export { getSyncingState, startHeartbeat, stopHeartbeat };
