@@ -253,7 +253,7 @@ const useSession = () => {
       }
     }
 
-    if (data.type === 'topup') {
+    if (data.type === 'topup' || data.type === 'deleted_topup') {
       if (data.topup_method === 'cash') {
         updatedSummary.summary.cash.topup_cash += data.topup_nominal;
       }
@@ -267,9 +267,9 @@ const useSession = () => {
       // Gunakan >= 0 karena indeks ke-0 itu valid!
       if (topupIdx >= 0) {
         const newTotalNominal =
-          (updatedSummary.summary.topups[topupIdx].total_paid || 0) + data?.total_charges;
+          (updatedSummary.summary.topups[topupIdx].total_nominal || 0) + data?.topup_nominal;
 
-        if (newTotalPaid <= 0 || newCount <= 0) {
+        if (newTotalNominal <= 0) {
           // Hapus dari array jika total_paid atau count sudah habis/0
           updatedSummary.summary.topups.splice(topupIdx, 1);
         } else {

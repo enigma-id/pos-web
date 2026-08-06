@@ -22,6 +22,8 @@ const CreateSection = ({ onClose }) => {
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
 
+  const [errorName, setErrorName] = React.useState(null);
+
   const { openModal, closeModal } = useModal();
 
   const { create, createResult } = useMembership();
@@ -36,6 +38,11 @@ const CreateSection = ({ onClose }) => {
 
   // Offline — Cache and IDB
   const onCreateOffline = async uid => {
+    if (name === '') {
+      setErrorName('name is required.');
+      return;
+    }
+
     const payload = {
       sync_id: uuidv4(),
       card_id: uid,
@@ -107,7 +114,7 @@ const CreateSection = ({ onClose }) => {
           <Input
             value={name}
             onChange={e => setName(e?.target?.value)}
-            error={FormState?.errors?.name}
+            error={FormState?.errors?.name || errorName}
           />
         </div>
         <div>

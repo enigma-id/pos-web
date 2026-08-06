@@ -38,6 +38,7 @@ import {
 } from '../../../services/offline/shapes';
 import {
   deleteOpenBills,
+  perbaharuiMembership,
   saveOpenBills,
   saveOrderHistory,
   showMembership,
@@ -649,6 +650,7 @@ const CheckoutScreen = () => {
         payload.membership_id = card?.id;
         payload.card_id = card?.card_id;
         payload.payment_ref = card?.reff_code;
+        payload.membership = card;
       }
 
       let outstandingBillPayment = 0;
@@ -726,6 +728,28 @@ const CheckoutScreen = () => {
         return;
       }
 
+      if (paymentMethod?.is_member_payment) {
+        console.log('[DEBUG] paymentMethod?.is_member_payment', paymentMethod?.is_member_payment);
+        const cloneMembership = JSON.parse(JSON.stringify(payload?.membership));
+
+        console.log('[DEBUG] cloneMembership', cloneMembership);
+
+        cloneMembership.saldo += dataOfflineToOnline?.total_charges;
+        cloneMembership.saldo_logs.push({
+          nominal: -1 * dataOfflineToOnline?.total_charges,
+          membership: cloneMembership,
+          membership_id: cloneMembership?.id,
+          reference_type: 'sales_order',
+          created_at: new Date(),
+        });
+
+        try {
+          perbaharuiMembership(cloneMembership);
+        } catch (err) {
+          console.log('[DEBUG] onPayOfflineSplit perbaharuiMembership', err);
+        }
+      }
+
       handleModalPrint(dataOfflineToOnline);
       dispatch(resetCart());
       setDiscountInputs([]);
@@ -781,12 +805,18 @@ const CheckoutScreen = () => {
 
     triggerQueueRefresh();
 
+    let kurangiBill = dataOfflineToOnline?.total_charges;
+
+    if (CartState?.bill?.total_charges != dataOfflineToOnline?.total_charges) {
+      kurangiBill = CartState?.bill?.total_charges;
+    }
+
     // 🔁 Update sessionSummary incremental
     updateSessionSummary({
       type: 'update',
       id: CartState?.bill?.session?.id,
       sync_id: CartState?.bill?.session?.sync_id,
-      outstanding_bill: -1 * dataOfflineToOnline?.total_charges,
+      outstanding_bill: -1 * kurangiBill,
     });
   };
 
@@ -1008,11 +1038,32 @@ const CheckoutScreen = () => {
     openModal(<SuccessModal data={data} backToMenu />, 'w-md');
   };
 
+  const openScan = result => {
+    openModal(
+      <NFCField onRead={handleRead} isOpen={true} onClose={closeModal} result={result} />,
+      'w-md'
+    );
+  };
+
   const handleRead = uid => {
     if (isOffline) {
       // No connection → skip checkSaldo, ambil dari cache kalo ada
       const membership = showMembership(uid);
-      onPay(membership || { card_id: uid });
+
+      let readyCard = false;
+      if (membership) {
+        if (membership?.saldo >= CartState?.meta?.grand_total) {
+          readyCard = true;
+        }
+      }
+
+      if (readyCard) {
+        onPay(membership || { card_id: uid });
+      } else {
+        // Re-open modal → NFCField reconcile (bukan remount), result isError → status 'failed'
+        openScan({ isError: true, message: 'Saldo anda kurang, silahkan topup terlebih dahulu' });
+      }
+
       return;
     }
 
@@ -1025,10 +1076,8 @@ const CheckoutScreen = () => {
     checkSaldo(params);
   };
 
-  const openNFC = async () => {
-    openModal(
-      <NFCField onRead={handleRead} isOpen={true} onClose={closeModal} result={checkResult} />
-    );
+  const openNFC = () => {
+    openScan(checkResult);
   };
 
   React.useEffect(() => {
@@ -1036,6 +1085,10 @@ const CheckoutScreen = () => {
       // openSuccess()
       const card = checkResult?.data?.data;
       onPay(card);
+    } else if (checkResult?.isError) {
+      // Tanpa re-open, modal via openScan() menampilkan result yang dibekukan (stale)
+      // → error scan tidak pernah terlihat.
+      openScan(checkResult);
     }
   }, [checkResult]);
 

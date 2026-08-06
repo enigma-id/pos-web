@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import CardContent from './card.content';
 import DrawerCreate from './drawer.create';
 import DrawerDetail from './drawer.detail';
-import createTableConfig from './table.config';
 import { Drawer, Modal, NFCField } from '../../../components/ui';
 import {
   CardSearchIcon,
@@ -15,7 +14,6 @@ import {
   WalletIcon,
 } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
-import useTable from '../../../components/ui/table';
 import useMembership from '../../../services/membership/hook';
 import { showMembership } from '../../../utils/cache';
 import useDrawer from '../../../utils/drawer';
@@ -80,21 +78,24 @@ const MembershipScreen = () => {
     }
   }, [membershipData, getMemberResult]);
 
+  const openScan = result => {
+    openModal(<NFCField onRead={handleRead} isOpen onClose={closeModal} result={result} />, 'w-md');
+  };
+
   const handleRead = uid => {
     if (isOffline) {
       const membership = showMembership(uid);
-      onScanSuccess(membership);
+      console.log('[DEBUG] handleRead', membership);
+      if (membership) {
+        onScanSuccess(membership);
+      } else {
+        // Re-open modal → NFCField reconcile (bukan remount), result isError → status 'failed'
+        openScan({ isError: true });
+      }
     } else {
       const params = { card_id: uid };
       checkSaldo(params);
     }
-  };
-
-  const onScan = () => {
-    openModal(
-      <NFCField onRead={handleRead} isOpen={true} onClose={closeModal} result={checkResult} />,
-      'w-md'
-    );
   };
 
   const onScanSuccess = data => {
@@ -112,11 +113,10 @@ const MembershipScreen = () => {
           <CardContent
             data={data}
             onClose={() => {
-              setOfflineMessage('');
               closeModal();
               setData(null);
-              Table.boot();
             }}
+            onRefresh={() => getMember()}
           />
         </Modal.Body>
       </>,
@@ -124,10 +124,14 @@ const MembershipScreen = () => {
     );
   };
 
-  // Online success → cache + proceed
+  // Online success → CardContent; error → re-open NFCField (result terbaru, reconcile)
   React.useEffect(() => {
     if (checkResult?.isSuccess) {
       onScanSuccess(checkResult?.data?.data);
+    } else if (checkResult?.isError) {
+      // Tanpa re-open, modal via openScan() menampilkan result yang dibekukan (stale)
+      // → error scan tidak pernah terlihat.
+      openScan(checkResult);
     }
   }, [checkResult]);
 
@@ -136,6 +140,10 @@ const MembershipScreen = () => {
       setData(null);
     }
   }, [drawerOpen]);
+
+  const onScan = () => {
+    openScan(checkResult);
+  };
 
   return (
     <Drawer.Wrapper>
