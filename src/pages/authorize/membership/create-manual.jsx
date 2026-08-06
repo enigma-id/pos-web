@@ -39,7 +39,7 @@ const CreateManual = () => {
     try {
       await createMembership(payload, sessionAuth?.user?.id);
     } catch (err) {
-      console.log('[DEBUG] error membership', err);
+      // ignore
     }
 
     triggerQueueRefresh();
@@ -47,7 +47,7 @@ const CreateManual = () => {
     try {
       saveMembership(payload);
     } catch (err) {
-      console.log('[DEBUG] error membership', err);
+      // ignore
     }
 
     navigate('/membership');
@@ -55,8 +55,6 @@ const CreateManual = () => {
 
   // Online — API
   const onCreateOnline = async uid => {
-    console.log('[DEBUG] [onCreateOnline]');
-
     const payload = {
       reff_code: phone,
       name,

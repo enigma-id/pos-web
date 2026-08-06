@@ -12,6 +12,7 @@ import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
 import { createOrderBill, updateOrderBill } from '../../../services/offline/queue';
+import { setWarning } from '../../../services/offline';
 import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
 import { resetCart } from '../../../services/cart/slice';
 import { v4 as uuidv4 } from 'uuid';
@@ -67,7 +68,7 @@ const Cart = ({ onUpdate }) => {
   // Offline — Cache and IDB
   const onCreateBillOffline = async billName => {
     if (!sessionSummary) {
-      dispatch(setWaring('Please open session.'));
+      dispatch(setWarning('Please open session.'));
       return;
     }
 
@@ -124,7 +125,6 @@ const Cart = ({ onUpdate }) => {
       code: code,
       sync_id: orderId,
       bill_name: billName,
-      membership_id: CartState?.meta?.customer?.id,
       sales_channel_id: Channel?.selectedChannel?.id,
       status: 'pending',
       is_offline_mode: true,
@@ -330,7 +330,6 @@ const Cart = ({ onUpdate }) => {
       sync_id: CartState?.bill?.sync_id,
       code: CartState?.bill?.code,
       bill_name: billName,
-      membership_id: CartState?.meta?.customer?.id,
       sales_channel_id: Channel?.selectedChannel?.id,
       status: 'pending',
       items,

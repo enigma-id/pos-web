@@ -8,6 +8,7 @@ import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
 import useMembership from '../../../services/membership/hook';
+import { showMembership } from '../../../utils/cache';
 
 const CustomerSection = () => {
   const CartState = useSelector(state => state?.Cart);
@@ -46,7 +47,11 @@ const CustomerSection = () => {
   }, [membershipData, getMemberResult]);
 
   const onSelected = data => {
-    if (CartState?.meta?.customer?.id === data?.id) {
+    const isSameCustomer =
+      (CartState?.meta?.customer?.sync_id && CartState?.meta?.customer.sync_id === data?.sync_id) ||
+      (CartState?.meta?.customer?.id && CartState?.meta?.customer.id === data?.id);
+
+    if (isSameCustomer) {
       setCustomer(null);
     } else {
       setCustomer(data);
@@ -93,8 +98,6 @@ const CustomerSection = () => {
       }
     }
   }, [checkResult]);
-
-  console.log('[DEBUG] [MEMBERSHIP]', memberships);
 
   return (
     <div className="border-base-200 bg-base-100 flex h-screen flex-col border-l">
@@ -152,7 +155,12 @@ const CustomerSection = () => {
                       type="checkbox"
                       className="checkbox checkbox-primary"
                       onChange={() => onSelected(d)}
-                      checked={CartState?.meta?.customer?.id === d?.id}
+                      checked={
+                        (CartState?.meta?.customer?.sync_id &&
+                          CartState?.meta?.customer?.sync_id === d?.sync_id) ||
+                        (CartState?.meta?.customer?.id &&
+                          CartState?.meta?.customer?.id === d?.card_id)
+                      }
                     />
                     <div className="flex gap-2">
                       <UserCircleIcon />

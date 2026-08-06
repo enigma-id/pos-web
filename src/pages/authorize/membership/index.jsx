@@ -85,7 +85,6 @@ const MembershipScreen = () => {
   const handleRead = uid => {
     if (isOffline) {
       const membership = showMembership(uid);
-      console.log('[DEBUG] handleRead', membership);
       if (membership) {
         onScanSuccess(membership);
       } else {
@@ -246,14 +245,18 @@ const MembershipScreen = () => {
         </div>
       </div>
 
-      <DrawerCreate type={type} onClose={() => setType('')} onRefresh={() => getMember()} />
+      {type && (
+        <>
+          <DrawerCreate type={type} onClose={() => setType('')} onRefresh={() => getMember()} />
 
-      <DrawerDetail
-        membership={data}
-        type={type}
-        onClose={() => setType('')}
-        onRefresh={() => getMember()}
-      />
+          <DrawerDetail
+            membership={data}
+            type={type}
+            onClose={() => setType('')}
+            onRefresh={() => getMember()}
+          />
+        </>
+      )}
     </Drawer.Wrapper>
   );
 };

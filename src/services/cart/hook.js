@@ -323,10 +323,9 @@ const useCart = catalog_id => {
   }, [catalog_id, selectedChannel, apiReachable, triggerCatalogDetail]);
 
   useEffect(() => {
-    if (CartState.meta.service_charge_value === 0) {
-      dispatch(changeServiceCharge(sessionOutlet?.service_charges));
-    }
-  }, []);
+    if (sessionOutlet?.service_charges == null) return;
+    dispatch(changeServiceCharge(sessionOutlet.service_charges));
+  }, [sessionOutlet?.service_charges]);
 
   return {
     catalogDetail: offlineCatalogDetail || catalogDetailResult?.data?.data,

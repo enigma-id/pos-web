@@ -117,7 +117,7 @@ export const initQueueDB = async userId => {
 export const startSession = async (payload, userId) => {
   const db = await ensureDB(userId);
 
-  const doc = { ...payload, sync_type: 'opened' };
+  const doc = { ...payload, sync_type: 'opened', is_synced: false };
 
   await db.add(STORES.sessions, doc);
   return doc;
@@ -147,6 +147,7 @@ export const closeSession = async (payload, userId) => {
   await db.put(STORES.sessions, {
     ...existing,
     ...payload,
+    is_synced: false, // offline close — masih perlu di-sync
   });
 
   return payload;
@@ -299,7 +300,6 @@ export const updateMembership = async (payload, userId) => {
 
 const METADATA_KEYS = {
   lastSyncTime: 'lastSyncTime',
-  syncAttempt: 'syncAttempt',
 };
 
 export const setLastSyncTime = async (timestamp, userId) => {
@@ -316,30 +316,4 @@ export const getLastSyncTime = async userId => {
   const db = await ensureDB(userId);
   const data = await db.get(STORES.metadata, METADATA_KEYS.lastSyncTime);
   return data?.value ?? null;
-};
-
-export const incrementSyncAttempt = async userId => {
-  const db = await ensureDB(userId);
-  const item = await db.get(STORES.metadata, METADATA_KEYS.syncAttempt);
-  const current = item?.value || 0;
-  const next = current + 1;
-
-  await db.put(STORES.metadata, {
-    key: METADATA_KEYS.syncAttempt,
-    value: next,
-    updatedAt: getNow(),
-  });
-
-  return next;
-};
-
-export const resetMetadata = async userId => {
-  const db = await ensureDB(userId);
-  await db.clear(STORES.metadata);
-  return true;
-};
-
-export const getAllMetadata = async userId => {
-  const db = await ensureDB(userId);
-  return db.getAll(STORES.metadata);
 };

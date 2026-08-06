@@ -39,6 +39,7 @@ const CreateSection = ({ onClose }) => {
   // Offline — Cache and IDB
   const onCreateOffline = async uid => {
     if (name === '') {
+      closeModal();
       setErrorName('name is required.');
       return;
     }
@@ -54,7 +55,7 @@ const CreateSection = ({ onClose }) => {
     try {
       await createMembership(payload, sessionAuth?.user?.id);
     } catch (err) {
-      console.log('[DEBUG] error membership', err);
+      // ignore
     }
 
     triggerQueueRefresh();
@@ -62,7 +63,7 @@ const CreateSection = ({ onClose }) => {
     try {
       saveMembership(payload);
     } catch (err) {
-      console.log('[DEBUG] error membership', err);
+      // ignore
     }
 
     closeModal();

@@ -143,7 +143,7 @@ const CheckoutScreen = () => {
   // Create Bill Offline — Cache and IDB
   const onCreateBillOffline = async billName => {
     if (!sessionSummary) {
-      dispatch(setWaring('Please open session.'));
+      dispatch(setWarning('Please open session.'));
       return;
     }
 
@@ -201,7 +201,6 @@ const CheckoutScreen = () => {
       code: code,
       sync_id: orderId,
       bill_name: billName,
-      membership_id: CartState?.meta?.customer?.id,
       sales_channel_id: Channel?.selectedChannel?.id,
       status: 'pending',
       is_offline_mode: true,
@@ -393,7 +392,6 @@ const CheckoutScreen = () => {
       sync_id: CartState?.bill?.sync_id,
       code: CartState?.bill?.code,
       bill_name: billName,
-      membership_id: CartState?.meta?.customer?.id,
       sales_channel_id: Channel?.selectedChannel?.id,
       status: 'pending',
       items,
@@ -611,7 +609,6 @@ const CheckoutScreen = () => {
       const now = new Date();
 
       let payload = {
-        membership_id: CartState?.meta?.customer?.id,
         sales_channel_id: Channel?.selectedChannel?.id,
         payment_method_id: selectedMethod?.id,
         payment_ref: paymentRef,
@@ -728,25 +725,22 @@ const CheckoutScreen = () => {
         return;
       }
 
-      if (paymentMethod?.is_member_payment) {
-        console.log('[DEBUG] paymentMethod?.is_member_payment', paymentMethod?.is_member_payment);
+      if (selectedMethod?.is_member_payment) {
         const cloneMembership = JSON.parse(JSON.stringify(payload?.membership));
 
-        console.log('[DEBUG] cloneMembership', cloneMembership);
-
-        cloneMembership.saldo += dataOfflineToOnline?.total_charges;
-        cloneMembership.saldo_logs.push({
+        cloneMembership.saldo -= dataOfflineToOnline?.total_charges;
+        cloneMembership.saldo_logs.unshift({
           nominal: -1 * dataOfflineToOnline?.total_charges,
-          membership: cloneMembership,
-          membership_id: cloneMembership?.id,
-          reference_type: 'sales_order',
+          membership_id: payload?.membership?.id,
+          reference_type: 'Sales',
+          reference_code: dataOfflineToOnline?.code,
           created_at: new Date(),
         });
 
         try {
           perbaharuiMembership(cloneMembership);
         } catch (err) {
-          console.log('[DEBUG] onPayOfflineSplit perbaharuiMembership', err);
+          // ignore
         }
       }
 
@@ -863,8 +857,6 @@ const CheckoutScreen = () => {
     try {
       updateOpenBills(dataOfflineToOnlineUpdated);
     } catch (err) {
-      console.log('[DEBUG] onPayOfflineSplit 3:', err);
-
       handleModalError();
     }
 

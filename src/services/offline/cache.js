@@ -52,7 +52,7 @@ export const addMembershipToCache = (sessions, newMember, sessionId) => {
  */
 export const computePendingCount = (sessions) => {
   return sessions.reduce((sum, s) => {
-    if (s.syncStatus === 'synced') return sum;
+    if (s.is_synced) return sum;
     const itemCount = (s.orders || []).length + (s.topups || []).length;
     return sum + (itemCount > 0 ? itemCount : 1);
   }, 0);

@@ -39,7 +39,7 @@ const HistorySection = ({ id, membership }) => {
     setPage(1);
     setHasMore(true);
     processedIdsRef.current.clear();
-  }, [id, showResult]);
+  }, [showResult]);
 
   // Fetch history
   React.useEffect(() => {
@@ -51,7 +51,7 @@ const HistorySection = ({ id, membership }) => {
 
       saldoLog({ id, params });
     }
-  }, [showResult, id, page]);
+  }, [showResult, page]);
 
   React.useEffect(() => {
     if (saldoLogResult?.isSuccess) {
@@ -183,7 +183,7 @@ const HistorySection = ({ id, membership }) => {
   }, [isOffline, membership?.card_id]);
 
   useEffect(() => {
-    if (!isOffline) {
+    if (!isOffline && membership?.id) {
       showMember(membership?.id);
     }
   }, [membership?.card_id]);
@@ -215,8 +215,6 @@ const HistorySection = ({ id, membership }) => {
       </div>
     );
   }
-
-  console.log('[History] [DEBUG]', logs);
 
   return (
     // tambahkan disini css meggunakan daiysiui dan css tailwind

@@ -9,10 +9,7 @@ import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useAuth from '../../../services/auth/hook';
 import useSession from '../../../services/sales/session/hook';
-import { syncPendingSessions } from '../../../services/offline/syncManager';
-import usePendingQueueCount, {
-  triggerQueueRefresh,
-} from '../../../services/offline/usePendingQueueCount';
+import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
 import { resetSummary } from '../../../services/sales/session/slice';
@@ -32,12 +29,10 @@ const CloseSection = () => {
   const isOffline = !isOnline || apiReachable === false;
 
   const { summary, end, endResult } = useSession();
-  const { count: pendingCount, refresh: refreshQueueCount } = usePendingQueueCount();
   const { onLogout } = useAuth();
 
   const { showCart } = useSidebar();
   const { openModal, closeModal } = useModal();
-  const [syncing, setSyncing] = React.useState(false);
 
   const { open } = usePrintWindow({
     title: 'Print Preview',
@@ -50,62 +45,6 @@ const CloseSection = () => {
 
   const handleOpenPrintSummary = v => {
     open(<Summary data={v} />);
-  };
-
-  const showFailoverModal = (count = pendingCount) => {
-    openModal(
-      <>
-        <Modal.Header onClose={closeModal}>
-          <div className="text-[16px] font-semibold tracking-wide">Pending Sync Warning</div>
-        </Modal.Header>
-        <Modal.Body>
-          <div className="p-6">
-            <div className="mb-4 text-sm">
-              There are <b>{count}</b> session(s) that couldn't be synced.
-            </div>
-            <div className="flex place-content-end gap-3">
-              <button className="btn btn-outline" onClick={closeModal}>
-                Cancel
-              </button>
-              <button
-                className="btn btn-outline"
-                onClick={async () => {
-                  setSyncing(true);
-                  try {
-                    await syncPendingSessions();
-                  } catch {
-                    // sync failed silently
-                  }
-                  setSyncing(false);
-
-                  // Re-check pending count after sync attempt
-                  const remaining = await refreshQueueCount();
-                  if (remaining > 0) {
-                    showFailoverModal(remaining);
-                  } else {
-                    closeModal();
-                    doEndSession();
-                  }
-                }}
-              >
-                Try Again
-              </button>
-              {isOffline && (
-                <button
-                  className="btn btn-warning"
-                  onClick={async () => {
-                    closeModal();
-                    doEndSession();
-                  }}
-                >
-                  Close Anyway
-                </button>
-              )}
-            </div>
-          </div>
-        </Modal.Body>
-      </>
-    );
   };
 
   const onCloseOffline = async () => {
@@ -339,12 +278,12 @@ const CloseSection = () => {
 
       <div className="border-base-200 min-h-15 border-t">
         <button
-          className={`btn btn-block btn-xl btn-primary rounded-none ${endResult?.isLoading || syncing ? 'btn-disabled' : ''}`}
+          className={`btn btn-block btn-xl btn-primary rounded-none ${endResult?.isLoading ? 'btn-disabled' : ''}`}
           onClick={openEndSessionConfirm}
-          disabled={endResult?.isLoading || syncing}
+          disabled={endResult?.isLoading}
         >
-          {syncing ? 'Syncing pending sessions...' : 'End Session'}
-          {(endResult?.isLoading || syncing) && <span className="loading loading-spinner"></span>}
+          End Session
+          {endResult?.isLoading && <span className="loading loading-spinner"></span>}
         </button>
       </div>
     </div>

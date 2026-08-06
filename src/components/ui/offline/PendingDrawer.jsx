@@ -14,6 +14,7 @@ const statusConfig = {
 
 const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
   const sessionUserId = useSelector(state => state?.Auth?.session?.user?.id);
+  const failedCount = useSelector(state => state?.Offline?.failedCount);
   const [activeTab, setActiveTab] = useState('order');
   const [refreshKey, setRefreshKey] = useState(0);
   const [data, setData] = useState({
@@ -53,9 +54,10 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
     fetchData();
   }, [open, sessionUserId, refreshKey]);
 
+  // Icon refresh muncul hanya kalau ada sync yang gagal (bukan sekadar pending/belum sync)
   const hasPendingOrFailed = useMemo(() => {
-    return data.sessions.some(s => s.syncStatus === 'pending' || s.syncStatus === 'failed');
-  }, [data]);
+    return failedCount > 0;
+  }, [failedCount]);
 
   // Build categorized items
   const categorized = useMemo(() => {
