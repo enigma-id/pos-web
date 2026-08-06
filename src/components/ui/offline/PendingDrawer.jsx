@@ -54,7 +54,7 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
   }, [open, sessionUserId, refreshKey]);
 
   const hasPendingOrFailed = useMemo(() => {
-    return data.sessions.some(s => s.syncStatus === 'pending' || s.syncStatus === 'failed');
+    return data.sessions.some(s => !s.is_synced);
   }, [data]);
 
   // Build categorized items

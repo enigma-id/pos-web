@@ -89,24 +89,22 @@ const Layout = ({ children }) => {
   }, [Offline?.apiReachable, isOnline]);
 
   const handleOpenBill = queueItem => {
-    console.log('[DEBUG] pikirin ini harus-nya ke selectedBill agar konsisten');
     onBillSelected(queueItem);
     navigate('/');
   };
 
   const handleRemoveOffline = (type, queueItem) => {
-    console.log('[DEBUG] remove disini per item bro');
     if (type === 'bill') {
       try {
         deleteOrderBill(queueItem?.sync_id, sessionAuth?.user?.id);
       } catch (err) {
-        console.log('[DEBUG] remove idb delete open bills', err);
+        // ignore
       }
 
       try {
         deleteOpenBills(queueItem);
       } catch (err) {
-        console.log('[DEBUG] remove cache delete open bills', err);
+        // ignore
       }
 
       updateSessionSummary({
@@ -119,13 +117,13 @@ const Layout = ({ children }) => {
       try {
         deleteOrderPayment(queueItem?.sync_id, sessionAuth?.user?.id);
       } catch (err) {
-        console.log('[DEBUG] remove idb delete payment', err);
+        // ignore
       }
 
       try {
         deleteOrderHistory(queueItem);
       } catch (err) {
-        console.log('[DEBUG] remove cache delete payment', err);
+        // ignore
       }
 
       let outstandingBillPayment = 0;
@@ -157,14 +155,12 @@ const Layout = ({ children }) => {
       try {
         deleteTopup(queueItem?.sync_id, sessionAuth?.user?.id);
       } catch (err) {
-        console.log('[DEBUG] remove idb delete topup', err);
+        // ignore
       }
 
       try {
         const membership = showMembership(queueItem?.membership?.card_id);
         membership.saldo -= queueItem.nominal;
-
-        console.log('[DEBUG] membership', membership);
 
         const logsIdx = membership.saldo_logs.findIndex(p => p.sync_id === queueItem?.sync_id);
 
@@ -172,7 +168,7 @@ const Layout = ({ children }) => {
 
         perbaharuiMembership(membership);
       } catch (err) {
-        console.log('[DEBUG] remove cache update membership', err);
+        // ignore
       }
 
       updateSessionSummary({
@@ -273,24 +269,22 @@ const Navbar = () => {
   const { updateSessionSummary } = useSession();
 
   const handleOpenBill = queueItem => {
-    console.log('[DEBUG] pikirin ini harus-nya ke selectedBill agar konsisten');
     onBillSelected(queueItem);
     navigate('/');
   };
 
   const handleRemoveOffline = (type, queueItem) => {
-    console.log('[DEBUG] remove disini per item bro');
     if (type === 'bill') {
       try {
         deleteOrderBill(queueItem?.sync_id, sessionAuth?.user?.id);
       } catch (err) {
-        console.log('[DEBUG] remove idb delete open bills', err);
+        // ignore
       }
 
       try {
         deleteOpenBills(queueItem);
       } catch (err) {
-        console.log('[DEBUG] remove cache delete open bills', err);
+        // ignore
       }
 
       updateSessionSummary({
@@ -303,13 +297,13 @@ const Navbar = () => {
       try {
         deleteOrderPayment(queueItem?.sync_id, sessionAuth?.user?.id);
       } catch (err) {
-        console.log('[DEBUG] remove idb delete payment', err);
+        // ignore
       }
 
       try {
         deleteOrderHistory(queueItem);
       } catch (err) {
-        console.log('[DEBUG] remove cache delete payment', err);
+        // ignore
       }
 
       let outstandingBillPayment = 0;
@@ -341,14 +335,12 @@ const Navbar = () => {
       try {
         deleteTopup(queueItem?.sync_id, sessionAuth?.user?.id);
       } catch (err) {
-        console.log('[DEBUG] remove idb delete topup', err);
+        // ignore
       }
 
       try {
         const membership = showMembership(queueItem?.membership?.card_id);
         membership.saldo -= queueItem.nominal;
-
-        console.log('[DEBUG] membership', membership);
 
         const logsIdx = membership.saldo_logs.findIndex(p => p.sync_id === queueItem?.sync_id);
 
@@ -356,7 +348,7 @@ const Navbar = () => {
 
         perbaharuiMembership(membership);
       } catch (err) {
-        console.log('[DEBUG] remove cache update membership', err);
+        // ignore
       }
 
       updateSessionSummary({

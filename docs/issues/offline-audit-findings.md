@@ -18,92 +18,83 @@ guard `isSyncingInternal`, `mapCategoryDiscountsToSync item.*`. ✅
 
 ## Online Path Findings (O1-O10)
 
-### 🔴 O1. `Auth.session` shape konflik → `outlet` undefined → **service charge 0% GLOBAL**
+> **Status verifikasi (2026-08-07): O1 & O2 RESOLVED — bukan bug.** Awalnya ditulis P0
+> "0% global" & "always undefined". Setelah verifikasi dengan response `/auth/me` &
+> `/auth/login` asli (keduanya punya `outlet` top-level dengan `service_charges: 5`),
+> **tidak ada bug** — `Auth.session.outlet` tersedia di kondisi normal. Detail di bawah.
 
-**File:** `src/services/auth/slice.js:15,23`, `src/services/auth/hook.js:49`, `src/services/cart/hook.js:37,327`, `src/services/cart/slice.js:277-293`
+### ✅ O1. Service charge — RESOLVED (bukan bug)
 
-Konteks: `state.Auth.session` di-set dari **dua sumber berbeda**:
-- `login` (slice:15): `state.session = action.payload.user` → session = **objek user**
-- `getUser` (hook:49): `dispatch(session(res.data))` → session = **`{user, sales_session}`** (wrapper)
+**File:** `src/services/auth/slice.js:13-25`, `src/services/auth/hook.js:29-49`, `src/services/cart/hook.js:37,325-329`
 
-Kedua-duanya, `user` **tidak punya properti `outlet`** — contract `specs/api-contract.md:26-36`
-menunjukkan user hanya punya `outlet_id`. Outlet ada di `sales_session.outlet` (login response line 52).
+**Response API asli (2026-08-07):**
 
-Alur bug:
-```js
-// cart/hook.js:37
-const sessionOutlet = useSelector(state => state?.Auth?.session?.outlet);  // ALWAYS undefined
-// cart/hook.js:327
-dispatch(changeServiceCharge(sessionOutlet?.service_charges));             // undefined
-// cart/slice.js:277-293
-if (state.meta.service_charge_percentage > 0) { ... }                      // undefined → false → 0
-```
+- `/auth/login` → `{ user, outlet: { service_charges: 5 }, access_token }`
+- `/auth/me` → `{ user, outlet: { service_charges: 5 } }`
 
-**Dampak: SERVICE CHARGE SELALU 0%** untuk semua transaksi (online + offline), walau outlet
-memiliki `service_charges` (mis. `0.1` = 10%). Grand total undercharged. Ini bug global, bukan
-cuma offline. (`offline-data-consistency.md:179` mendokumentasikan `service_charges: 0.1` = 10%,
-jadi jelas nilai itu harusnya terpakai.)
+`service_charges: 5` = **persen langsung** (5%). Konfirmasi: summary server `total_service 7500 / total_sales 150000 = 5%` ✓.
 
-**Fix:** ambil service charge dari `SalesSession.sessionSummary?.outlet?.service_charges`
-(atau `session?.sales_session?.outlet`), bukan `session.outlet`. Alternatif: konsistenkan
-`Auth.session` (jangan overwrite dari dua sumber shape beda).
+**Alur `Auth.session`:**
 
-### 🔴 O2. `openSession` — `outlet_id: sessionAuth?.outlet?.id` → undefined
+- `login` (slice:15) → `Auth.session = user` (tanpa outlet) — sesaat
+- `getUser` (hook:49) → `dispatch(session(res.data))` → `Auth.session = {user, outlet}` → **`Auth.session.outlet.service_charges = 5`** ✅
+- `getUser()` selalu dipanggil di `signin` (hook:32) → outlet tersedia
+- `Auth` **tidak di-blacklist** (store.js) → persist → reload app tetap `{user, outlet}` → outlet ada ✅
 
-**File:** `src/pages/authorize/home/openSession.jsx:39`
+**Kesimpulan: `Auth.session.outlet.service_charges` tersedia di kondisi normal. Bukan bug.**
+Race window (login set user tanpa outlet → getUser async) cuma beberapa ms, non-issue.
+Kalau getUser gagal (offline), service charge 0 memang wajar (tidak punya data outlet).
 
-Sama akar dengan O1: `sessionAuth.outlet` tidak ada. Payload open session:
-```js
-outlet_id: sessionAuth?.outlet?.id,   // undefined
-outlet: sessionAuth?.outlet,           // undefined
-```
-Contract `POST /sales/session` (line 226+) mungkin derive outlet dari token, tapi kalau server
-require `outlet_id` → session di-create tanpa outlet (atau reject). Risiko data integrity session.
+### ✅ O2. `openSession` `outlet_id` — RESOLVED (bukan bug)
 
-**Fix:** ambil outlet dari `sessionSummary?.outlet` / `sales_session.outlet` (set di
-`setSummary(res?.data?.sales_session)`), atau dari `session.user` properti yang benar.
+**File:** `src/pages/authorize/home/openSession.jsx:39,44`
 
-### 🟠 O3. Custom catalog online — kirim `unit_nett`, contract minta `unit_price`
+`outlet_id: sessionAuth?.outlet?.id`, `cashier_id: sessionAuth?.user?.id` — setelah getUser,
+`Auth.session = {user, outlet}` → **keduanya tersedia** ✅. `getUser` cuma menambah `outlet`,
+tidak menghapus `user`, jadi `session.user.id` tetap konsisten. Bukan bug.
 
-**File:** `src/pages/authorize/home/checkout.jsx:187,286,380,481,601,906`
+### ✅ O3. Custom catalog online — SOLVED (backend baca `unit_nett`, bukan `unit_price`)
 
-Item custom online: `base.unit_nett = item?.unit_nett`.
-Contract Item Request (`specs/api-contract.md:404-410`): custom pakai **`unit_price`**.
+**Status:** solved. Temuan awalnya berdasarkan `specs/api-contract.md:404-410` yang **outdated**.
+Verifikasi ke backend asli (`~/Workspaces/franq/backend/pos`):
 
-```js
-// checkout.jsx:906
-if (item?.is_custom) {
-  base.catalog_name = item?.name;
-  base.unit_nett = item?.unit_nett;   // server mungkin baca unit_price → 0
+- `src/handler/rest/sales/order/request_item.go:16-18` — field custom:
+  ```go
+  UnitNett    float64 `json:"unit_nett"`
+  CatalogName string  `json:"catalog_name"`
+  ```
+- `request_item.go:66-74` — validasi custom pakai `UnitNett` sebagai harga:
+  ```go
+  if r.UnitNett == 0 { v.SetError(..., "unit price is required for custom catalog") }
+  r.catalogPricing = &entity.CatalogPricing{ CatalogID: r.catalog.ID, Price: r.UnitNett }
+  ```
+
+→ Backend baca `unit_nett` → **frontend kirim `unit_nett` = benar. Bukan bug.**
+
+### ✅ O4. Addons online — SOLVED (backend default `quantity=1` utk options/checkbox)
+
+**File:** `src/pages/authorize/home/checkout.jsx:904-910`, `src/services/cart/slice.js:9-38`
+**Verifikasi backend:** `src/handler/rest/sales/order/request_addon.go:54-60`:
+
+```go
+if r.addonGroup.Type == "quantity" {
+    if r.Quantity == 0 { v.SetError(..., "quantity is required for quantity type") }
+} else {
+    r.Quantity = 1   // options/checkbox → default 1
 }
 ```
 
-**Dampak:** kalau backend membaca `unit_price` untuk custom item → **harga custom item 0** di order.
-(Offline `localTransaction.js` juga pakai `unit_nett` — konsisten dengan bug yang sama.)
+- Frontend kirim `quantity` undefined utk options/checkbox → backend **default 1** → **benar**.
+- Qty scaling addon dilakukan di server (`request_item.go:123` `addon.Quantity = item.Quantity * addon.Quantity`) — bukan client. → **bukan bug.**
 
-**Fix:** kirim `unit_price` (bukan `unit_nett`) untuk custom item, di semua path online.
+**Catatan tambahan dari backend (konteks online):**
 
-### 🟠 O4. Addons online — shape mismatch dengan contract
+- **Service charge dihitung server** (`request_create.go:57-61`) dari `session.SalesSession.Outlet.ServiceCharges`, bukan dari request → konfirmasi O1: transaksi online aman walau client display 0.
+- **Category discount dihitung server** (`request_create.go:279-291`): `TotalDiscount` dari items, validasi category harus dipakai item.
+- **Midtrans/qris**: `request_create.go:183` status dipaksa `pending` utk gateway (callback) — frontend kirim `completed` tapi server override. OK.
+- **`is_apk`** (`request_create.go:57`): kalau `is_apk: true` → skip service charge.
 
-**File:** `src/pages/authorize/home/checkout.jsx:904-910`, `src/services/cart/slice.js:9-38`
-
-Online kirim `base.addons = item?.additionals_flat` yang berasal dari `flattenAdditionals`:
-```js
-{ addon_group, addon_group_id, addon_item_id, name, unit_nett, quantity }
-```
-Contract addon (`specs/api-contract.md:411-415`) minta:
-```js
-{ addon_group_id, addon_item_id, quantity }
-```
-
-Masalah:
-- `quantity` hanya di-set untuk type `'quantity'` (slice.js:31) — options/checkbox → **`quantity` undefined** → server default 1 → options dihitung qty 1 (mungkin OK), tapi kalau server pakai `quantity` → double-count.
-- `unit_nett` vs `unit_price` beda nama.
-- `addon_group` (nested object) tidak ada di contract → backend tolerate? tidak pasti.
-
-**Dampak:** addon online bisa salah harga/qty di server.
-
-### 🟠 O5. `onPayOnline` bill — `payment_ref` dari `card` overwrite
+### ✅ O5. `onPayOnline` bill — `payment_ref` dari `card` overwrite — INTENDED
 
 **File:** `src/pages/authorize/home/checkout.jsx:944-948`
 
@@ -111,318 +102,379 @@ Masalah:
 if (card) {
   payload.membership_id = card?.id;
   payload.card_id = card?.card_id;
-  payload.payment_ref = card?.reff_code;   // overwrite payment_ref user-typed
+  payload.payment_ref = card?.reff_code; // sengaja — ref = kode member card
 }
 ```
-Kalau payment via NFC card, `payment_ref` di-overwrite dengan `reff_code` — mungkin intended
-(member payment). Bukan bug fatal, cuma catatan.
 
-### 🟡 O6. `changeServiceCharge` jalan sekali di `useEffect([])`
+Konfirmasi user (2026-08-07): **sengaja** — payment via member card, `payment_ref` = `reff_code`
+member. **Bukan bug.**
+
+### ✅ O6. `changeServiceCharge` — FIXED (re-run + guard)
 
 **File:** `src/services/cart/hook.js:325-329`
 
-`changeServiceCharge` hanya dipanggil saat mount cart hook. Kalau outlet/service_charges
-berubah setelah login (atau di-load asinkron), nilai tidak refresh. (Terikat O1 — source-nya
-undefined anyway.)
+**Before:**
 
-### 🟡 O7. `onCreateBillOnline` items custom pakai `unit_nett` — sama O3
+```js
+useEffect(() => {
+  if (CartState.meta.service_charge_value === 0) {
+    dispatch(changeServiceCharge(sessionOutlet?.service_charges));
+  }
+}, []);
+```
 
-### 🟢 O8. Offline `discount_categories` include `category` object — online tidak
+**After (2026-08-07):**
+
+```js
+useEffect(() => {
+  if (sessionOutlet?.service_charges == null) return;
+  dispatch(changeServiceCharge(sessionOutlet.service_charges));
+}, [sessionOutlet?.service_charges]);
+```
+
+Perubahan:
+
+- Dep `[]` → `[sessionOutlet?.service_charges]` → re-run saat outlet/`service_charges` berubah
+- Guard `sc == null` → skip kalau outlet belum ada (cegah `changeServiceCharge(undefined)`)
+- Dispatch langsung tanpa kondisi `service_charge_value === 0` → selalu sinkron dengan outlet
+
+### ✅ O7. `onCreateBillOnline` items custom pakai `unit_nett` — SOLVED (sama O3)
+
+### ✅ O8. Offline `discount_categories` include `category` object — SOLVED (harmless)
 
 **File:** `checkout.jsx:150-161` (offline), `checkout.jsx:266-276` (online)
 
-Online kirim `{ category_id, discount_percentage, discount_value }` (sesuai contract).
-Offline tambah `category` object. Contract Category Discount (`api-contract.md:423-429`) minta
-tanpa `category` → online **benar**, offline **ekstra field** (tolerated backend, tapi tidak konsisten).
+Online kirim `{ category_id, discount_percentage, discount_value }`.
+Offline tambah `category` object (ekstra).
 
-### 🟢 O9. `refund.jsx`/`copy_order.jsx` — online-only tanpa gating offline
+**Verifikasi backend** (`request_category_discount.go:11-20`):
 
-`useOrder().cancel`/`copy` (dipanggil Refund/CopyOrder) — tidak ada path offline. Tombol
-di-gating di UI (`isOnline && apiReachable !== false`) di history/bills, jadi aman saat ini,
-tapi kalau dipanggil offline → fetch error tanpa fallback.
+```go
+type categoryDiscountRequest struct {
+    CategoryID         string  `json:"category_id"`
+    DiscountPercentage float64 `json:"discount_percentage"`
+    DiscountValue      float64 `json:"discount_value"`
+}
+```
 
-### 🟢 O10. Dead code online-path
+- Backend baca 3 field; `category` object (extra) **diabaikan** (Go unmarshal) → tidak crash.
+- Validasi (`:37-39`) butuh minimal satu discount — frontend offline selalu kirim
+  `discount_percentage` ATAU `discount_value` (filter `discount_value > 0`) → aman.
 
-- `specs/api-contract.md` menyebut `POST /catalog`, `/category` — `home/create.jsx` (create catalog) pakai `useCatalog().create` → online-only, tidak ada gating/queue offline. Kalau offline klik create catalog → error. (Minor — biasanya online-only operation.)
+**Kesimpulan: bukan bug** — extra `category` harmless, online & offline sama-sama diterima backend.
+
+### ✅ O9. `refund.jsx`/`copy_order.jsx` — online-only — INTENDED
+
+`useOrder().cancel`/`copy` (Refund/CopyOrder) — online-only. Konfirmasi user (2026-08-07):
+tombol **hanya muncul saat online** (`history/index.jsx:236` `{isOnline && apiReachable !== false && ...}`),
+copy order button di-comment. **Offline tidak ada tombol → tidak ada aksi → aman. Bukan bug.**
+
+### ✅ O10. Create catalog offline — INTENDED (tombol di-gating)
+
+`home/create.jsx` pakai `useCatalog().create` → `POST /catalog` (online-only, tanpa queue).
+Tapi tombol `+` (openDrawer) **hanya render saat online**: `home/index.jsx:215`
+`{!isOffline && (...)}` → offline tombol gak muncul → gak bisa klik → aman.
+**Bukan bug** — gating di UI, konsisten dengan O9.
 
 ---
 
 ## P0 — Offline Data Loss / Crash
 
-### 1. `checkAppVersion` — `localStorage.clear()` wipe semua offline cache saat deploy
+### ✅ 1. `checkAppVersion` — `localStorage.clear()` — NOT A BUG / by design
 
 **File:** `src/utils/checkVersion.jsx:4-11`
 
 ```js
 if (saved !== APP_VERSION) {
-  localStorage.clear();
+  localStorage.clear(); // cuma localStorage
   localStorage.setItem(STORAGE_KEY, APP_VERSION);
-  window.location.replace("/login");
+  window.location.replace('/login');
 }
 ```
 
-`VITE_APP_VERSION` berubah ("sandbox" → "V2", dst.) setiap deploy. `localStorage.clear()` menghapus:
+**Verifikasi (2026-08-07):**
 
-- **Semua cache offline**: `cache_openbills`, `cache_order_history`, `cache_shifts`, `cache_membership`, `cache_catalog`, `cache_sales`, `cache_table_*`
-- **`redux-persist`** (`persist:root`) → logout paksa semua user
+- `localStorage.clear()` **tidak menyentuh IndexedDB** (`pos-offline-queue-${userId}`) → queue transaksi offline **tetap aman**.
+- Setelah login ulang, `signin` (auth/hook.js:35-37) langsung panggil `syncPendingSessions()` → IDB langsung sync. Konfirmasi user: disengaja.
+- Yang hilang cuma cache display (history/bills/shifts offline) + logout paksa — wajar saat deploy versi baru.
 
-**Dampak:** transaksi offline yang sudah ada di cache (belum sync) **hilang dari UI**.
-IDB (`pos-offline-queue-${userId}`) **tidak** ikut terhapus, tapi cache fallback display hilang
-→ order/bill/history/shift tampak "hilang" walau masih ada di IDB. Ditambah logout massal.
-
-**Fix yang disarankan:**
-- Jangan `localStorage.clear()`; hapus hanya key persist yang bukan cache, atau
-- Clear cache dengan **safelist** — hapus `cache_*` DAN `persist:root` tapi **jangan** sentuh IDB, lalu **jangan redirect paksa** kalau user punya pending queue.
+**Kesimpulan: bukan bug.** Data transaksi di IDB tidak hilang; cache display ilang = expected saat deploy.
 
 ---
 
-### 2. Split payment offline — double charge server
+### ✅ 2. Split payment offline — NOT A BUG (double-charge salah klaim)
 
-**File:** `src/pages/authorize/home/checkout.jsx:801-872` (`onPayOfflineSplit`)
+**File:** `src/pages/authorize/home/checkout.jsx:821-856` (`onPayOfflineSplit`)
 
-Alur split: order bill asli (pending) diupdate via `updateOrderBill`, dan payment baru
-(completed) dibuat via `createOrderPayment`. `dataOfflineToOnline.sync_id` diganti uuid baru,
-`id` dikosongkan.
+**Re-verifikasi (2026-08-07):** klaim awal "double charge" **salah**. Trace alur split:
 
-**Bug:** order bill **asli yang pending tidak pernah dihapus** dari IDB (`deleteOrderBill` tidak dipanggil).
-Saat sync, keduanya terkirim:
-- `order_bills` lama (pending, `ref_sync_id: ''`) → server buat order baru
-- `order_payments` baru (completed, `ref_sync_id = sync_id lama`) → server buat order bayar
+1. `createOrderPayment` (line 829) — porsi yang dibayar → entry **baru** di `order_payments`,
+   `ref_sync_id` = bill asli, `sync_id` baru, `id` kosong.
+2. `updateOrderBill` (line 850) — sisa item → **UPDATE bill asli in-place** (`queue.js:173-205`
+   `db.put({...existing, ...payload})`), tidak bikin entri baru, tidak hapus.
 
-**Dampak:** transaksi **dobel** di server (2 order, 1 sisa pending + 1 payment).
+Setelah split, IDB punya 2 entri **beda peran** (bukan dobel):
+| Store | sync_id | Isi | Status |
+|---|---|---|---|
+| order_bills | original | sisa item (belum bayar) | pending |
+| order_payments | baru | item yang dibayar | completed + ref_sync_id |
 
-**Fix:** panggil `deleteOrderBill(CartState?.bill?.sync_id, userId)` di jalur split — sama seperti
-`onPayOfflinePayAndDeleteBill` (checkout.jsx:756-799). Hapus juga dari `cache_openbills` via `deleteOpenBills`.
+- Bill asli **MEMANG harus tetap ada** di split (mewakili sisa yang belum dibayar) — di-update, bukan dihapus.
+- Yang harus dihapus hanya di alur **bayar penuh** — dan itu sudah `deleteOrderBill` (line 781). ✅
+
+**Kesimpulan: bukan bug.** Risiko nyata bukan di sini, tapi di **#8 `checkPartialPaid` id mismatch** —
+kalau deteksi `isPending` salah → bisa masuk cabang split/payAndDelete yang salah.
 
 ---
 
-### 3. `setBillItems` — `category_discounts` dibuang, diskon kategori hilang
+### ✅ 3. `setBillItems` — NOT A BUG (dua jalur, tujuan berbeda)
 
 **File:** `src/services/cart/slice.js:459-498`
 
-```js
-state.discount.category = category_discounts.map(...);  // line 482-491 — DIISI
-...
-state.discount.category = extractUniqueCategories(allItems);  // line 495 — DITIMPA
-```
+**Re-verifikasi (2026-08-07):** klaim awal "line 495 menimpa, diskon hilang" **salah**.
+Juga koreksi: bukan "dead code" — ini **dua jalur dengan sumber berbeda**:
 
-Line 482-491 mengisi `state.discount.category` dari `category_discounts` payload, tapi
-**line 495 langsung menimpa** dengan hasil `extractUniqueCategories(allItems)` yang hanya
-menurunkan dari `item.unit_discount` (bukan kategori). Kode line 482-491 **dead**.
+- **Blok A (482-491):** `state.discount.category` dari **`category_discounts`** (diskon kategori
+  eksplisit dari server): `{ id, name, discount_type, discount_value }`.
+- **Blok B (495):** `state.discount.category` dari **`extractUniqueCategories(allItems)`** —
+  diskon kategori diturunkan dari `item.unit_discount` per-item (slice.js:46-54).
+  `convertApiOrderToCartItem` (256-257) sudah set `unit_discount`/`discount_percentage`/`is_discount_percentage`.
 
-**Dampak:** buka bill (offline & online) yang punya diskon kategori → diskon hilang →
-`subtotal`/`grand_total` salah → **transaksi amount salah saat checkout**.
+Server simpan diskon kategori di 2 tempat (`item.discount_value` per-item + `category_discounts`
+array) → kedua jalur valid, sumber beda. **Diskon tidak hilang — dua-duanya menangani kasus yang sama.**
 
-**Fix:** hilangkan line 495 (atau merge — `extractUniqueCategories` hanya untuk default saat
-tidak ada `category_discounts`). Perhatikan juga `unit_discount` sudah di-set di `convertApiOrderToCartItem`
-dari `item.discount_value`, jadi sumber diskon kategori dobel.
+**Kesimpulan: bukan bug.** Tidak perlu fix.
 
 ---
 
-### 4. `session/hook.js` topup block — `newTotalPaid`/`newCount` undefined → ReferenceError
+### ✅ 4. `session/hook.js` topup block — ALREADY FIXED (Rev-21)
 
 **File:** `src/services/sales/session/hook.js:256-288`
 
-```js
-if (topupIdx >= 0) {
-  const newTotalNominal = ... + data?.total_charges;   // line 269
+**Re-verifikasi (2026-08-07):** temuan awal (`newTotalPaid`/`newCount` undefined → ReferenceError)
+**sudah di-fix** di commit `7ff3f6b` (Rev-21):
 
-  if (newTotalPaid <= 0 || newCount <= 0) {             // line 272 — UNDEFINED
-    updatedSummary.summary.topups.splice(topupIdx, 1);
-  } else {
-    updatedSummary.summary.topups[topupIdx] = {
-      ...updatedSummary.summary.topups[topupIdx],
-      total_nominal: newTotalNominal,
-    };
-  }
-}
+```diff
+- if (data.type === 'topup') {
++ if (data.type === 'topup' || data.type === 'deleted_topup') {
+-   ...total_paid ... + data?.total_charges;
++   ...total_nominal ... + data?.topup_nominal;
+-   if (newTotalPaid <= 0 || newCount <= 0) {
++   if (newTotalNominal <= 0) {
 ```
 
-`newTotalPaid`/`newCount` tidak pernah didefinisikan → **ReferenceError** di jalur
-`updateSessionSummary({ type: 'topup' })` yang dipanggil dari `card.content.jsx:102`
-(topup offline). **Topup offline → summary crash** (payment berhasil, summary gagal).
+- `newTotalPaid`/`newCount` dihapus → pakai `newTotalNominal` (benar).
+- Bonus: `deleted_topup` juga di-handle.
 
-**Fix:** hapus kondisi `newTotalPaid`/`newCount`, cukup `if (newTotalNominal <= 0)` splice.
+**Kesimpulan: bukan bug — sudah fixed.** (Audit awal di titik sebelum Rev-21.)
 
 ---
 
-### 5. `session/hook.js` update block — `showShifts` null → crash
+### ✅ 5. `session/hook.js` update block — NOT A BUG (session hasSession selalu di cache)
 
 **File:** `src/services/sales/session/hook.js:242-254`
 
-```js
-if (data.type === 'update') {
-  if (!(data.id === updatedSummary.id || data.sync_id === updatedSummary.sync_id)) {
-    let existing = showShifts(data);      // bisa null (cache_shifts tidak punya session)
-    existing.summary.sales.outstanding_bill += data.outstanding_bill;  // crash
-```
+**Re-verifikasi (2026-08-07):** klaim awal "showShifts null → crash" **overclaim**.
 
-`showShifts` (cache.js:342) return `null` kalau `findIndex === -1` (session tidak ada di
-`cache_shifts` — mis. bill berasal dari server session yang belum di-cache offline, atau
-session dari device lain).
+`showShifts` (cache.js:342) return null kalau session gak ada di `cache_shifts`. Tapi
+**session aktif (hasSession) selalu ada di `cache_shifts`**, via 2 jalur:
 
-**Dampak:** `updateSessionSummary({type:'update'})` dipanggil dari `onPayOfflinePayAndDeleteBill`
-(checkout.jsx:793) & `onUpdateBillOffline` (checkout.jsx:445) → **ReferenceError** saat session
-tidak ada di cache.
+1. `openSession.jsx:61` `saveShifts` — saat session dibuka offline
+2. `session/hook.js:82` `setCache(SHIFTS_CACHE_KEY, serverData)` — saat `session()` fetch online
+   (dipanggil App.jsx pre-fetch saat login online)
 
-**Fix:** guard `if (!existing) return;` setelah `showShifts`.
+`onBillSelected` cuma bisa dipanggil saat `hasSession` (UI gating) → bill pakai session yang
+hasSession → session itu selalu di-cache → `showShifts` ketemu → **tidak crash.**
+
+**Kesimpulan: bukan bug.** `showShifts` null cuma di edge case session dari device lain / stale
+(rare, non-issue).
 
 ---
 
 ## P1 — Behavior / Sync Salah
 
-### 6. `setWaring` — undefined function → ReferenceError
+### ✅ 6. `setWaring` — FIXED (typo → `setWarning`)
 
 **File:** `src/pages/authorize/home/cart.jsx:70`, `checkout.jsx:146`
 
-```js
-dispatch(setWaring('Please open session.'));
-```
+**Before:** `dispatch(setWaring('Please open session.'))` — `setWaring` (typo) tidak ada di slice →
+ReferenceError saat Save Bill offline tanpa session.
 
-`setWaring` tidak di-import dan tidak didefinisikan (yang ada `setWarning` di slice). 
-**ReferenceError** saat Save Bill offline tanpa session terbuka.
+**After (2026-08-07):**
 
-**Fix:** import `setWarning` dari `services/offline/slice`.
-
----
-
-### 7. `syncStatus` vs `is_synced` campur — count pending salah
-
-Sessions pakai `syncStatus` (index dibuat di queue.js:43), orders/payments/topups pakai `is_synced`.
-`startSession`/`closeSession` (queue.js) **hanya set `sync_type`, tidak pernah set `syncStatus`**.
-
-Akibat:
-- `PendingDrawer.jsx:57` `hasPendingOrFailed` cek `s.syncStatus === 'pending'||'failed'` → **selalu false** (field undefined) → tombol Retry di header drawer tidak muncul walau ada session pending.
-- `usePendingQueueCount.js:36` `sessions.filter(s => s.syncStatus !== 'synced')` → **semua session dihitung pending** (inflasi count) walau hanya referensi server.
-- Tab Shifts di PendingDrawer count = `data.sessions.length` (semua, termasuk referensi synced).
-
-**Fix:** konsisten — buang `syncStatus`, pakai `is_synced` untuk semua store (dan index `syncStatus` di queue.js upgrade DB), atau set `syncStatus` dengan benar.
+- `cart.jsx`: tambah `import { setWarning } from '../../../services/offline'` + ganti `setWaring` → `setWarning`
+- `checkout.jsx`: ganti `setWaring` → `setWarning` (import sudah ada line 24)
+- `grep setWaring` → bersih (0 hasil).
 
 ---
 
-### 8. `checkPartialPaid` — id mismatch, split payment salah cabang
+### ✅ 7. `syncStatus` vs `is_synced` campur — FIXED (konsisten `is_synced`)
 
-**File:** `src/services/offline/helper.js:31-91`, dipanggil `checkout.jsx:699`
+Sessions dulu pakai `syncStatus` (index queue.js:43) tapi **tidak pernah di-set**; orders/payments/topups pakai `is_synced`. Akibat: `usePendingQueueCount` hitung semua session pending (inflasi), `PendingDrawer` tombol Retry tidak muncul.
 
-`checkPartialPaid(payload.items, CartState?.bill?.items)`:
-- `reqItems` (payload.items) dibangun dari `CartState.items` → `id: item?.order_item_id || uuidv4()` (baru digenerate, `uuidv4()` acak)
-- `oldItems` (bill items) punya `id` = `order_item_id` asli dari server
+**Fix (2026-08-07) — konsisten `is_synced` di sessions:**
+| File | Perubahan |
+|---|---|
+| `queue.js` `startSession` | `is_synced: false` |
+| `queue.js` `closeSession` insert-fallback (server) | `is_synced: false` |
+| `queue.js` `closeSession` offline close | `is_synced: false` |
+| `usePendingQueueCount.js:36` | `!s.is_synced` |
+| `cache.js:55` (computePendingCount) | `if (s.is_synced) return` |
+| `PendingDrawer.jsx:57` | `!s.is_synced` |
 
-Match `ir.id === oldItem.id` (helper.js:46) → untuk item cart yang id-nya `uuidv4()` baru,
-**tidak cocok** → `notPay=false` semua → `isPending` salah → **cabang PayAndDelete vs Split salah**.
-
-**Dampak:** item yang benar-benar diubah qty-nya tidak terdeteksi → payment "split" salah jalur
-(atau tidak split saat harusnya, atau split saat tidak harus).
-
-**Fix:** match berdasarkan `catalog_id` + qty (bukan id), atau pastikan `payload.items` memakai
-`order_item_id` yang sama dengan bill items.
+Index `syncStatus` di DB (v5) dibiarkan (legacy, tidak merusak).
 
 ---
 
-### 9. Offline membership — `id` undefined → fetch `/membership/undefined`
+### ✅ 8. `checkPartialPaid` — NOT A BUG (id match benar)
 
-Membership offline (`createMembership`/`createTopup` cache) payload hanya `{ sync_id, card_id, name, reff_code, saldo }` — **tidak ada `id`** (server UUID).
+**File:** `src/services/offline/helper.js:31-91`, dipanggil `checkout.jsx:696`
 
-Akibat:
-- `drawer.detail.jsx:50` `HistorySection id={membership?.id}` → `history.jsx:187` `showMember(undefined)` → `triggerShow(undefined)` → **fetch `/membership/undefined`** → error.
-- `update.jsx` `update({ id: membership?.id ... })` → `/membership/undefined` → error.
+**Re-verifikasi (2026-08-07):** klaim awal "id mismatch" **salah**. Kunci: `CartState.bill`
+dan `CartState.items.bill` adalah **dua hal berbeda**:
 
-**Dampak:** buka detail/update member yang **dibuat offline** (belum sync) → error fetch.
+- `selectedBill(data)` (cart/hook.js:263) → `CartState.bill = data` **asli** (server/queue bill) →
+  `CartState.bill.items` = **item server asli, punya `id`**.
+- `setBillItems` (slice:473) → `CartState.items.bill` = hasil `convertApiOrderToCartItem`
+  (punya `order_item_id`, utk display/edit).
+
+`checkPartialPaid(payload.items, CartState.bill.items)`:
+- `oldItems` = `CartState.bill.items` (server asli) → `oldItem.id` = server UUID.
+- `reqItems` = `payload.items` → item dari bill: `ir.id = item.order_item_id` = server UUID (sama).
+- Item bill sama → id cocok → `notPay=true`; qty sama → tidak pending. Item baru → `uuidv4()`
+  → masuk pending (benar).
+
+**Kesimpulan: bukan bug.** Logika match benar. Ini juga konfirmasi #2 (double-charge) memang
+tidak ada — bill penuh → `PayAndDeleteBill` → hapus bill.
+
+---
+
+### ✅ 9. Offline membership — `id` undefined — NOT A BUG (sudah di-guard)
+
+Membership offline (`createMembership`/`createTopup` cache) payload `{ sync_id, card_id, name, reff_code, saldo }` — **tidak ada `id`** (server UUID). Tapi **sudah di-guard**:
+
+- `history.jsx:186` → `if (!isOffline && membership?.id) showMember(membership?.id)` → offline / id undefined → **tidak fetch** `/membership/undefined`. Offline render dari `membership.saldo_logs` (line 182-183).
+- `update.jsx:141-142` → `if (!isOffline) show(id)` → offline tidak fetch. Offline update pakai `updateMembership` (queue IDB, tidak butuh id server). Tombol Remove di-gating `!isOffline` (line 223).
+- `drawer.detail.jsx:50` `HistorySection id={membership?.id}` → aman karena history.jsx guard internal.
+
+**Kesimpulan: bukan bug** — semua jalur fetch sudah di-guard offline / undefined id.
 
 **Fix:** gating offline — kalau `!membership?.id` (masih pending sync), render dari cache
 (saldo_logs dari `membership.saldo_logs`), nonaktifkan tombol yang butuh id.
 
 ---
 
-### 10. Cache tidak di-cleanup setelah sync — entri stale/duplikat
+### ✅ 10. Cache tidak di-cleanup setelah sync — NOT A BUG (auto-refresh via lastSyncTime)
 
-**File:** `src/services/offline/syncManager.js` (hapus row IDB sukses, tapi tidak sentuh localStorage)
+**File:** `src/services/offline/syncManager.js`, halaman history/bills/shifts/membership
 
-Setelah `/sales/sync` sukses, row IDB dihapus (`db.delete`), tapi:
-- `cache_openbills` — tidak dihapus untuk bills yang jadi payment
-- `cache_order_history` — tidak dihapus untuk orders yang synced
-- `cache_shifts` — session synced masih tersisa
+**Re-verifikasi (2026-08-07):** klaim "cache stale/duplikat" **salah**. Alur:
 
-Satu-satunya cleanup manual ada di `layout.jsx` (saat user klik Remove di PendingDrawer).
-Cache cleanup function (`deleteOpenBills`, `deleteOrderHistory`) **tidak dipanggil di syncManager**.
+- `syncManager.js:330-331` → `setLastSyncTime(now)` di-dispatch **di akhir sync** (setelah semua group diproses).
+- Semua halaman `useEffect(..., [lastSyncTime])` → re-fetch dari server:
+  - `history/index.jsx:65`, `bills/index.jsx:70`, `shifts/index.jsx:108`, `membership/index.jsx:47`.
+- **Summary juga auto-refresh**: `layout.jsx:376-378` `useEffect(() => summary(), [lastSyncTime])` →
+  `session/hook.js:54-56` fetch server → `dispatch(setSummary(res.data))` → `sessionSummary` Redux fresh.
+- Re-fetch sukses → `setCache(...)` di hook → **cache ditimpa data server fresh**.
 
-**Dampak:** setelah sync, buka History/Bills/Shifts offline → **entri lama masih muncul duplikat**
-sampai cache ditimpa fetch online.
+Cache otomatis ter-refresh setelah sync — tidak perlu manual delete. Edge case: kalau re-fetch
+gagal (masih offline sesaat), cache lama bertahan — display sementara, bukan bug.
 
-**Fix:** setelah `db.delete` sukses di syncManager, panggil `deleteOpenBills`/`deleteOrderHistory`
-untuk order yang synced + hapus session yang synced dari `cache_shifts`.
+**Kesimpulan: bukan bug.**
 
 ---
 
-### 11. Addon options/checkbox — quantity fraksi → subtotal salah
+### ✅ 11. Addon options/checkbox — quantity fraksi — NOT A BUG (normalisasi balik benar)
 
 **File:** `src/services/cart/slice.js:213,233` (`convertApiOrderToCartItem`)
 
 ```js
-quantity: add.quantity / item.quantity,   // options/checkbox → qty = 1/item.qty → fraksi
+quantity: add.quantity / item.quantity
 ```
 
-Untuk addon group `type: 'options'`/`'checkbox'`, server simpan `add.quantity` (biasanya 1).
-Dibagi `item.quantity` → **fraksi** (mis. item qty 3 → addon qty 0.333). Lalu
-`calculateAdditionalsPerItem` (line 271) `child.quantity` dipakai untuk subtotal → **salah**.
+**Re-verifikasi (2026-08-07):** klaim "fraksi → subtotal salah" **salah**. Ini **normalisasi balik yang benar**:
 
-Untuk `type: 'quantity'`, addon qty = `addon.qty * item.qty` (dari makePendingBill) →
-`add.quantity / item.quantity` = benar (kembali ke addon.qty).
+- Backend simpan addon qty **scaled** = `item.Quantity * addon.Quantity` (`request_item.go:123`).
+- Options/checkbox: backend set addon qty `= 1` (`request_addon.go:59-60`) → DB `item.qty * 1` = scaled.
+- Frontend `/ item.quantity` → normalisasi balik: `(item.qty * 1) / item.qty` = **1** (options), `(item.qty * userQty) / item.qty` = **userQty** (quantity type) → **keduanya benar**.
 
-**Dampak:** bill item dengan addon options/checkbox → subtotal addon salah saat edit/re-open bill.
-
-**Fix:** `type: 'options'`/`'checkbox'` → `quantity: 1` (jangan dibagi). Hanya `type: 'quantity'` yang dibagi.
+**Kesimpulan: bukan bug.** Division hanya masalah kalau `item.quantity = 0`, tapi server qty ≥ 1.
 
 ---
 
 ## P2 — Display / Drift
 
-### 12. Receipt / OrderDetails — cashier offline kosong
+### ✅ 12. Receipt / OrderDetails — cashier offline kosong — NOT A BUG
 
 `receipt.jsx:40`, `order.jsx:29`: `data?.session?.cashier?.name`.
-Order offline `session` = `sessionSummary` (Redux) yang punya `cashier` di **root**, bukan
-`session.cashier`. → **cashier kosong** di receipt/order detail offline.
 
-**Fix:** `data?.session?.cashier?.name || data?.cashier?.name || '-'`.
+**Re-verifikasi (2026-08-07):** klaim "cashier offline kosong" **salah**. Salah interpretasi akses:
+
+- `data?.session?.cashier?.name` = `session.cashier.name` (cashier di **root session**), BUKAN
+  `session.session.cashier.name`.
+- `data.session` (offline) = `sessionSummary`, dan `sessionSummary.cashier` = user object (di-set
+  `makeStartSession` spread `openSession.jsx:44` `cashier: sessionAuth?.user`) → `.name` ada ✅.
+- Online: `data.session.cashier.name` juga ada (server session cashier root).
+
+**Kesimpulan: bukan bug** — cashier tampil benar untuk online & offline. Sumber salah: gua
+mengira `data.session` butuh `.session.cashier`, padahal `.cashier` di root.
 
 ---
 
-### 13. Topup offline — bonus saldo drift + payment_type kosong
+### ✅ 13. Topup offline — bonus drift — NOT A BUG (praktis tak terjadi)
 
 **File:** `src/pages/authorize/membership/card.content.jsx:35-111`
 
-- `useBonuses` dari `schemaBonus` (useMaster). Kalau offline & belum pernah cache bonus schema
-  (pre-fetch App.jsx hanya saat login online), `schemaBonus = []` → bonus **tidak dihitung offline**,
-  tapi server hitung bonus saat sync → **saldo server ≠ cache**.
-- `payloadBonus` (line 76-83) **tidak punya `sync_id`** — dan bonus tidak di-queue ke IDB
-  (`createTopup` hanya untuk topup, bonus hanya di cache saldo). Setelah sync, `saldo_logs`
-  cache tidak match server.
-- `payment_type: method` tanpa validasi → bisa empty → sync topup `payment_type: ''` → server reject.
+**Re-verifikasi (2026-08-07):**
+- `payloadBonus` **sudah punya `sync_id`** (line 81) & `reference_id` (line 85).
+- Bonus tidak di-queue ke IDB (hanya cache saldo); server `processTopups` (sales_sync.go) hitung
+  bonus sendiri dari nominal.
 
-**Fix:** validasi `method` wajib pilih; catat bonus sebagai saldo_log dengan `sync_id`; pertimbangkan
-jangan menambah bonus di cache sampai sync (atau sync bonus eksplisit).
+**Kenapa praktis tidak terjadi drift:** `schemaBonus` selalu tersedia saat offline karena login
+selalu online:
+1. Login → `App.jsx:40` `getSchemaBonus()` → fetch server → `setCache('cache_schema_bonus')`.
+2. Buka topup modal → `card.content.jsx:155` `getSchemaBonus()` → offline baca cache
+   (`master/hook.js:35-37`).
+3. `schemaBonus` client (dari cache) == server gRPC → bonus client & server konsisten.
+
+Offline tanpa cache schema bonus praktis mustahil (harus login dulu = online). `payment_type`
+dari `method` (bisa kosong) → potensi reject, tapi UI pilihan method ada (cash/transfer).
+
+**Kesimpulan: bukan bug** (login selalu online → cache schema bonus selalu terisi sebelum offline).
 
 ---
 
-### 14. Shifts offline — order list tidak muncul
+### ✅ 14. Shifts offline — order list tidak muncul — NOT A BUG
 
-`cache_shifts` diisi `saveShifts` (open) & `updateShifts` (close) dari `makeStartSession` yang
-**tidak punya `orders` array**. `shifts/index.jsx:429` `detail?.orders?.map` → undefined → order
-tidak dirender. Jadi **shifts offline tidak bisa lihat/buka order dalam session**.
+**File:** `src/pages/authorize/shifts/index.jsx:429`, `src/utils/cache.js`
+
+**Re-verifikasi (2026-08-07):** klaim "shifts offline gak bisa lihat order" **salah**.
+
+- `cache_shifts` diisi 3 cara: `saveShifts` (open session), `updateShifts` (hook:293), `setCache`
+  (hook:82, dari `session()` fetch online).
+- **Session yang dipake transaksi** → `updateSessionSummary` (`type:'payment'`) nambah
+  `updatedSummary.orders` (hook:219-225) → `updateShifts` → cache_shifts **dengan orders** →
+  shift detail offline `detail.orders.map` → **order muncul** ✅.
+- Session tanpa transaksi → orders kosong (wajar). Session server → detail butuh `GET
+  /sales/session/{id}` (online); list `GET /sales/session` tanpa orders → detail offline terbatas
+  (wajar, online-only fetch).
+
+**Kesimpulan: bukan bug.** Offline shifts menampilkan orders dari session yang punya transaksi
+(via updateShifts); session server detail butuh online fetch (expected).
 
 ---
 
 ## P3 — Kosmetik / Dead Code
 
-| # | Temuan | Lokasi |
-|---|---|---|
-| 15 | Debug `console.log` di prod | `customer.jsx:88`, `history.jsx:222`, `card.content.jsx:88,99`, `layout.jsx:87,93,211,217,298`, `syncManager.js` (banyak), `membership/index.jsx:88` |
-| 16 | `setPendingCount` tidak pernah di-dispatch — `Offline.pendingCount` selalu 0 | `bills/index.jsx:84`, `history/index.jsx:79` baca `Offline.pendingCount` → re-fetch offline mati |
-| 17 | Dead code — `localTransaction.js` (`buildOfflineTransactionPayload`), `incrementSyncAttempt`/`resetMetadata`/`getAllMetadata` (queue.js) | tidak ada pemakai |
-| 18 | Dead code — seluruh `table/` (useTable, table.config, TableRender, CardRender, CardList, Pagination, TableTool, TableWrapper, `tableApi`) | tidak ada importer; masih di-register store.js → bundle bloat |
-| 19 | Dead code — `CopyOrder` (`copy_order.jsx`) | `useOrder().copy` tidak ada di hook/action; button di-comment |
-| 20 | Dead code — `preview.jsx` (PrintWindow lama), `config.js` (`CONFIG.apiURL` hardcode) | tidak dipakai |
-| 21 | `copy_order.jsx`, `refund.jsx` `useOrder().copy`/`cancel` — online-only, tanpa gating offline | kalau di-uncomment, tidak ada path offline |
+| #   | Temuan                                                                                                                                    | Lokasi                                                                                                                                               |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 15  | Debug `console.log` di prod — **FIXED** (2026-08-07)                                                                                       | layout.jsx(18), checkout(4), customer(2), membership pages(11), syncManager(19) dihapus/`// ignore`. Yang legit (error log, DEV-gated baseQuery) dibiarkan. Build OK. |
+| 16  | `setPendingCount` tidak pernah di-dispatch — `Offline.pendingCount` selalu 0 — **FIXED** (2026-08-07)                                      | `usePendingQueueCount.refresh()` sekarang `dispatch(setPendingCount(total))` → Redux sinkron → heartbeat syncManager jalan + `offlinePendingCount` bills/history bener. Build OK. |
+| 17  | Dead code — **FIXED** (2026-08-07): `localTransaction.js` dihapus, `incrementSyncAttempt`/`resetMetadata`/`getAllMetadata` (queue.js) + barrel export dihapus | tidak ada pemakai (verified); grep bersih. Build OK.                                                                                                |
+| 18  | `useTable` + seluruh `table/` (useTable, table.config, TableRender, CardRender, CardList, Pagination, TableTool, TableWrapper, `tableApi`) | tidak ada importer; masih di-register store.js → bundle bloat. **User pilih: biarkan.**                                                               |
+| 19  | `CopyOrder` (`copy_order.jsx`)                                                                                                            | **DIPAKAI** — tombol "copy order" di bills/index.jsx:249-253 (gating `!isOffline`), `useOrder().copy` ada (order/action.js:38, hook.js:84). NOT dead.  |
+| 20  | `preview.jsx` (PrintWindow lama), `config.js` (`CONFIG.apiURL` hardcode)                                                                  | tidak dipakai. **User pilih: biarkan.**                                                                                                              |
+| 21  | `refund.jsx` `useOrder().cancel` — online-only, gating di UI (`isOnline && apiReachable !== false`)                                      | offline tombol tidak muncul → aman. CopyOrder juga gating `!isOffline`. NOT a bug.                                                                    |
 
 ---
 
@@ -430,32 +482,24 @@ tidak dirender. Jadi **shifts offline tidak bisa lihat/buka order dalam session*
 
 ### Urutan rekomendasi
 
-**Online path (paling fatal, fix dulu):**
-1. **O1** service charge 0% global — source `session.outlet` undefined → ganti ke `sessionSummary.outlet` / `sales_session.outlet`
-2. **O2** `openSession` `outlet_id` undefined — sama akar O1
-3. **O3** custom catalog online kirim `unit_nett` vs contract `unit_price`
-4. **O4** addons online shape mismatch (quantity missing utk options/checkbox)
+**Online path — SEMUA RESOLVED / BUKAN BUG (verified ke backend asli):**
 
-**Offline P0:**
-5. **P0 #1** `checkAppVersion` — ganti `localStorage.clear()`
-6. **P0 #2** split double-charge — tambah `deleteOrderBill` + `deleteOpenBills`
-7. **P0 #3** `setBillItems` — jangan timpa `category_discounts`
-8. **P0 #4** topup `newTotalPaid`/`newCount` — hapus kondisi undefined
-9. **P0 #5** `showShifts` null — tambah guard
+1. ~~**O1**~~ — **RESOLVED** — `Auth.session.outlet.service_charges` tersedia; server hitung service charge sendiri (`request_create.go:57-61`)
+2. ~~**O2**~~ — **RESOLVED** — outlet & user tersedia setelah getUser
+3. ~~**O3**~~ — **SOLVED** — backend baca `unit_nett` (`request_item.go:16-18`)
+4. ~~**O4**~~ — **SOLVED** — backend default `quantity=1` utk options/checkbox (`request_addon.go:54-60`)
+5. ~~**O7**~~ — **SOLVED** — sama O3
+6. ~~**O5**~~ — **INTENDED** — `payment_ref = card.reff_code` by design (payment member card)
+7. ~~**O6**~~ — **FIXED** — re-run useEffect + guard (`cart/hook.js`)
+8. ~~**O8**~~ — **SOLVED** — extra `category` object harmless (backend abaikan)
 
-**Offline P1-P3:**
-10. **P1 #6** `setWaring` → `setWarning`
-11. **P1 #7** `syncStatus`/`is_synced` konsisten
-12. **P1 #8** `checkPartialPaid` id mismatch
-13. **P1 #9** offline membership `id` undefined
-14. **P1 #10** cache cleanup setelah sync
-15. **P1 #11** addon options qty fraksi
-16. **P2 #12-14** display/drift
-17. **P3 #15-21** debug logs + dead code cleanup
+**Offline P0 (paling fatal):** 5. ~~**P0 #1**~~ — **NOT A BUG** — `localStorage.clear()` aman (IDB tidak kena; sync otomatis saat login ulang) 6. ~~**P0 #2**~~ — **NOT A BUG** — split payment update in-place (`updateOrderBill`), bukan double-charge. Risiko nyata ada di #8 (checkPartialPaid id mismatch) 7. ~~**P0 #3**~~ — **NOT A BUG** — `extractUniqueCategories` turunkan diskon dari `item.unit_discount` (sudah set di convert); diskon tidak hilang. Line 482-491 dead code saja 8. ~~**P0 #4**~~ — **ALREADY FIXED** (Rev-21 `7ff3f6b`) — `newTotalPaid`/`newCount` sudah diganti `newTotalNominal` 9. ~~**P0 #5**~~ — **NOT A BUG** — session hasSession selalu di-cache (`saveShifts` offline / `setCache` via `session()` online) → `showShifts` tidak null
+
+**Offline P1-P3:** 10. ~~**P1 #6**~~ — **FIXED** — `setWaring` → `setWarning` (cart.jsx + checkout.jsx) 11. ~~**P1 #7**~~ — **FIXED** — konsisten `is_synced` di sessions (queue.js, usePendingQueueCount, cache, PendingDrawer) 12. ~~**P1 #8**~~ — **NOT A BUG** — `checkPartialPaid` match `CartState.bill.items` (server asli, punya id) dengan benar 13. ~~**P1 #9**~~ — **NOT A BUG** — fetch sudah di-guard `!isOffline && membership?.id` (history.jsx, update.jsx) 14. ~~**P1 #10**~~ — **NOT A BUG** — cache auto-refresh via `lastSyncTime` (semua halaman re-fetch server) 15. **P1 #11** addon options qty fraksi 16. **P2 #12-14** display/drift 17. **P3 #15-21** debug logs + dead code cleanup
 
 ### Catatan
 
 - **IDB vs localStorage**: fix P0 #1 tidak menghapus IDB, tapi cache fallback display hilang → pesan konfirmasi ke user sebelum clear.
-- **Prioritas paling fatal data loss**: O1 (service charge undercharge semua transaksi), #2 (double charge), #3 (amount salah), #1 (wipe cache).
-- **O1 adalah yang paling berdampak** — mempengaruhi SEMUA transaksi (online + offline), bukan hanya alur tertentu.
+- **Prioritas paling fatal data loss (offline)**: #2 (double charge), #3 (amount salah), #1 (wipe cache), #4 (crash topup), #5 (crash update bill).
+- **`service_charges` = persen langsung** (mis. `5` = 5%), bukan fraksi. **Dokumen `offline-data-consistency.md:179` ("0.1 = 10%") outdated** — perlu dikoreksi.
 - Semua fix sebaiknya di-verify manual di alur online & offline→online (ikuti `offline-e2e.md`).

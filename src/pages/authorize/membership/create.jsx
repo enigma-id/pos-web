@@ -55,7 +55,7 @@ const CreateSection = ({ onClose }) => {
     try {
       await createMembership(payload, sessionAuth?.user?.id);
     } catch (err) {
-      console.log('[DEBUG] error membership', err);
+      // ignore
     }
 
     triggerQueueRefresh();
@@ -63,7 +63,7 @@ const CreateSection = ({ onClose }) => {
     try {
       saveMembership(payload);
     } catch (err) {
-      console.log('[DEBUG] error membership', err);
+      // ignore
     }
 
     closeModal();

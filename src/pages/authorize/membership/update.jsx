@@ -74,7 +74,7 @@ const UpdateSession = ({ id, onClose, isOpen, onRefresh, membership }) => {
     try {
       await updateMembership(payload, sessionAuth?.user?.id);
     } catch (err) {
-      console.log('[DEBUG] error membership', err);
+      // ignore
     }
 
     triggerQueueRefresh();
@@ -82,7 +82,7 @@ const UpdateSession = ({ id, onClose, isOpen, onRefresh, membership }) => {
     try {
       perbaharuiMembership(payload);
     } catch (err) {
-      console.log('[DEBUG] error membership', err);
+      // ignore
     }
 
     onClose?.();

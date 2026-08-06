@@ -188,8 +188,6 @@ const HistorySection = ({ id, membership }) => {
     }
   }, [membership?.card_id]);
 
-  console.log('[DEBUG] render history');
-
   if (showResult?.isLoading) return <div>loading...</div>;
 
   const data = showResult?.data?.data || membership;
@@ -217,8 +215,6 @@ const HistorySection = ({ id, membership }) => {
       </div>
     );
   }
-
-  console.log('[History] [DEBUG]', logs);
 
   return (
     // tambahkan disini css meggunakan daiysiui dan css tailwind

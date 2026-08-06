@@ -71,7 +71,7 @@ const CardContent = ({ data, onClose, onRefresh }) => {
       membership.saldo_logs.push(payload);
       dataPrint.topup = payload;
     } catch (err) {
-      console.log('[DEBUG] createTopup', err);
+      // ignore
     }
 
     if (useBonuses?.length > 0) {
@@ -94,7 +94,7 @@ const CardContent = ({ data, onClose, onRefresh }) => {
         membership.saldo_logs.push(payloadBonus);
         dataPrint.bonus = payloadBonus;
       } catch (err) {
-        console.log('[DEBUG] createTopup bonus', err);
+        // ignore
       }
     }
 
@@ -103,7 +103,7 @@ const CardContent = ({ data, onClose, onRefresh }) => {
     try {
       perbaharuiMembership(membership);
     } catch (err) {
-      console.log('[DEBUG] perbaharuiMembership ', err);
+      // ignore
     }
 
     updateSessionSummary({

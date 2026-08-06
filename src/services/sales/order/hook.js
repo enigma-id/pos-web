@@ -6,6 +6,7 @@ import {
   useUpdateMutation,
   useLazyShowQuery,
   useLazyHistoryQuery,
+  useCopyMutation,
 } from './action';
 import { $failure } from '../../form/action';
 import { getCache, setCache } from '../../../utils/cache';
@@ -19,6 +20,7 @@ const useOrder = id => {
   const [triggerHistory, historyResult] = useLazyHistoryQuery();
   const [cancelMutation, cancelResult] = useCancelMutation();
   const [updateMutation, updateResult] = useUpdateMutation();
+  const [copyMutation, copyResult] = useCopyMutation();
   const [mergedHistoryData, setMergedHistoryData] = useState(null);
 
   const show = async id => {
@@ -79,6 +81,16 @@ const useOrder = id => {
     }
   };
 
+  const copy = async ({ id, payload }) => {
+    try {
+      const result = await copyMutation({ id, payload }).unwrap();
+      return result;
+    } catch (error) {
+      dispatch($failure(error));
+      throw error;
+    }
+  };
+
   useEffect(() => {
     if (!id) return;
 
@@ -96,6 +108,8 @@ const useOrder = id => {
     cancelResult,
     update,
     updateResult,
+    copy,
+    copyResult,
   };
 };
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { ensureDB, STORES } from './queue';
+import { setPendingCount } from './slice';
 
 /**
  * Hook — baca pending queue count langsung dari IndexedDB.
@@ -10,6 +11,7 @@ import { ensureDB, STORES } from './queue';
  * Panggil `triggerQueueRefresh()` setelah offline write operations.
  */
 const usePendingQueueCount = () => {
+  const dispatch = useDispatch();
   const sessionUserId = useSelector(state => state?.Auth?.session?.user?.id);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -17,6 +19,7 @@ const usePendingQueueCount = () => {
   const refresh = useCallback(async () => {
     if (!sessionUserId) {
       setCount(0);
+      dispatch(setPendingCount(0));
       return;
     }
     setLoading(true);
@@ -33,15 +36,17 @@ const usePendingQueueCount = () => {
       const pendingBills = bills.filter(b => !b.is_synced).length;
       const pendingPayments = payments.filter(p => !p.is_synced).length;
       const pendingTopups = topups.length; // semua topup pending sync
-      const pendingSessions = sessions.filter(s => s.syncStatus !== 'synced').length;
+      const pendingSessions = sessions.filter(s => !s.is_synced).length;
       const pendingMemberships = memberships.length; // semua memberships pending sync
 
-      setCount(
-        pendingBills + pendingPayments + pendingTopups + pendingSessions + pendingMemberships
-      );
+      const total = pendingBills + pendingPayments + pendingTopups + pendingSessions + pendingMemberships;
+
+      setCount(total);
+      dispatch(setPendingCount(total));
     } catch (err) {
       console.error('[usePendingQueueCount] error:', err);
       setCount(0);
+      dispatch(setPendingCount(0));
     } finally {
       setLoading(false);
     }

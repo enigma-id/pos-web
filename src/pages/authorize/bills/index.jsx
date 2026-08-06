@@ -134,6 +134,21 @@ const BillScreen = () => {
     }
   }, [showOrderResult]);
 
+  const onCopyOrder = () => {
+    openModal(
+      <CopyOrder
+        detail={detail}
+        orders={data}
+        onClose={closeModal}
+        onSuccess={result => {
+          order({ status: 'pending', search, page: currentPage, limit: itemsPerPage });
+          closeModal();
+        }}
+      />,
+      'w-md'
+    );
+  };
+
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
@@ -229,13 +244,16 @@ const BillScreen = () => {
         <div className="h-full w-full">
           <div className="bg-base-100 h-16 w-full">
             <div className="flex h-full flex-1/2 place-content-end place-items-center">
-              {/* <div
-                className="bg-success text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
-                onClick={onCopyOrder}
-              >
-                <FaCopy />
-                copy order
-              </div> */}
+              {!isOffline && (
+                <div
+                  className="bg-success text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
+                  onClick={onCopyOrder}
+                >
+                  <FaCopy />
+                  copy order
+                </div>
+              )}
+
               <div
                 className="bg-primary text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
                 onClick={handleOpenPrintReceipt}

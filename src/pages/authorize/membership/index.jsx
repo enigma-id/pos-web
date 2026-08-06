@@ -85,7 +85,6 @@ const MembershipScreen = () => {
   const handleRead = uid => {
     if (isOffline) {
       const membership = showMembership(uid);
-      console.log('[DEBUG] handleRead', membership);
       if (membership) {
         onScanSuccess(membership);
       } else {

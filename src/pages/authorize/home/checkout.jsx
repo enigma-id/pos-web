@@ -143,7 +143,7 @@ const CheckoutScreen = () => {
   // Create Bill Offline — Cache and IDB
   const onCreateBillOffline = async billName => {
     if (!sessionSummary) {
-      dispatch(setWaring('Please open session.'));
+      dispatch(setWarning('Please open session.'));
       return;
     }
 
@@ -725,12 +725,8 @@ const CheckoutScreen = () => {
         return;
       }
 
-      console.log('[DEBUG] paymentMethod?.is_member_payment', selectedMethod?.is_member_payment);
-
       if (selectedMethod?.is_member_payment) {
         const cloneMembership = JSON.parse(JSON.stringify(payload?.membership));
-
-        console.log('[DEBUG] cloneMembership', cloneMembership);
 
         cloneMembership.saldo -= dataOfflineToOnline?.total_charges;
         cloneMembership.saldo_logs.unshift({
@@ -744,7 +740,7 @@ const CheckoutScreen = () => {
         try {
           perbaharuiMembership(cloneMembership);
         } catch (err) {
-          console.log('[DEBUG] onPayOfflineSplit perbaharuiMembership', err);
+          // ignore
         }
       }
 
@@ -861,8 +857,6 @@ const CheckoutScreen = () => {
     try {
       updateOpenBills(dataOfflineToOnlineUpdated);
     } catch (err) {
-      console.log('[DEBUG] onPayOfflineSplit 3:', err);
-
       handleModalError();
     }
 
