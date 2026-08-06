@@ -38,6 +38,7 @@ import {
 } from '../../../services/offline/shapes';
 import {
   deleteOpenBills,
+  perbaharuiMembership,
   saveOpenBills,
   saveOrderHistory,
   showMembership,
@@ -649,6 +650,7 @@ const CheckoutScreen = () => {
         payload.membership_id = card?.id;
         payload.card_id = card?.card_id;
         payload.payment_ref = card?.reff_code;
+        payload.membership = card;
       }
 
       let outstandingBillPayment = 0;
@@ -781,12 +783,18 @@ const CheckoutScreen = () => {
 
     triggerQueueRefresh();
 
+    let kurangiBill = dataOfflineToOnline?.total_charges;
+
+    if (CartState?.bill?.total_charges != dataOfflineToOnline?.total_charges) {
+      kurangiBill = CartState?.bill?.total_charges;
+    }
+
     // 🔁 Update sessionSummary incremental
     updateSessionSummary({
       type: 'update',
       id: CartState?.bill?.session?.id,
       sync_id: CartState?.bill?.session?.sync_id,
-      outstanding_bill: -1 * dataOfflineToOnline?.total_charges,
+      outstanding_bill: -1 * kurangiBill,
     });
   };
 
@@ -846,6 +854,21 @@ const CheckoutScreen = () => {
       outstanding_bill:
         -1 * (CartState?.bill?.total_charges - dataOfflineToOnlineUpdated?.total_charges || 0),
     });
+
+    if (paymentMethod?.is_member_payment) {
+      const cloneMembership = JSON.parse(JSON.stringify(payload?.membership));
+
+      cloneMembership.saldo += dataOfflineToOnlineUpdated?.total_charges;
+      cloneMembership.saldo_logs.push({
+        nominal: -1 * dataOfflineToOnlineUpdated?.total_charges,
+        membership: cloneMembership,
+        membership_id: cloneMembership?.id,
+        reference_type: 'sales_order',
+        created_at: new Date(),
+      });
+
+      perbaharuiMembership(cloneMembership);
+    }
   };
 
   // Pay Online — API

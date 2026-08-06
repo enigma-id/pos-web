@@ -85,6 +85,8 @@ const CustomerSection = () => {
     }
   }, [checkResult]);
 
+  console.log('[DEBUG] [MEMBERSHIP]', memberships);
+
   return (
     <div className="border-base-200 bg-base-100 flex h-screen flex-col border-l">
       <div className="border-base-200 flex h-16 items-center gap-4 border-b px-6">

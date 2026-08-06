@@ -364,7 +364,7 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
                       )}
                       {item?.membership && (
                         <>
-                          <span className="max-w-24 truncate">{item?.membership?.nmae || '-'}</span>
+                          <span className="max-w-24 truncate">{item?.membership?.name || '-'}</span>
                           <span>·</span>
                         </>
                       )}
@@ -486,7 +486,7 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
                       )}
                       {item?.membership && (
                         <>
-                          <span className="max-w-24 truncate">{item?.membership?.nmae || '-'}</span>
+                          <span className="max-w-24 truncate">{item?.membership?.name || '-'}</span>
                           <span>·</span>
                         </>
                       )}
