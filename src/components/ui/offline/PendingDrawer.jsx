@@ -145,10 +145,7 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
               Queue Manager
             </h3>
             {hasPendingOrFailed && (
-              <button
-                className="btn btn-ghost btn-xs btn-circle"
-                onClick={() => syncNow()}
-              >
+              <button className="btn btn-ghost btn-xs btn-circle" onClick={() => syncNow()}>
                 <FiRefreshCw className="h-4 w-4" />
               </button>
             )}
@@ -359,8 +356,18 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
                       </span>
                     </div>
                     <div className="text-base-content/50 flex flex-wrap items-center gap-1 text-[10px]">
-                      <span className="max-w-24 truncate">{item?.bill_name || '-'}</span>
-                      <span>·</span>
+                      {item?.bill_name && (
+                        <>
+                          <span className="max-w-24 truncate">{item?.bill_name || '-'}</span>
+                          <span>·</span>
+                        </>
+                      )}
+                      {item?.membership && (
+                        <>
+                          <span className="max-w-24 truncate">{item?.membership?.nmae || '-'}</span>
+                          <span>·</span>
+                        </>
+                      )}
                       <span className="truncate">{item?.sales_channel?.name}</span>
                       <span>·</span>
                       <span className="whitespace-nowrap">{dateFormat(item?.created_at)}</span>
@@ -474,6 +481,12 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
                       {item?.bill_name && (
                         <>
                           <span className="max-w-24 truncate">{item?.bill_name || '-'}</span>
+                          <span>·</span>
+                        </>
+                      )}
+                      {item?.membership && (
+                        <>
+                          <span className="max-w-24 truncate">{item?.membership?.nmae || '-'}</span>
                           <span>·</span>
                         </>
                       )}
