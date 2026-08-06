@@ -201,7 +201,6 @@ const CheckoutScreen = () => {
       code: code,
       sync_id: orderId,
       bill_name: billName,
-      membership_id: CartState?.meta?.customer?.id,
       sales_channel_id: Channel?.selectedChannel?.id,
       status: 'pending',
       is_offline_mode: true,
@@ -393,7 +392,6 @@ const CheckoutScreen = () => {
       sync_id: CartState?.bill?.sync_id,
       code: CartState?.bill?.code,
       bill_name: billName,
-      membership_id: CartState?.meta?.customer?.id,
       sales_channel_id: Channel?.selectedChannel?.id,
       status: 'pending',
       items,
@@ -611,7 +609,6 @@ const CheckoutScreen = () => {
       const now = new Date();
 
       let payload = {
-        membership_id: CartState?.meta?.customer?.id,
         sales_channel_id: Channel?.selectedChannel?.id,
         payment_method_id: selectedMethod?.id,
         payment_ref: paymentRef,

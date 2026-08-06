@@ -45,6 +45,7 @@ const mapOrderToSync = order => ({
   origin_session_sync_id: order?.session?.id || order?.session?.sync_id,
   sales_channel_id: order?.sales_channel_id,
   membership_id: order?.membership_id,
+  membership_sync_id: order?.membership_id ? '' : order?.membership_sync_id,
   service_charge_percentage: order?.service_charge_percentage,
   service_charge_value: order?.service_charge_value,
   discount_percentage: order?.discount_percentage,
@@ -157,11 +158,11 @@ export const syncPendingSessions = async () => {
     if (memberships.length > 0) {
       const payload = {
         members: memberships.map(m => ({
-          id: m.id || '',
-          sync_id: m.sync_id || '',
-          card_id: m.card_id || '',
-          name: m.name || '',
-          reff_code: m.reff_code || '',
+          id: m.id,
+          sync_id: m.id ? '' : m.sync_id,
+          card_id: m.card_id,
+          name: m.name,
+          reff_code: m.reff_code,
         })),
       };
 

@@ -82,6 +82,8 @@ export function makePendingBill(payload) {
     category_discounts: recalculateDiscountCategory(payload.category_discounts, payload.items),
     subtotal_nett: subtotal,
     total_bill: totalBill,
+    membership_id: payload?.membership?.id,
+    membership_sync_id: payload?.membership?.id ? '' : payload?.membership?.sync_id,
   };
 }
 
@@ -157,5 +159,7 @@ export function makeCompletedOrder(payload) {
     category_discounts: recalculateDiscountCategory(payload.category_discounts, payload.items),
     subtotal_nett: subtotal,
     total_bill: totalBill,
+    membership_id: payload?.membership?.id,
+    membership_sync_id: payload?.membership?.id ? '' : payload?.membership?.sync_id,
   };
 }

@@ -46,11 +46,17 @@ const CustomerSection = () => {
   }, [membershipData, getMemberResult]);
 
   const onSelected = data => {
-    if (CartState?.meta?.customer?.id === data?.id) {
+    const isSameCustomer =
+      (CartState?.meta?.customer?.sync_id && CartState?.meta?.customer.sync_id === data?.sync_id) ||
+      (CartState?.meta?.customer?.id && CartState?.meta?.customer.id === data?.id);
+
+    if (isSameCustomer) {
       setCustomer(null);
     } else {
       setCustomer(data);
     }
+
+    console.log('[onSelected]', isSameCustomer);
 
     showCart();
   };
@@ -152,7 +158,12 @@ const CustomerSection = () => {
                       type="checkbox"
                       className="checkbox checkbox-primary"
                       onChange={() => onSelected(d)}
-                      checked={CartState?.meta?.customer?.id === d?.id}
+                      checked={
+                        (CartState?.meta?.customer?.sync_id &&
+                          CartState?.meta?.customer?.sync_id === d?.sync_id) ||
+                        (CartState?.meta?.customer?.id &&
+                          CartState?.meta?.customer?.id === d?.card_id)
+                      }
                     />
                     <div className="flex gap-2">
                       <UserCircleIcon />
