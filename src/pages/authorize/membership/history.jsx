@@ -186,7 +186,7 @@ const HistorySection = ({ id, membership }) => {
     if (!isOffline) {
       showMember(membership?.id);
     }
-  }, []);
+  }, [membership?.card_id]);
 
   if (showResult?.isLoading) return <div>loading...</div>;
 
@@ -269,11 +269,9 @@ const HistorySection = ({ id, membership }) => {
             </span>
           </div>
 
-          {/* Description */}
+          {/* Payment Type */}
           <p className="text-sm leading-snug text-gray-600 capitalize">
-            {item?.reference_type === 'bonus' || item?.reference_type === 'top-up'
-              ? `${item?.payment_type}`
-              : ''}
+            {item?.payment_type ? `${item?.payment_type} - ` : ''} {item?.reference_code}
           </p>
 
           {/* Date */}

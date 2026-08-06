@@ -8,8 +8,7 @@ const NFCField = ({ onRead, isOpen, onClose, result }) => {
 
   const ref = useRef();
   const [status, setStatus] = useState('idle');
-
-  console.log('[DEBUG] NFC Field', result);
+  const [message, setMessage] = useState(null);
 
   const handleInput = e => {
     const value = e.target.value.trim();
@@ -46,6 +45,7 @@ const NFCField = ({ onRead, isOpen, onClose, result }) => {
 
     if (result?.isError) {
       setStatus('failed');
+      setMessage(result?.message);
     }
   }, [result]);
 
@@ -64,6 +64,11 @@ const NFCField = ({ onRead, isOpen, onClose, result }) => {
       if (FormState?.errors?.saldo) {
         return 'Click the icon above to try again';
       }
+
+      if (message) {
+        return message;
+      }
+
       return 'The card could not be registered. It may be unreadable or already linked to another account.';
     }
     if (status === 'scanning') return 'Hold your card near the reader. Scanning in progress...';

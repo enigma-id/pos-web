@@ -26,6 +26,7 @@ const UpdateSession = ({ id, onClose, isOpen, onRefresh, membership }) => {
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
   const [saving, setSaving] = React.useState(false);
+  const [errorName, setErrorName] = React.useState(null);
 
   const { show, showResult, update, updateResult } = useMembership();
 
@@ -58,6 +59,11 @@ const UpdateSession = ({ id, onClose, isOpen, onRefresh, membership }) => {
 
   // Offline — Cache and IDB
   const onUpdateOffline = async uid => {
+    if (name === '') {
+      setErrorName('name is required.');
+      return;
+    }
+
     const payload = {
       ...membership,
       card_id: uid,
@@ -126,8 +132,8 @@ const UpdateSession = ({ id, onClose, isOpen, onRefresh, membership }) => {
   // Offline fallback: populate dari cache
   React.useEffect(() => {
     if (isOffline) {
-      setName(membership.name || '');
-      setPhone(membership.reff_code || '');
+      setName(membership?.name || '');
+      setPhone(membership?.reff_code || '');
     }
   }, [membership]);
 
@@ -199,7 +205,7 @@ const UpdateSession = ({ id, onClose, isOpen, onRefresh, membership }) => {
               value={name}
               onChange={v => setName(v?.target?.value)}
               label="Name"
-              error={FormState?.errors?.name}
+              error={FormState?.errors?.name || errorName}
             />
           </div>
           <div className="pt-4">

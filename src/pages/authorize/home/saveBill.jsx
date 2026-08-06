@@ -3,21 +3,38 @@ import React from 'react';
 import { useSelector } from 'react-redux';
 
 import { Input, Modal } from '../../../components/ui';
-import { SearchIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useCart from '../../../services/cart/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 
 const BillModal = ({ mode, count, onBillCreate }) => {
   const FormState = useSelector(state => state?.Form);
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+
+  const isOffline = !isOnline || apiReachable === false;
+
   const { closeModal } = useModal();
   const [billName, setBillName] = React.useState('');
   const { bill, billResult, billData, onBillSelected } = useCart();
+  const [errorBillName, setErrorBillName] = React.useState(null);
 
   React.useEffect(() => {
     if (mode === 'create') return;
     bill();
   }, [mode]);
+
+  const onSubmit = () => {
+    if (isOffline) {
+      if (billName === '') {
+        setErrorBillName('Bill name harus diisi.');
+
+        return;
+      }
+    }
+
+    onBillCreate(billName);
+  };
 
   const billList = billData || billResult?.data?.data || [];
 
@@ -74,7 +91,7 @@ const BillModal = ({ mode, count, onBillCreate }) => {
               label="bill name"
               value={billName}
               onChange={e => setBillName(e?.target?.value)}
-              error={FormState?.errors?.billName || FormState?.errors?.items}
+              error={FormState?.errors?.billName || FormState?.errors?.items || errorBillName}
             />
           </div>
         )}
@@ -83,7 +100,7 @@ const BillModal = ({ mode, count, onBillCreate }) => {
         <Modal.Footer>
           <div
             className={`btn btn-block btn-primary btn-lg ${billResult?.isLoading ? 'btn-disabled' : ''}`}
-            onClick={() => onBillCreate(billName)}
+            onClick={onSubmit}
           >
             Save Bill
             {billResult?.isLoading && <span className="loading loading-spinner loading-sm"></span>}

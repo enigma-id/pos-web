@@ -99,6 +99,7 @@ const mapTopupsToSync = (topups, sessionSyncId) =>
     membership_id: t.membership_id || '',
     nominal: t.nominal || 0,
     payment_type: t.payment_type || '',
+    reference_code: t.reference_code,
     created_at: t.created_at,
   }));
 
@@ -156,7 +157,8 @@ export const syncPendingSessions = async () => {
     if (memberships.length > 0) {
       const payload = {
         members: memberships.map(m => ({
-          sync_id: m.sync_id || m.card_id,
+          id: m.id || '',
+          sync_id: m.sync_id || '',
           card_id: m.card_id || '',
           name: m.name || '',
           reff_code: m.reff_code || '',
@@ -177,7 +179,10 @@ export const syncPendingSessions = async () => {
             fakeApi,
             {}
           );
-          console.log('[SyncManager] /membership/sync result:', result?.error ? result.error : 'OK');
+          console.log(
+            '[SyncManager] /membership/sync result:',
+            result?.error ? result.error : 'OK'
+          );
 
           if (!result?.error) {
             for (const m of memberships) {
@@ -295,7 +300,7 @@ export const syncPendingSessions = async () => {
             if (group.session) {
               await db.delete(STORES.sessions, group.session.sync_id);
             }
-            triggerQueueRefresh();
+
             break;
           }
 
@@ -317,6 +322,8 @@ export const syncPendingSessions = async () => {
         }
       }
     }
+
+    triggerQueueRefresh();
 
     // Update last sync time
     await setLastSyncTimeMeta(now, userId);

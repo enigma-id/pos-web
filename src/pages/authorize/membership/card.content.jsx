@@ -15,7 +15,7 @@ import { usePrintWindow } from '../../../utils/print';
 import useMaster from '../../../services/master/hook';
 import useSession from '../../../services/sales/session/hook';
 
-const CardContent = ({ data, onClose }) => {
+const CardContent = ({ data, onClose, onRefresh }) => {
   const hasSession = useSelector(state => state?.SalesSession?.hasSession);
   const sessionSummary = useSelector(state => state?.SalesSession?.sessionSummary);
   const FormState = useSelector(state => state?.Form);
@@ -44,6 +44,8 @@ const CardContent = ({ data, onClose }) => {
     };
 
     const nominal = Number(value) || 0;
+    const now = new Date();
+    const code = `${now.toISOString().slice(2, 8).replace(/-/g, '')}${String(Math.floor(Math.random() * 9000) + 1000)}`;
 
     const payload = {
       sync_id: uuidv4(),
@@ -53,6 +55,7 @@ const CardContent = ({ data, onClose }) => {
       nominal: parseFloat(value) || 0,
       payment_type: method,
       reference_type: 'top-up',
+      reference_code: code,
       created_at: new Date(),
       session_sync_id: sessionSummary?.id || sessionSummary?.sync_id,
     };
@@ -75,10 +78,13 @@ const CardContent = ({ data, onClose }) => {
       const nominalBonus = Math.ceil(nominal * (useBonuses[0].bonus_percentage / 100));
 
       const payloadBonus = {
+        sync_id: uuidv4(),
         nominal: nominalBonus,
         membership: data,
         membership_id: data?.id,
+        reference_id: payload?.id,
         reference_type: 'bonus',
+        reference_code: code,
         created_at: new Date(),
         session_sync_id: sessionSummary?.id || sessionSummary?.sync_id,
       };
@@ -109,6 +115,7 @@ const CardContent = ({ data, onClose }) => {
     handleModalPrint(dataPrint);
 
     onClose?.();
+    onRefresh?.();
   };
 
   const onTopupOnline = async () => {
@@ -140,6 +147,7 @@ const CardContent = ({ data, onClose }) => {
       handleModalPrint(topupResult?.data?.data);
 
       onClose?.();
+      onRefresh?.();
     }
   }, [topupResult]);
 

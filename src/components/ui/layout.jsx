@@ -27,7 +27,7 @@ const Layout = ({ children }) => {
   const sessionAuth = useSelector(state => state?.Auth?.session);
   const Offline = useSelector(state => state?.Offline);
   const { isOnline, wasOffline } = useNetworkStatus();
-  const { count: queueCount, refresh: refreshQueueCount } = usePendingQueueCount();
+  const { count: queueCount } = usePendingQueueCount();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [showBanner, setShowBanner] = useState(true);
   const [backOnline, setBackOnline] = useState(false);
@@ -257,6 +257,7 @@ const Navbar = () => {
   const navigate = useNavigate();
   const sessionAuth = useSelector(state => state?.Auth?.session);
   const SalesSession = useSelector(state => state?.SalesSession);
+  const lastSyncTime = useSelector(state => state?.Offline?.lastSyncTime);
 
   const { summary } = useSession();
   const { showSummary } = useSidebar();
@@ -355,7 +356,7 @@ const Navbar = () => {
 
         perbaharuiMembership(membership);
       } catch (err) {
-        console.log('[DEBUG] remove cache delete delete topup', err);
+        console.log('[DEBUG] remove cache update membership', err);
       }
 
       updateSessionSummary({
@@ -371,6 +372,10 @@ const Navbar = () => {
   useEffect(() => {
     summary();
   }, []);
+
+  useEffect(() => {
+    summary();
+  }, [lastSyncTime]);
 
   return (
     <div

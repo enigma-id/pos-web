@@ -78,6 +78,10 @@ const MembershipScreen = () => {
     }
   }, [membershipData, getMemberResult]);
 
+  const openScan = result => {
+    openModal(<NFCField onRead={handleRead} isOpen onClose={closeModal} result={result} />, 'w-md');
+  };
+
   const handleRead = uid => {
     if (isOffline) {
       const membership = showMembership(uid);
@@ -86,10 +90,7 @@ const MembershipScreen = () => {
         onScanSuccess(membership);
       } else {
         // Re-open modal → NFCField reconcile (bukan remount), result isError → status 'failed'
-        openModal(
-          <NFCField onRead={handleRead} isOpen onClose={closeModal} result={{ isError: true }} />,
-          'w-md'
-        );
+        openScan({ isError: true });
       }
     } else {
       const params = { card_id: uid };
@@ -115,6 +116,7 @@ const MembershipScreen = () => {
               closeModal();
               setData(null);
             }}
+            onRefresh={() => getMember()}
           />
         </Modal.Body>
       </>,
@@ -122,11 +124,14 @@ const MembershipScreen = () => {
     );
   };
 
-  // Online success → cache + proceed
+  // Online success → CardContent; error → re-open NFCField (result terbaru, reconcile)
   React.useEffect(() => {
-    console.log(checkResult, '========================[DEBGU]');
     if (checkResult?.isSuccess) {
       onScanSuccess(checkResult?.data?.data);
+    } else if (checkResult?.isError) {
+      // Tanpa re-open, modal via openScan() menampilkan result yang dibekukan (stale)
+      // → error scan tidak pernah terlihat.
+      openScan(checkResult);
     }
   }, [checkResult]);
 
@@ -136,13 +141,8 @@ const MembershipScreen = () => {
     }
   }, [drawerOpen]);
 
-  console.log(checkResult, '========================[DEBGU][Diluar onScan]');
-
   const onScan = () => {
-    openModal(
-      <NFCField onRead={handleRead} isOpen onClose={closeModal} result={checkResult} />,
-      'w-md'
-    );
+    openScan(checkResult);
   };
 
   return (
