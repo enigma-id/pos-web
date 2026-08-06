@@ -725,18 +725,19 @@ const CheckoutScreen = () => {
         return;
       }
 
-      if (paymentMethod?.is_member_payment) {
-        console.log('[DEBUG] paymentMethod?.is_member_payment', paymentMethod?.is_member_payment);
+      console.log('[DEBUG] paymentMethod?.is_member_payment', selectedMethod?.is_member_payment);
+
+      if (selectedMethod?.is_member_payment) {
         const cloneMembership = JSON.parse(JSON.stringify(payload?.membership));
 
         console.log('[DEBUG] cloneMembership', cloneMembership);
 
-        cloneMembership.saldo += dataOfflineToOnline?.total_charges;
-        cloneMembership.saldo_logs.push({
+        cloneMembership.saldo -= dataOfflineToOnline?.total_charges;
+        cloneMembership.saldo_logs.unshift({
           nominal: -1 * dataOfflineToOnline?.total_charges,
-          membership: cloneMembership,
-          membership_id: cloneMembership?.id,
-          reference_type: 'sales_order',
+          membership_id: payload?.membership?.id,
+          reference_type: 'Sales',
+          reference_code: dataOfflineToOnline?.code,
           created_at: new Date(),
         });
 

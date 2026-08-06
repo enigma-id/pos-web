@@ -246,14 +246,18 @@ const MembershipScreen = () => {
         </div>
       </div>
 
-      <DrawerCreate type={type} onClose={() => setType('')} onRefresh={() => getMember()} />
+      {type && (
+        <>
+          <DrawerCreate type={type} onClose={() => setType('')} onRefresh={() => getMember()} />
 
-      <DrawerDetail
-        membership={data}
-        type={type}
-        onClose={() => setType('')}
-        onRefresh={() => getMember()}
-      />
+          <DrawerDetail
+            membership={data}
+            type={type}
+            onClose={() => setType('')}
+            onRefresh={() => getMember()}
+          />
+        </>
+      )}
     </Drawer.Wrapper>
   );
 };

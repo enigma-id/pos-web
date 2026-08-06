@@ -8,6 +8,7 @@ import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
 import useMembership from '../../../services/membership/hook';
+import { showMembership } from '../../../utils/cache';
 
 const CustomerSection = () => {
   const CartState = useSelector(state => state?.Cart);

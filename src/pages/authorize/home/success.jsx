@@ -7,10 +7,16 @@ import useModal from '../../../components/ui/modal/hook';
 // import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
+import { useSelector } from 'react-redux';
 
 const SuccessModal = ({ data, backToMenu }) => {
-  const isCurrentlyOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+
+  const isOffline = !isOnline || apiReachable === false;
+
   const isCompletedFlow = data?.status === 'completed';
+
   const navigate = useNavigate();
   const { closeModal } = useModal();
   const { open: openPrint } = usePrintWindow({ title: 'Print Preview', autoClose: true });
@@ -39,7 +45,7 @@ const SuccessModal = ({ data, backToMenu }) => {
         }
       >
         <div className="text-lg font-semibold tracking-wide uppercase">
-          {isCurrentlyOffline
+          {isOffline && isCompletedFlow
             ? 'Payment Queued'
             : isCompletedFlow
               ? 'Payment success'
@@ -53,7 +59,7 @@ const SuccessModal = ({ data, backToMenu }) => {
         </div>
 
         <div className="py-4 text-center">
-          {isCompletedFlow && !isCurrentlyOffline ? (
+          {isCompletedFlow && !isOffline ? (
             <>
               <p className="text-base font-semibold">Payment success.</p>
 
@@ -73,7 +79,7 @@ const SuccessModal = ({ data, backToMenu }) => {
                 )}
               </div>
             </>
-          ) : isCurrentlyOffline && isCompletedFlow ? (
+          ) : isOffline && isCompletedFlow ? (
             <>
               <p className="text-base font-semibold">Payment saved locally.</p>
               <p className="text-base-300 text-sm">
@@ -96,7 +102,7 @@ const SuccessModal = ({ data, backToMenu }) => {
                 )}
               </div>
             </>
-          ) : isCurrentlyOffline ? (
+          ) : isOffline ? (
             <>
               <p className="text-base font-semibold">Bill saved locally.</p>
               <p className="text-base-300 text-sm">
