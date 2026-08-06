@@ -58,9 +58,17 @@ const CustomerSection = () => {
   const handleRead = uid => {
     if (isOffline) {
       const membership = showMembership(uid);
-      onSelected(membership);
-      closeModal();
-      showCart();
+      if (membership) {
+        onSelected(membership);
+        closeModal();
+        showCart();
+      } else {
+        // Re-open modal → NFCField reconcile (bukan remount), result isError → status 'failed'
+        openModal(
+          <NFCField onRead={handleRead} isOpen onClose={closeModal} result={{ isError: true }} />,
+          'w-md'
+        );
+      }
     } else {
       const params = { card_id: uid };
       checkSaldo(params);
@@ -81,6 +89,7 @@ const CustomerSection = () => {
       if (data) {
         onSelected(data);
         closeModal();
+        showCart();
       }
     }
   }, [checkResult]);

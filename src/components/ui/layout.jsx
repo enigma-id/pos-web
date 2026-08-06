@@ -15,7 +15,12 @@ import usePendingQueueCount, {
 import useSession from '../../services/sales/session/hook';
 import { isActive } from '../../utils/common';
 import useCart from '../../services/cart/hook';
-import { deleteOpenBills, deleteOrderHistory } from '../../utils/cache';
+import {
+  deleteOpenBills,
+  deleteOrderHistory,
+  perbaharuiMembership,
+  showMembership,
+} from '../../utils/cache';
 
 const Layout = ({ children }) => {
   const dispatch = useDispatch();
@@ -110,16 +115,75 @@ const Layout = ({ children }) => {
       });
     }
 
+    if (type === 'payment') {
+      try {
+        deleteOrderPayment(queueItem?.sync_id, sessionAuth?.user?.id);
+      } catch (err) {
+        console.log('[DEBUG] remove idb delete payment', err);
+      }
+
+      try {
+        deleteOrderHistory(queueItem);
+      } catch (err) {
+        console.log('[DEBUG] remove cache delete payment', err);
+      }
+
+      let outstandingBillPayment = 0;
+
+      if (
+        !(
+          queueItem?.session?.id === queueItem?.paid_session?.id ||
+          queueItem?.session?.sync_id === queueItem?.paid_session?.sync_id
+        )
+      ) {
+        outstandingBillPayment = -1 * queueItem?.total_charges;
+      }
+
+      updateSessionSummary({
+        type: 'deleted_payment',
+        payment_method: queueItem?.payment_method,
+        total_sales: -1 * queueItem?.subtotal_nett,
+        total_discount:
+          -1 * (queueItem?.subtotal_nett - queueItem?.total_bill + queueItem?.discount_value),
+        total_after_discount: -1 * (queueItem?.total_bill - queueItem?.discount_value),
+        total_service: -1 * queueItem?.service_charge_value,
+        total_charges: -1 * queueItem?.total_charges,
+        outstanding_bill_payment: outstandingBillPayment,
+        order: queueItem,
+      });
+    }
+
+    if (type === 'topup') {
+      try {
+        deleteTopup(queueItem?.sync_id, sessionAuth?.user?.id);
+      } catch (err) {
+        console.log('[DEBUG] remove idb delete topup', err);
+      }
+
+      try {
+        const membership = showMembership(queueItem?.membership?.card_id);
+        membership.saldo -= queueItem.nominal;
+
+        console.log('[DEBUG] membership', membership);
+
+        const logsIdx = membership.saldo_logs.findIndex(p => p.sync_id === queueItem?.sync_id);
+
+        membership.saldo_logs.splice(logsIdx, 1);
+
+        perbaharuiMembership(membership);
+      } catch (err) {
+        console.log('[DEBUG] remove cache update membership', err);
+      }
+
+      updateSessionSummary({
+        type: 'deleted_topup',
+        topup_method: queueItem?.payment_type,
+        topup_nominal: -1 * queueItem?.nominal,
+      });
+    }
+
     triggerQueueRefresh();
   };
-
-  const refreshQueue = useCallback(async () => {
-    await refreshQueueCount();
-  }, [refreshQueueCount]);
-
-  useEffect(() => {
-    refreshQueue();
-  }, []);
 
   const banner = (() => {
     if (!showBanner) return null;
@@ -280,23 +344,28 @@ const Navbar = () => {
       }
 
       try {
-        deleteOrderHistory(queueItem);
+        const membership = showMembership(queueItem?.membership?.card_id);
+        membership.saldo -= queueItem.nominal;
+
+        console.log('[DEBUG] membership', membership);
+
+        const logsIdx = membership.saldo_logs.findIndex(p => p.sync_id === queueItem?.sync_id);
+
+        membership.saldo_logs.splice(logsIdx, 1);
+
+        perbaharuiMembership(membership);
       } catch (err) {
         console.log('[DEBUG] remove cache delete delete topup', err);
       }
 
       updateSessionSummary({
-        type: 'delete_topup',
+        type: 'deleted_topup',
         topup_method: queueItem?.payment_type,
-        topup_nominal: -1 * nominal,
+        topup_nominal: -1 * queueItem?.nominal,
       });
     }
 
     triggerQueueRefresh();
-  };
-
-  const refreshQueue = async () => {
-    // Gausah re-read — pendingCount terupdate dari write operations
   };
 
   useEffect(() => {

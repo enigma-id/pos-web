@@ -1035,7 +1035,29 @@ const CheckoutScreen = () => {
     if (isOffline) {
       // No connection → skip checkSaldo, ambil dari cache kalo ada
       const membership = showMembership(uid);
-      onPay(membership || { card_id: uid });
+
+      let readyCard = false;
+      if (membership) {
+        if (membership?.saldo >= CartState?.meta?.grand_total) {
+          readyCard = true;
+        }
+      }
+
+      if (readyCard) {
+        onPay(membership || { card_id: uid });
+      } else {
+        // Re-open modal → NFCField reconcile (bukan remount), result isError → status 'failed'
+        openModal(
+          <NFCField
+            onRead={handleRead}
+            isOpen
+            onClose={closeModal}
+            result={{ isError: true, message: 'Saldo anda kurang, silahkan topup terlebih dahulu' }}
+          />,
+          'w-md'
+        );
+      }
+
       return;
     }
 

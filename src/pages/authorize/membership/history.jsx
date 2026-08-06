@@ -2,10 +2,7 @@
 import React, { useEffect } from 'react';
 import { LuWallet } from 'react-icons/lu';
 
-import CardMockup from '../../../assets/card-mockup.jpg';
-import { NFCField, OrderDetails, Remove } from '../../../components/ui';
-import { PaypassIcon, WalletIcon } from '../../../components/ui/icon';
-import Input from '../../../components/ui/input';
+import { OrderDetails } from '../../../components/ui';
 import useMembership from '../../../services/membership/hook';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';

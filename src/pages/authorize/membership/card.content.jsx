@@ -16,6 +16,7 @@ import useMaster from '../../../services/master/hook';
 import useSession from '../../../services/sales/session/hook';
 
 const CardContent = ({ data, onClose }) => {
+  const hasSession = useSelector(state => state?.SalesSession?.hasSession);
   const sessionSummary = useSelector(state => state?.SalesSession?.sessionSummary);
   const FormState = useSelector(state => state?.Form);
   const sessionAuth = useSelector(state => state?.Auth?.session);
@@ -180,55 +181,59 @@ const CardContent = ({ data, onClose }) => {
       </div>
 
       {/* Form Section */}
-      <div className="pt-4">
-        <div className="px-4">
-          <div className="mb-2 text-sm font-semibold tracking-wider uppercase">Topup Amount</div>
-          <input
-            type="text"
-            inputMode="decimal"
-            className={`border-base-200 text-primary bg-base-100 focus:!border-primary min-h-15 w-full rounded-2xl border px-4 py-3 text-center text-xl font-bold focus:!outline-none ${
-              FormState?.errors?.nominal
-                ? '!border-error !text-error !bg-[var(--color-error-shadow)]'
-                : ''
-            }`}
-            value={currencyFormat(value, false)}
-            onChange={e => {
-              const raw = e.target.value.replace(/[^0-9]/g, '');
-              setValue(raw);
-            }}
-          />
-          <small className="text-error">{FormState?.errors?.nominal}</small>
-        </div>
-
-        <div className="mt-4 mb-2 px-4">
-          <div className="mb-2 text-sm font-semibold tracking-wider uppercase">Payment Method</div>
-          <div className="grid grid-cols-3 gap-3">
-            {['cash', 'transfer'].map(m => (
-              <div
-                key={m}
-                className={`border-base-200 hover:border-primary hover:text-primary cursor-pointer rounded border p-2 text-center text-sm font-medium tracking-wide uppercase ${
-                  method === m ? '!border-primary !text-primary' : ''
-                } ${FormState?.errors?.payment_type ? '!border-error !text-error' : ''}`}
-                onClick={() => setMethod(m)}
-              >
-                {m}
-              </div>
-            ))}
+      {hasSession && (
+        <div className="pt-4">
+          <div className="px-4">
+            <div className="mb-2 text-sm font-semibold tracking-wider uppercase">Topup Amount</div>
+            <input
+              type="text"
+              inputMode="decimal"
+              className={`border-base-200 text-primary bg-base-100 focus:!border-primary min-h-15 w-full rounded-2xl border px-4 py-3 text-center text-xl font-bold focus:!outline-none ${
+                FormState?.errors?.nominal
+                  ? '!border-error !text-error !bg-[var(--color-error-shadow)]'
+                  : ''
+              }`}
+              value={currencyFormat(value, false)}
+              onChange={e => {
+                const raw = e.target.value.replace(/[^0-9]/g, '');
+                setValue(raw);
+              }}
+            />
+            <small className="text-error">{FormState?.errors?.nominal}</small>
           </div>
-          <small className="text-error">{FormState?.errors?.payment_type}</small>
-        </div>
 
-        <div className="mt-4">
-          <div
-            className={`btn btn-primary btn-block btn-xl !rounded-none !rounded-b ${
-              topupResult?.isLoading || (!isOffline && !sessionSummary) ? 'btn-disabled' : ''
-            }`}
-            onClick={onTopup}
-          >
-            Top Up
+          <div className="mt-4 mb-2 px-4">
+            <div className="mb-2 text-sm font-semibold tracking-wider uppercase">
+              Payment Method
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {['cash', 'transfer'].map(m => (
+                <div
+                  key={m}
+                  className={`border-base-200 hover:border-primary hover:text-primary cursor-pointer rounded border p-2 text-center text-sm font-medium tracking-wide uppercase ${
+                    method === m ? '!border-primary !text-primary' : ''
+                  } ${FormState?.errors?.payment_type ? '!border-error !text-error' : ''}`}
+                  onClick={() => setMethod(m)}
+                >
+                  {m}
+                </div>
+              ))}
+            </div>
+            <small className="text-error">{FormState?.errors?.payment_type}</small>
+          </div>
+
+          <div className="mt-4">
+            <div
+              className={`btn btn-primary btn-block btn-xl !rounded-none !rounded-b ${
+                topupResult?.isLoading || (!isOffline && !sessionSummary) ? 'btn-disabled' : ''
+              }`}
+              onClick={onTopup}
+            >
+              Top Up
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </>
   );
 };

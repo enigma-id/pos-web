@@ -5,8 +5,11 @@ import Modal from './modal';
 
 const NFCField = ({ onRead, isOpen, onClose, result }) => {
   const FormState = useSelector(state => state?.Form);
+
   const ref = useRef();
   const [status, setStatus] = useState('idle');
+
+  console.log('[DEBUG] NFC Field', result);
 
   const handleInput = e => {
     const value = e.target.value.trim();
@@ -40,9 +43,7 @@ const NFCField = ({ onRead, isOpen, onClose, result }) => {
 
       return () => clearTimeout(timeout);
     }
-  }, [result]);
 
-  useEffect(() => {
     if (result?.isError) {
       setStatus('failed');
     }
