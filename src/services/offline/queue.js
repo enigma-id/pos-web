@@ -205,9 +205,26 @@ export const updateOrderBill = async (payload, userId) => {
   return payload;
 };
 
-export const deleteOrderBill = async (syncId, userId) => {
+export const deleteOrderBill = async (payload, userId) => {
   const db = await ensureDB(userId);
-  await db.delete(STORES.orderBills, syncId);
+
+  let syncId = '';
+
+  let existing = payload?.sync_id ? await db.get(STORES.orderBills, payload?.sync_id) : null;
+
+  if (!existing) {
+    existing = await db.get(STORES.orderBills, payload?.id);
+    if (existing) {
+      syncId = existing.id;
+    }
+  } else {
+    syncId = existing.sync_id;
+  }
+
+  if (syncId !== '') {
+    await db.delete(STORES.orderBills, syncId);
+  }
+
   return true;
 };
 
@@ -221,6 +238,7 @@ export const createOrderPayment = async (payload, userId) => {
 
   const doc = {
     ...payload,
+    sync_id: payload?.sync_id || payload?.id,
     paid_session_sync_id: paid_session_sync_id,
   };
 

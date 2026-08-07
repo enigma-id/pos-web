@@ -209,7 +209,7 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
 
               return (
                 <div
-                  key={item.id}
+                  key={item?.sync_id || item?.id}
                   className="border-base-200 bg-base-100 hover:border-base-300 overflow-hidden rounded-lg border transition-colors"
                 >
                   <div
@@ -266,7 +266,7 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
               if (item.sync_type === 'membership') {
                 return (
                   <div
-                    key={item.id}
+                    key={item?.sync_id || item?.id}
                     className="border-base-200 bg-base-100 hover:border-base-300 overflow-hidden rounded-lg border transition-colors"
                   >
                     <div className="bg-info h-1 w-full" />
@@ -296,7 +296,7 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
               } else {
                 return (
                   <div
-                    key={item.id}
+                    key={item?.sync_id || item?.id}
                     className="border-base-200 bg-base-100 hover:border-base-300 overflow-hidden rounded-lg border transition-colors"
                   >
                     <div className="bg-success h-1 w-full" />
@@ -345,7 +345,7 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
             if (activeTab === 'bills') {
               return (
                 <div
-                  key={item.id}
+                  key={item?.sync_id || item?.id}
                   className="border-base-200 bg-base-100 hover:border-base-300 overflow-hidden rounded-lg border transition-colors"
                 >
                   <div className="p-2.5 pb-1.5">
@@ -467,7 +467,7 @@ const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
             if (activeTab === 'order') {
               return (
                 <div
-                  key={item.id}
+                  key={item?.sync_id || item?.id}
                   className="border-base-200 bg-base-100 hover:border-base-300 overflow-hidden rounded-lg border transition-colors"
                 >
                   <div className="p-2.5 pb-1.5">

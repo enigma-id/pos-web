@@ -96,7 +96,7 @@ const Layout = ({ children }) => {
   const handleRemoveOffline = (type, queueItem) => {
     if (type === 'bill') {
       try {
-        deleteOrderBill(queueItem?.sync_id, sessionAuth?.user?.id);
+        deleteOrderBill(queueItem, sessionAuth?.user?.id);
       } catch (err) {
         // ignore
       }
@@ -276,7 +276,7 @@ const Navbar = () => {
   const handleRemoveOffline = (type, queueItem) => {
     if (type === 'bill') {
       try {
-        deleteOrderBill(queueItem?.sync_id, sessionAuth?.user?.id);
+        deleteOrderBill(queueItem, sessionAuth?.user?.id);
       } catch (err) {
         // ignore
       }

@@ -786,7 +786,7 @@ const CheckoutScreen = () => {
 
     try {
       // kita hapus delete order bill jika ada di IDB
-      await deleteOrderBill(CartState?.bill?.sync_id, session?.user?.id);
+      await deleteOrderBill(CartState?.bill, session?.user?.id);
     } catch (err) {
       handleModalError();
       dispatch($failure(err));
