@@ -1,48 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 
+import { syncNow } from '../../../services/offline';
+import { ensureDB, STORES } from '../../../services/offline/queue';
+import { FiRefreshCw } from 'react-icons/fi';
 import { currencyFormat, dateFormat } from '../../../utils/common';
-
-const getApiCategory = (item) => {
-  const url = item?.url;
-
-  if (!url) return 'unknown';
-  const path = String(url).toLowerCase();
-  if (path.includes('/sales/session')) return 'shifts';
-  if (path.includes('/sales/order')) {
-    const status = item?.body?.status;
-    if (path.includes('/checkout') || status === 'completed') return 'order';
-    if (status === 'pending') return 'bills';
-    return 'order';
-  }
-  if (path.includes('/balance') && path.includes('/topup')) return 'topup';
-  return 'other';
-};
-
-const getApiType = (item) => {
-  const url = item?.url;
-
-  if (!url) return 'unknown';
-
-  const path = String(url).toLowerCase();
-  const parts = path.split('/').filter(Boolean);
-  const last = parts[parts.length - 1] || 'unknown';
-
-  if (path.includes('/sales/session')) {
-    return last === 'close' ? 'close session' : 'start session';
-  }
-
-  if (path.includes('/sales/order')) {
-    const status = item?.body?.status;
-    if (status === 'pending') return 'save bill';
-    if (path.includes('/checkout') || status === 'completed') return 'checkout';
-    return 'order';
-  }
-
-  if (path.includes('/balance') && path.includes('/topup')) return 'topup';
-
-  return last;
-};
 
 const statusConfig = {
   failed: { badge: 'badge-error', icon: '✕' },
@@ -50,32 +12,87 @@ const statusConfig = {
   pending: { badge: 'badge-info', icon: '◷' },
 };
 
-const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
-  const items = useSelector(state => state?.Offline?.items || []);
+const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
+  const sessionUserId = useSelector(state => state?.Auth?.session?.user?.id);
+  const failedCount = useSelector(state => state?.Offline?.failedCount);
   const [activeTab, setActiveTab] = useState('order');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [data, setData] = useState({
+    orders: [],
+    bills: [],
+    topups: [],
+    memberships: [],
+    sessions: [],
+  });
+
+  // Fetch data from IndexedDB directly when drawer opens
+  useEffect(() => {
+    if (!open || !sessionUserId) return;
+
+    const fetchData = async () => {
+      try {
+        const db = await ensureDB(sessionUserId);
+
+        const sessions = await db.getAll(STORES.sessions);
+        const bills = await db.getAll(STORES.orderBills);
+        const payments = await db.getAll(STORES.orderPayments);
+        const topups = await db.getAll(STORES.topups);
+        const memberships = await db.getAll(STORES.memberships);
+
+        setData({
+          orders: payments,
+          bills: bills,
+          topups,
+          memberships,
+          sessions: sessions,
+        });
+      } catch (err) {
+        console.error('[PendingDrawer] fetch error:', err);
+      }
+    };
+
+    fetchData();
+  }, [open, sessionUserId, refreshKey]);
+
+  // Icon refresh muncul hanya kalau ada sync yang gagal (bukan sekadar pending/belum sync)
+  const hasPendingOrFailed = useMemo(() => {
+    return failedCount > 0;
+  }, [failedCount]);
+
+  // Build categorized items
+  const categorized = useMemo(() => {
+    const result = { order: [], bills: [], shifts: [], member: [], failedCount: {} };
+
+    // Tab Bills
+    result.bills = data.bills;
+
+    // Tab Order
+    result.order = data.orders;
+
+    // Tab Shifts
+    result.shifts = data.sessions;
+
+    // Tab Member — memberships
+    data.memberships.forEach(m => {
+      result.member.push({ ...m, sync_type: 'membership' });
+    });
+
+    // Tab Member — topups
+    data.topups.forEach(t => {
+      result.member.push({ ...t, sync_type: 'topup' });
+    });
+
+    return result;
+  }, [data]);
+
+  const filteredItems = categorized[activeTab] || [];
 
   if (!open) return null;
-
-  const categorized = items.reduce(
-    (acc, item) => {
-      const cat = getApiCategory(item);
-      acc[cat]?.push(item);
-
-      if (item.status === 'failed') {
-        acc.failedCount[cat] = (acc.failedCount[cat] || 0) + 1;
-      }
-      return acc;
-    },
-    { order: [], bills: [], shifts: [], topup: [], other: [], failedCount: {} }
-  );
-
-  // Merge 'other' into none — we don't show it as a tab
-  const filteredItems = categorized[activeTab] || [];
 
   const tabs = [
     { id: 'order', label: 'Order', icon: '🛒' },
     { id: 'bills', label: 'Bills', icon: '📋' },
-    { id: 'topup', label: 'Topup', icon: '💰' },
+    { id: 'member', label: 'Member', icon: '👤' },
     { id: 'shifts', label: 'Shifts', icon: '💼' },
   ];
 
@@ -83,11 +100,9 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
 
   const Tab = ({ id, label, icon, isActive }) => {
     const count = categorized[id]?.length || 0;
-    const failed = categorized.failedCount[id] || 0;
-
     return (
       <button
-        className={`relative z-10 flex-1 h-10 flex items-center justify-center transition-colors duration-300 gap-1.5 ${
+        className={`relative z-10 flex h-10 flex-1 items-center justify-center gap-1.5 transition-colors duration-300 ${
           isActive ? 'text-primary-content' : 'text-base-content/40 hover:text-base-content/70'
         }`}
         onClick={() => setActiveTab(id)}
@@ -95,34 +110,21 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
         <span className={`text-lg transition-transform ${isActive ? 'scale-110' : 'scale-90'}`}>
           {icon}
         </span>
-
         {isActive && (
-          <span className="capitalize text-[11px] font-bold tracking-tight animate-in fade-in duration-300">
+          <span className="animate-in fade-in text-[11px] font-bold tracking-tight capitalize duration-300">
             {label}
           </span>
         )}
-
         {count > 0 && (
-          <div className="flex gap-0.5 items-center">
-            {failed > 0 && (
-              <span
-                className={`badge ${
-                  isActive ? 'bg-error text-error-content border-none' : 'badge-error'
-                } badge-xs w-3 h-3 p-0 flex items-center justify-center text-[7px] font-black animate-pulse`}
-              >
-                !
-              </span>
-            )}
-            <span
-              className={`badge badge-xs min-w-4 h-3.5 ${
-                isActive
-                  ? 'bg-primary-content text-primary border-none'
-                  : 'badge-neutral text-white border-none'
-              } tabular-nums text-[8px]`}
-            >
-              {count}
-            </span>
-          </div>
+          <span
+            className={`badge badge-xs h-3.5 min-w-4 ${
+              isActive
+                ? 'bg-primary-content text-primary border-none'
+                : 'badge-neutral border-none text-white'
+            } text-[8px] tabular-nums`}
+          >
+            {count}
+          </span>
         )}
       </button>
     );
@@ -134,21 +136,20 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
       onClick={onClose}
     >
       <div
-        className="bg-base-100 h-full w-105 shadow-2xl overflow-hidden flex flex-col animate-fade-slide"
+        className="bg-base-100 animate-fade-slide flex h-full w-105 flex-col overflow-hidden shadow-2xl"
         onClick={e => e.stopPropagation()}
         style={{ '--tw-translate-x': '100%' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-base-200 bg-base-100">
+        <div className="border-base-200 bg-base-100 flex items-center justify-between border-b px-5 py-4">
           <div className="flex items-center gap-3">
-            <h3 className="text-sm font-black text-base-content uppercase tracking-widest">
+            <h3 className="text-base-content text-sm font-black tracking-widest uppercase">
               Queue Manager
             </h3>
-            {Object.values(categorized.failedCount).reduce((a, b) => a + b, 0) > 0 && (
-              <span className="badge badge-error badge-sm gap-1.5 font-bold px-2 py-2.5">
-                <span className="animate-bounce">✕</span>
-                {Object.values(categorized.failedCount).reduce((a, b) => a + b, 0)} Issues
-              </span>
+            {hasPendingOrFailed && (
+              <button className="btn btn-ghost btn-xs btn-circle" onClick={() => syncNow()}>
+                <FiRefreshCw className="h-4 w-4" />
+              </button>
             )}
           </div>
           <button className="btn btn-ghost btn-sm btn-circle" onClick={onClose}>
@@ -158,16 +159,14 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
 
         {/* Sliding Pill Tabs */}
         <div className="mx-4 mt-3 mb-1">
-          <div className="bg-base-200/60 p-1 rounded-xl flex relative border border-base-300/30 h-12">
-            {/* The Shifter / Slider background */}
+          <div className="bg-base-200/60 border-base-300/30 relative flex h-12 rounded-xl border p-1">
             <div
-              className="absolute h-[calc(100%-8px)] top-1 bg-primary rounded-lg transition-all duration-300 ease-in-out shadow-md"
+              className="bg-primary absolute top-1 h-[calc(100%-8px)] rounded-lg shadow-md transition-all duration-300 ease-in-out"
               style={{
                 width: 'calc(25% - 4px)',
                 left: `calc(${activeIndex * 25}% + 2px)`,
               }}
             />
-
             {tabs.map(tab => (
               <Tab key={tab.id} {...tab} isActive={activeTab === tab.id} />
             ))}
@@ -175,280 +174,273 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-base-200/20">
+        <div className="bg-base-200/20 flex-1 space-y-2 overflow-y-auto p-3">
           {filteredItems.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12 text-base-content/30 italic">
-              <span className="text-4xl mb-3 opacity-20">
-                {activeTab === 'topup' ? '💰' : activeTab === 'order' ? '🛒' : activeTab === 'bills' ? '📋' : '💼'}
+            <div className="text-base-content/30 flex flex-col items-center justify-center py-12 italic">
+              <span className="mb-3 text-4xl opacity-20">
+                {activeTab === 'member'
+                  ? '👤'
+                  : activeTab === 'order'
+                    ? '🛒'
+                    : activeTab === 'bills'
+                      ? '📋'
+                      : '💼'}
               </span>
               <span className="text-xs font-medium">No {activeTab} items in queue</span>
             </div>
           )}
 
           {filteredItems.map(item => {
-            const preview = item?.transaction_preview || {};
-            const apiType = getApiType(item);
-            const code = preview?.code || `OFF-${item?.id}`;
-            const channelName = preview?.channel?.name || '-';
-            const paymentName = preview?.payment_method?.name || '-';
-            const cashierName = preview?.cashier?.name || preview?.session?.cashier?.name || '-';
-            const itemCount = Number(preview?.item_count) || preview?.items?.length || 0;
-            const totalCharges = Number(preview?.total_charges || preview?.total_bill) || 0;
-            const displayTotal = totalCharges;
-            const createdAt = preview?.created_at || item?.createdAt;
-            const status = statusConfig[item.status] || statusConfig.pending;
-            const itemsList = preview?.items || [];
-
-            // Specialized rendering for Session Start/End
-            const isSession = apiType === 'start' || apiType === 'end';
-            // Specialized rendering for Topup
-            const isTopup = apiType === 'topup';
-
-            if (isSession) {
-              const sessionLabel = apiType === 'start' ? 'Open Session' : 'Close Session';
-              const sessionIcon = apiType === 'start' ? '🚪' : '🏁';
-              const sessionColor = apiType === 'start' ? 'badge-success' : 'badge-warning';
-              const cashAmount = item?.body?.cash || 0;
+            if (activeTab === 'shifts') {
+              const sessionLabel =
+                item.sync_type === 'both'
+                  ? 'Open & Close Session'
+                  : item.sync_type === 'opened'
+                    ? 'Open Session'
+                    : 'Close Session';
+              const sessionIcon =
+                item.sync_type === 'both' ? '🔄' : item.sync_type === 'opened' ? '🚪' : '🏁';
+              const sessionColor =
+                item.sync_type === 'both'
+                  ? 'badge-info'
+                  : item.sync_type === 'opened'
+                    ? 'badge-success'
+                    : 'badge-warning';
 
               return (
                 <div
                   key={item.id}
-                  className={`rounded-lg border border-base-200 bg-base-100 transition-colors hover:border-base-300 overflow-hidden`}
+                  className="border-base-200 bg-base-100 hover:border-base-300 overflow-hidden rounded-lg border transition-colors"
                 >
-                  <div className={`h-1 w-full ${apiType === 'start' ? 'bg-success' : 'bg-warning'}`} />
+                  <div
+                    className={`h-1 w-full ${item.sync_type === 'opened' ? 'bg-success' : 'bg-warning'}`}
+                  />
                   <div className="p-2.5">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className={`badge badge-xs ${sessionColor} uppercase font-bold tracking-wider`}>
+                    <div className="mb-1.5 flex items-center gap-2">
+                      <span
+                        className={`badge badge-xs ${sessionColor} font-bold tracking-wider uppercase`}
+                      >
                         {sessionIcon} {sessionLabel}
                       </span>
-                      <span className="text-[10px] font-bold text-base-content/50 flex-1 truncate">
-                        {dateFormat(createdAt)}
-                      </span>
-                      <span className={`badge badge-xs ${status.badge} gap-0.5`}>
-                        <span className="text-[9px]">{status.icon}</span>
-                        {item.status}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center bg-base-200/30 rounded p-2">
-                      <div className="flex flex-col">
-                        <span className="text-[9px] uppercase text-base-content/40 font-bold">
-                          {apiType === 'start' ? 'Starting Cash' : 'Ending Cash'}
+                      {item.sync_type !== 'both' && (
+                        <span className="text-base-content/50 flex-1 truncate text-[10px] font-bold">
+                          {dateFormat(item?.started_at)}
                         </span>
-                        <span className="text-sm font-black text-base-content">
-                          {currencyFormat(cashAmount)}
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[9px] uppercase text-base-content/40 font-bold block">Cashier</span>
-                        <span className="text-[10px] font-bold">{cashierName}</span>
-                      </div>
+                      )}
                     </div>
-
-                    {/* Error message */}
-                    {item.lastError && (
-                      <div className="mt-2 text-[10px] text-error bg-error/10 rounded px-2 py-1 leading-tight">
-                        {item.lastError}
+                    {item.sync_type === 'both' && (
+                      <div className="text-base-content/50 mb-1.5 flex gap-3 text-[10px] font-bold">
+                        <span>Open: {dateFormat(item?.started_at)}</span>
+                        <span>Close: {dateFormat(item?.finished_at)}</span>
                       </div>
                     )}
+                    <div className="bg-base-200/30 rounded p-2">
+                      <div className="text-base-content/40 flex justify-between text-[9px] font-bold uppercase">
+                        {(item?.sync_type === 'opened' || item?.sync_type === 'both') && (
+                          <span>Starting Cash</span>
+                        )}
+                        {(item?.sync_type === 'closed' || item?.sync_type === 'both') && (
+                          <span>Ending Cash</span>
+                        )}
+                      </div>
+                      <div className="mt-0.5 flex items-center justify-between">
+                        {(item?.sync_type === 'opened' || item?.sync_type === 'both') && (
+                          <span className="text-base-content text-sm font-black">
+                            {currencyFormat(item?.cash_started)}
+                          </span>
+                        )}
 
-                    {/* Action buttons */}
-                    <div className="mt-2 flex gap-1">
-                      {item.status === 'pending' && (
-                        <button
-                          className="btn btn-ghost btn-xs text-base-content/50"
-                          onClick={() => onRemove?.(item.id)}
-                        >
-                          🗑️ Remove
-                        </button>
-                      )}
-                      {item.status === 'failed' && (
-                        <button
-                          className="btn btn-error btn-xs flex-1 gap-1"
-                          onClick={() => onRetry?.(item.id)}
-                        >
-                          ↻ Retry Sync
-                        </button>
-                      )}
+                        {(item?.sync_type === 'closed' || item?.sync_type === 'both') && (
+                          <span className="text-base-content text-sm font-black">
+                            {currencyFormat(item?.cash_finished)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
               );
             }
 
-            if (isTopup) {
-              const nominal = Number(preview?.nominal) || 0;
-              const memberName = preview?.member_name || '-';
-              const memberCode = preview?.member_code || '';
+            if (activeTab === 'member') {
+              if (item.sync_type === 'membership') {
+                return (
+                  <div
+                    key={item.id}
+                    className="border-base-200 bg-base-100 hover:border-base-300 overflow-hidden rounded-lg border transition-colors"
+                  >
+                    <div className="bg-info h-1 w-full" />
+                    <div className="p-2.5">
+                      <div className="mb-1.5 flex items-center gap-2">
+                        <span className="badge badge-xs badge-info font-bold tracking-wider uppercase">
+                          {item?.id ? 'Perbaharui Member' : 'Create Member'}
+                        </span>
+                      </div>
+                      <div className="bg-base-200/30 rounded p-2">
+                        <div className="text-base-content/40 flex justify-between text-[9px] font-bold uppercase">
+                          <span>Name</span>
+                          <span>Phone</span>
+                        </div>
+                        <div className="mt-0.5 flex items-center justify-between">
+                          <span className="text-[13px] font-bold capitalize">
+                            {item?.name || '-'}
+                          </span>
+                          <span className="text-[13px] font-bold capitalize">
+                            {item?.reff_code || '-'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              } else {
+                return (
+                  <div
+                    key={item.id}
+                    className="border-base-200 bg-base-100 hover:border-base-300 overflow-hidden rounded-lg border transition-colors"
+                  >
+                    <div className="bg-success h-1 w-full" />
+                    <div className="p-2.5">
+                      <div className="mb-1.5 flex items-center gap-2">
+                        <span className="badge badge-xs badge-success font-bold tracking-wider uppercase">
+                          💰 Topup
+                        </span>
+                      </div>
+                      <div className="text-base-content/50 mb-2 flex flex-wrap items-center gap-1 text-[10px]">
+                        <span className="truncate">{item?.membership?.name}</span>
+                        <span>·</span>
+                        <span className="whitespace-nowrap">{dateFormat(item?.created_at)}</span>
+                      </div>
+                      <div className="bg-base-200/30 rounded p-2">
+                        <div className="text-base-content/40 flex justify-between text-[9px] font-bold uppercase">
+                          <span>Payment</span>
+                          <span>Amount</span>
+                        </div>
+                        <div className="mt-0.5 flex items-center justify-between">
+                          <span className="text-[13px] font-bold capitalize">
+                            {item?.payment_type || '-'}
+                          </span>
+                          <span className="text-success text-sm font-black">
+                            {currencyFormat(item?.nominal)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-2 flex gap-1 p-2.5 pt-0">
+                        <button
+                          className="btn btn-error btn-ghost btn-xs text-base-content/50"
+                          onClick={async () => {
+                            await onRemove?.('topup', item);
+                            setRefreshKey(k => k + 1);
+                          }}
+                        >
+                          &#10006; Remove
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+            }
 
+            if (activeTab === 'bills') {
               return (
                 <div
                   key={item.id}
-                  className="rounded-lg border border-base-200 bg-base-100 transition-colors hover:border-base-300 overflow-hidden"
+                  className="border-base-200 bg-base-100 hover:border-base-300 overflow-hidden rounded-lg border transition-colors"
                 >
-                  <div className="h-1 w-full bg-info" />
-                  <div className="p-2.5">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className="badge badge-xs badge-info uppercase font-bold tracking-wider">
-                        💰 Topup
+                  <div className="p-2.5 pb-1.5">
+                    <div className="mb-1.5 flex items-center gap-2">
+                      <span className="badge badge-xs badge-primary badge-outline font-bold tracking-wider uppercase">
+                        Bills
                       </span>
-                      <span className="text-xs font-bold text-base-content truncate flex-1">{code}</span>
-                      <span className={`badge badge-xs ${status.badge} gap-0.5`}>
-                        <span className="text-[9px]">{status.icon}</span>
-                        {item.status}
+                      <span className="text-base-content flex-1 truncate text-xs font-bold">
+                        {item?.code}
                       </span>
                     </div>
-
-                    <div className="flex items-center gap-1 text-[10px] text-base-content/50 flex-wrap mb-2">
-                      <span className="truncate">{memberName}</span>
-                      {memberCode && <><span>·</span><span className="truncate">{memberCode}</span></>}
+                    <div className="text-base-content/50 flex flex-wrap items-center gap-1 text-[10px]">
+                      {item?.bill_name && (
+                        <>
+                          <span className="max-w-24 truncate">{item?.bill_name || '-'}</span>
+                          <span>·</span>
+                        </>
+                      )}
+                      {item?.membership && (
+                        <>
+                          <span className="max-w-24 truncate">{item?.membership?.name || '-'}</span>
+                          <span>·</span>
+                        </>
+                      )}
+                      <span className="truncate">{item?.sales_channel?.name}</span>
                       <span>·</span>
-                      <span className="whitespace-nowrap">{dateFormat(createdAt)}</span>
-                    </div>
-
-                    <div className="flex justify-between items-center bg-base-200/30 rounded p-2">
-                      <div className="flex flex-col">
-                        <span className="text-[9px] uppercase text-base-content/40 font-bold">Payment</span>
-                        <span className="text-[13px] font-bold">{paymentName}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[9px] uppercase text-base-content/40 font-bold block">Amount</span>
-                        <span className="text-sm font-black text-success">{currencyFormat(nominal)}</span>
-                      </div>
-                    </div>
-
-                    {item.lastError && (
-                      <div className="mt-2 text-[10px] text-error bg-error/10 rounded px-2 py-1 leading-tight">
-                        {item.lastError}
-                      </div>
-                    )}
-
-                    <div className="mt-2 flex gap-1">
-                      {item.status === 'pending' && (
-                        <button
-                          className="btn btn-ghost btn-xs text-base-content/50"
-                          onClick={() => onRemove?.(item.id)}
-                        >
-                          🗑️ Remove
-                        </button>
-                      )}
-                      {item.status === 'failed' && (
-                        <button
-                          className="btn btn-error btn-xs flex-1 gap-1"
-                          onClick={() => onRetry?.(item.id)}
-                        >
-                          ↻ Retry Sync
-                        </button>
-                      )}
+                      <span className="whitespace-nowrap">{dateFormat(item?.created_at)}</span>
                     </div>
                   </div>
-                </div>
-              );
-            }
 
-            return (
-              <div
-                key={item.id}
-                className="rounded-lg border border-base-200 bg-base-100 transition-colors hover:border-base-300 overflow-hidden"
-              >
-                {/* Header Info */}
-                <div className="p-2.5 pb-1.5">
-                  {/* Row 1: Type badge + Code + Status */}
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="badge badge-xs badge-primary badge-outline uppercase font-bold tracking-wider">
-                      {apiType}
-                    </span>
-                    <span className="text-xs font-bold text-base-content truncate flex-1">{code}</span>
-                    <span className={`badge badge-xs ${status.badge} gap-0.5`}>
-                      <span className="text-[9px]">{status.icon}</span>
-                      {item.status}
-                    </span>
-                  </div>
-
-                  {/* Row 2: Metadata - single compact line */}
-                  <div className="flex items-center gap-1 text-[10px] text-base-content/50 flex-wrap">
-                    <span className="truncate max-w-20">{cashierName}</span>
-                    <span>·</span>
-                    <span className="truncate">{channelName}</span>
-                    <span>·</span>
-                    <span className="truncate">{paymentName}</span>
-                    <span>·</span>
-                    <span className="whitespace-nowrap">{dateFormat(createdAt)}</span>
-                  </div>
-                </div>
-
-                {/* Collapsible Items Section */}
-                {itemsList.length > 0 ? (
-                  <div className="collapse collapse-arrow rounded-none border-t border-base-200">
-                    <input type="checkbox" className="min-h-0" />
-                    <div className="collapse-title min-h-0 py-2 px-2.5 flex items-center justify-between group">
-                      <span className="text-[12px] font-bold text-base-content/70">
-                        {itemCount} item{itemCount !== 1 ? 's' : ''}
-                      </span>
-                      <span className="text-[12px] font-extrabold text-base-content mr-6">
-                        {currencyFormat(displayTotal)}
-                      </span>
-                    </div>
-                    <div className="collapse-content px-2.5 pb-2 bg-base-200/30">
-                      <div className="space-y-2 pt-2">
-                        {itemsList.map((product, idx) => (
-                          <div key={idx} className="flex flex-col gap-0.5">
-                            <div className="flex justify-between items-start gap-2">
-                              <div className="flex gap-1.5 items-start flex-1 min-w-0">
-                                <span className="bg-base-content/80 rounded px-1.5 py-0.5 text-[13px] text-white font-bold leading-none mt-0.5">
-                                  {product.quantity}
-                                </span>
-                                <span className="text-[13px] font-bold uppercase truncate leading-tight">
-                                  {product.catalog?.name || product.description || 'Unknown Item'}
+                  {item?.items.length > 0 ? (
+                    <div className="collapse-arrow border-base-200 collapse rounded-none border-t">
+                      <input type="checkbox" className="min-h-0" />
+                      <div className="collapse-title group flex min-h-0 items-center justify-between px-2.5 py-2">
+                        <span className="text-base-content/70 text-[12px] font-bold">
+                          {item?.items.length} item{item?.items.length !== 1 ? 's' : ''}
+                        </span>
+                        <span className="text-base-content mr-6 text-[12px] font-extrabold">
+                          {currencyFormat(item?.total_charges)}
+                        </span>
+                      </div>
+                      <div className="collapse-content bg-base-200/30 px-2.5 pb-2">
+                        <div className="space-y-2 pt-2">
+                          {item?.items.map((product, idx) => (
+                            <div key={idx} className="flex flex-col gap-0.5">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex min-w-0 flex-1 items-start gap-1.5">
+                                  <span className="bg-base-content/80 mt-0.5 rounded px-1.5 py-0.5 text-[13px] leading-none font-bold text-white">
+                                    {product.quantity}
+                                  </span>
+                                  <span className="truncate text-[13px] leading-tight font-bold uppercase">
+                                    {product.catalog_name || product.catalog?.name || '-'}{' '}
+                                    {/* catalog_name langsung, catalog?.name fallback struktural */}
+                                  </span>
+                                </div>
+                                <span className="text-base-content/60 text-[13px] font-medium whitespace-nowrap">
+                                  {currencyFormat(
+                                    Number(product.unit_nett || 0) * Number(product.quantity || 0)
+                                  )}
                                 </span>
                               </div>
-                              <span className="text-[13px] text-base-content/60 font-medium whitespace-nowrap">
-                                {currencyFormat(Number(product.unit_nett || 0) * Number(product.quantity || 0))}
-                              </span>
-                            </div>
-
-                            {/* Additionals for queued items */}
-                            {product.addons?.length > 0 && (
-                              <div className="ml-5 border-l border-base-content/10 pl-2 flex flex-col gap-0.5">
-                                {product.addons?.map((add, aIdx) => {
-                                 const suffix = add?.addon?.type === 'quantity' || add?.addon?.type === 'checkbox' ? `(${product?.quantity} x ${add?.quantity}) x ${currencyFormat(add?.unit_nett || 0)}` : '';
-                                return (
-                                    <div key={aIdx} className="flex justify-between text-[11px] text-base-content/40 italic">
-                                    <span>+ {add.catalog?.name} {suffix}</span>
-                                        {add.unit_nett > 0 && (
-                                      <span>
-                                        {currencyFormat(product?.quantity * add?.quantity * add?.unit_nett || 0)}
-                                       </span>
+                              {product.addons?.length > 0 && (
+                                <div className="border-base-content/10 ml-5 flex flex-col gap-0.5 border-l pl-2">
+                                  {product.addons?.map((add, aIdx) => {
+                                    const addonName = add.catalog_name || '-';
+                                    const addonPrice = Number(add.unit_nett || 0);
+                                    const addonQty = Number(add.quantity || 1);
+                                    return (
+                                      <div
+                                        key={aIdx}
+                                        className="text-base-content/40 flex justify-between text-[11px] italic"
+                                      >
+                                        <span>
+                                          + {addonName} ({addonQty} x {currencyFormat(addonPrice)})
+                                        </span>
+                                        {addonPrice > 0 && (
+                                          <span>{currencyFormat(addonQty * addonPrice)}</span>
                                         )}
-                                    </div>
-                                  )})}
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="px-2.5 py-2 border-t border-base-200 flex justify-between items-center bg-base-200/10">
-                    <span className="text-[10px] text-base-content/50">No items</span>
-                    <span className="text-xs font-extrabold text-base-content">
-                      {currencyFormat(displayTotal)}
-                    </span>
-                  </div>
-                )}
+                  ) : (
+                    <div className="border-base-200 bg-base-200/10 flex items-center justify-between border-t px-2.5 py-2">
+                      <span className="text-base-content/50 text-[10px]">No items</span>
+                    </div>
+                  )}
 
-                {/* Error message */}
-                {item.lastError && (
-                  <div className="mx-2.5 mb-1.5 text-[10px] text-error bg-error/10 rounded px-2 py-1 leading-tight">
-                    {item.lastError}
-                  </div>
-                )}
-
-                {/* Action buttons */}
-                <div className="p-2.5 pt-0 flex gap-1">
-                  {/* Open Bill button - only for save-bill type and pending status */}
-                  {apiType === 'save bill' && item.status === 'pending' && (
+                  <div className="mt-2 flex gap-1 p-2.5 pt-0">
                     <button
                       className="btn btn-primary btn-xs flex-1 gap-1"
                       onClick={() => {
@@ -458,30 +450,134 @@ const PendingDrawer = ({ open, onClose, onRetry, onOpenBill, onRemove }) => {
                     >
                       📋 Open Bill
                     </button>
-                  )}
-
-                  {/* Remove button for pending items */}
-                  {item.status === 'pending' && (
                     <button
                       className="btn btn-error btn-ghost btn-xs text-base-content/50"
-                      onClick={() => onRemove?.(item.id)}
+                      onClick={async () => {
+                        await onRemove?.('bill', item);
+                        setRefreshKey(k => k + 1);
+                      }}
                     >
                       &#10006; Remove
                     </button>
+                  </div>
+                </div>
+              );
+            }
+
+            if (activeTab === 'order') {
+              return (
+                <div
+                  key={item.id}
+                  className="border-base-200 bg-base-100 hover:border-base-300 overflow-hidden rounded-lg border transition-colors"
+                >
+                  <div className="p-2.5 pb-1.5">
+                    <div className="mb-1.5 flex items-center gap-2">
+                      <span className="badge badge-xs badge-primary badge-outline font-bold tracking-wider uppercase">
+                        Orders
+                      </span>
+                      <span className="text-base-content flex-1 truncate text-xs font-bold">
+                        {item?.code}
+                      </span>
+                    </div>
+                    <div className="text-base-content/50 flex flex-wrap items-center gap-1 text-[10px]">
+                      {item?.bill_name && (
+                        <>
+                          <span className="max-w-24 truncate">{item?.bill_name || '-'}</span>
+                          <span>·</span>
+                        </>
+                      )}
+                      {item?.membership && (
+                        <>
+                          <span className="max-w-24 truncate">{item?.membership?.name || '-'}</span>
+                          <span>·</span>
+                        </>
+                      )}
+                      <span className="truncate">{item?.sales_channel?.name}</span>
+                      <span>·</span>
+                      <span className="truncate">{item?.payment_method?.name}</span>
+                      <span>·</span>
+                      <span className="whitespace-nowrap">{dateFormat(item?.paid_at)}</span>
+                    </div>
+                  </div>
+
+                  {item?.items.length > 0 ? (
+                    <div className="collapse-arrow border-base-200 collapse rounded-none border-t">
+                      <input type="checkbox" className="min-h-0" />
+                      <div className="collapse-title group flex min-h-0 items-center justify-between px-2.5 py-2">
+                        <span className="text-base-content/70 text-[12px] font-bold">
+                          {item?.items.length} item{item?.items.length !== 1 ? 's' : ''}
+                        </span>
+                        <span className="text-base-content mr-6 text-[12px] font-extrabold">
+                          {currencyFormat(item?.total_charges)}
+                        </span>
+                      </div>
+                      <div className="collapse-content bg-base-200/30 px-2.5 pb-2">
+                        <div className="space-y-2 pt-2">
+                          {item?.items.map((product, idx) => (
+                            <div key={idx} className="flex flex-col gap-0.5">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex min-w-0 flex-1 items-start gap-1.5">
+                                  <span className="bg-base-content/80 mt-0.5 rounded px-1.5 py-0.5 text-[13px] leading-none font-bold text-white">
+                                    {product.quantity}
+                                  </span>
+                                  <span className="truncate text-[13px] leading-tight font-bold uppercase">
+                                    {product.catalog_name || product.catalog?.name || '-'}{' '}
+                                    {/* catalog_name langsung, catalog?.name fallback struktural */}
+                                  </span>
+                                </div>
+                                <span className="text-base-content/60 text-[13px] font-medium whitespace-nowrap">
+                                  {currencyFormat(
+                                    Number(product.unit_nett || 0) * Number(product.quantity || 0)
+                                  )}
+                                </span>
+                              </div>
+                              {product.addons?.length > 0 && (
+                                <div className="border-base-content/10 ml-5 flex flex-col gap-0.5 border-l pl-2">
+                                  {product.addons?.map((add, aIdx) => {
+                                    const addonName = add.catalog_name || '-';
+                                    const addonPrice = Number(add.unit_nett || 0);
+                                    const addonQty = Number(add.quantity || 1);
+                                    return (
+                                      <div
+                                        key={aIdx}
+                                        className="text-base-content/40 flex justify-between text-[11px] italic"
+                                      >
+                                        <span>
+                                          + {addonName} ({addonQty} x {currencyFormat(addonPrice)})
+                                        </span>
+                                        {addonPrice > 0 && (
+                                          <span>{currencyFormat(addonQty * addonPrice)}</span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="border-base-200 bg-base-200/10 flex items-center justify-between border-t px-2.5 py-2">
+                      <span className="text-base-content/50 text-[10px]">No items</span>
+                    </div>
                   )}
 
-                  {/* Retry button for failed items */}
-                  {item.status === 'failed' && (
+                  <div className="mt-2 flex gap-1">
                     <button
-                      className="btn btn-error btn-xs flex-1 gap-1"
-                      onClick={() => onRetry?.(item.id)}
+                      className="btn btn-ghost btn-xs text-base-content/50"
+                      onClick={async () => {
+                        await onRemove?.('payment', item);
+                        setRefreshKey(k => k + 1);
+                      }}
                     >
-                      ↻ Retry Sync
+                      &#10006; Remove
                     </button>
-                  )}
+                  </div>
                 </div>
-              </div>
-            );
+              );
+            }
           })}
         </div>
       </div>

@@ -1,21 +1,32 @@
-import {createSlice} from '@reduxjs/toolkit';
+import { createSlice } from '@reduxjs/toolkit';
 
 const defineInitialState = () => ({
   hasSession: false,
+  sessionSummary: {
+    summary: {
+      sales: {
+        outstanding_bill: 0,
+      },
+    },
+  },
 });
 
 const sessionSlice = createSlice({
   name: 'salesSession',
   initialState: defineInitialState(),
   reducers: {
-    checkSession: state => {
-      state.hasSession = true;
+    resetSummary: () => defineInitialState(),
+
+    setSummary: (state, action) => {
+      state.hasSession = action.payload === null ? false : true;
+      state.sessionSummary = action.payload;
     },
-    invalidateSession: state => {
-      state.hasSession = false;
+    updateSummary: (state, action) => {
+      state.sessionSummary = action.payload;
     },
   },
 });
 
-export const {checkSession, invalidateSession} = sessionSlice.actions;
+export const { setSummary, updateSummary, resetSummary } = sessionSlice.actions;
+
 export const sessionReducer = sessionSlice.reducer;

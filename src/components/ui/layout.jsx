@@ -1,27 +1,41 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { BurgerIcon, DeviceIcon, HistoryIcon, ListIcon, MenuIcon, ReceiptIcon, UserIcon, TruckIcon } from './icon';
+import { BurgerIcon, HistoryIcon, ListIcon, MenuIcon, ReceiptIcon, UserIcon } from './icon';
 import { OfflineBanner, PendingDrawer, SyncIndicator } from './offline';
 import useSidebar from './sidebar/hook';
-import { loadOfflineBill } from '../../services/cart/slice';
-import { removeFailedItem, retryFailedItem, syncNow } from '../../services/offline';
+import { deleteOrderBill, deleteOrderPayment, deleteTopup, syncNow } from '../../services/offline';
 import { setNetworkState } from '../../services/offline/slice';
 import useNetworkStatus from '../../services/offline/useNetworkStatus';
+import usePendingQueueCount, {
+  triggerQueueRefresh,
+} from '../../services/offline/usePendingQueueCount';
 import useSession from '../../services/sales/session/hook';
 import { isActive } from '../../utils/common';
+import useCart from '../../services/cart/hook';
+import {
+  deleteOpenBills,
+  deleteOrderHistory,
+  perbaharuiMembership,
+  showMembership,
+} from '../../utils/cache';
 
 const Layout = ({ children }) => {
   const dispatch = useDispatch();
+  const sessionAuth = useSelector(state => state?.Auth?.session);
   const Offline = useSelector(state => state?.Offline);
   const { isOnline, wasOffline } = useNetworkStatus();
+  const { count: queueCount } = usePendingQueueCount();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [showBanner, setShowBanner] = useState(true);
   const [backOnline, setBackOnline] = useState(false);
   const prevOnlineRef = useRef(isOnline);
   const prevApiReachableRef = useRef(Offline?.apiReachable);
+
+  const { onBillSelected } = useCart();
+  const { updateSessionSummary } = useSession();
 
   // Wire network status to Redux
   useEffect(() => {
@@ -75,7 +89,96 @@ const Layout = ({ children }) => {
   }, [Offline?.apiReachable, isOnline]);
 
   const handleOpenBill = queueItem => {
-    dispatch(loadOfflineBill(queueItem));
+    onBillSelected(queueItem);
+    navigate('/');
+  };
+
+  const handleRemoveOffline = (type, queueItem) => {
+    if (type === 'bill') {
+      try {
+        deleteOrderBill(queueItem?.sync_id, sessionAuth?.user?.id);
+      } catch (err) {
+        // ignore
+      }
+
+      try {
+        deleteOpenBills(queueItem);
+      } catch (err) {
+        // ignore
+      }
+
+      updateSessionSummary({
+        type: 'update',
+        outstanding_bill: -1 * queueItem.total_charges,
+      });
+    }
+
+    if (type === 'payment') {
+      try {
+        deleteOrderPayment(queueItem?.sync_id, sessionAuth?.user?.id);
+      } catch (err) {
+        // ignore
+      }
+
+      try {
+        deleteOrderHistory(queueItem);
+      } catch (err) {
+        // ignore
+      }
+
+      let outstandingBillPayment = 0;
+
+      if (
+        !(
+          queueItem?.session?.id === queueItem?.paid_session?.id ||
+          queueItem?.session?.sync_id === queueItem?.paid_session?.sync_id
+        )
+      ) {
+        outstandingBillPayment = -1 * queueItem?.total_charges;
+      }
+
+      updateSessionSummary({
+        type: 'deleted_payment',
+        payment_method: queueItem?.payment_method,
+        total_sales: -1 * queueItem?.subtotal_nett,
+        total_discount:
+          -1 * (queueItem?.subtotal_nett - queueItem?.total_bill + queueItem?.discount_value),
+        total_after_discount: -1 * (queueItem?.total_bill - queueItem?.discount_value),
+        total_service: -1 * queueItem?.service_charge_value,
+        total_charges: -1 * queueItem?.total_charges,
+        outstanding_bill_payment: outstandingBillPayment,
+        order: queueItem,
+      });
+    }
+
+    if (type === 'topup') {
+      try {
+        deleteTopup(queueItem?.sync_id, sessionAuth?.user?.id);
+      } catch (err) {
+        // ignore
+      }
+
+      try {
+        const membership = showMembership(queueItem?.membership?.card_id);
+        membership.saldo -= queueItem.nominal;
+
+        const logsIdx = membership.saldo_logs.findIndex(p => p.sync_id === queueItem?.sync_id);
+
+        membership.saldo_logs.splice(logsIdx, 1);
+
+        perbaharuiMembership(membership);
+      } catch (err) {
+        // ignore
+      }
+
+      updateSessionSummary({
+        type: 'deleted_topup',
+        topup_method: queueItem?.payment_type,
+        topup_nominal: -1 * queueItem?.nominal,
+      });
+    }
+
+    triggerQueueRefresh();
   };
 
   const banner = (() => {
@@ -106,7 +209,7 @@ const Layout = ({ children }) => {
       return {
         variant: 'syncing',
         message: 'Syncing queued transactions...',
-        pendingCount: Offline?.pendingCount || 0,
+        pendingCount: queueCount,
       };
     }
 
@@ -127,7 +230,7 @@ const Layout = ({ children }) => {
         <OfflineBanner
           variant={banner.variant}
           message={banner.message}
-          pendingCount={banner.pendingCount}
+          pendingCount={queueCount}
           onRetry={() => syncNow()}
           onDismiss={() => {
             setShowBanner(false);
@@ -139,22 +242,22 @@ const Layout = ({ children }) => {
       <PendingDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        onRetry={retryFailedItem}
-        onRemove={removeFailedItem}
         onOpenBill={handleOpenBill}
+        onRemove={handleRemoveOffline}
       />
     </div>
   );
 };
 
 const Navbar = () => {
-  const dispatch = useDispatch();
   const navigate = useNavigate();
-  const User = useSelector(state => state?.Auth?.session?.user);
+  const sessionAuth = useSelector(state => state?.Auth?.session);
   const SalesSession = useSelector(state => state?.SalesSession);
+  const lastSyncTime = useSelector(state => state?.Offline?.lastSyncTime);
 
-  const { summary, sendDeviceData, updateDeviceResult, startDeviceTracking, stopDeviceTracking } = useSession();
+  const { summary } = useSession();
   const { showSummary } = useSidebar();
+  const { count: queueCount } = usePendingQueueCount();
 
   const location = useLocation();
   const { pathname } = location;
@@ -162,23 +265,109 @@ const Navbar = () => {
   const Offline = useSelector(state => state?.Offline);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  const { onBillSelected } = useCart();
+  const { updateSessionSummary } = useSession();
+
   const handleOpenBill = queueItem => {
-    dispatch(loadOfflineBill(queueItem));
+    onBillSelected(queueItem);
     navigate('/');
+  };
+
+  const handleRemoveOffline = (type, queueItem) => {
+    if (type === 'bill') {
+      try {
+        deleteOrderBill(queueItem?.sync_id, sessionAuth?.user?.id);
+      } catch (err) {
+        // ignore
+      }
+
+      try {
+        deleteOpenBills(queueItem);
+      } catch (err) {
+        // ignore
+      }
+
+      updateSessionSummary({
+        type: 'update',
+        outstanding_bill: -1 * queueItem.total_charges,
+      });
+    }
+
+    if (type === 'payment') {
+      try {
+        deleteOrderPayment(queueItem?.sync_id, sessionAuth?.user?.id);
+      } catch (err) {
+        // ignore
+      }
+
+      try {
+        deleteOrderHistory(queueItem);
+      } catch (err) {
+        // ignore
+      }
+
+      let outstandingBillPayment = 0;
+
+      if (
+        !(
+          queueItem?.session?.id === queueItem?.paid_session?.id ||
+          queueItem?.session?.sync_id === queueItem?.paid_session?.sync_id
+        )
+      ) {
+        outstandingBillPayment = -1 * queueItem?.total_charges;
+      }
+
+      updateSessionSummary({
+        type: 'deleted_payment',
+        payment_method: queueItem?.payment_method,
+        total_sales: -1 * queueItem?.subtotal_nett,
+        total_discount:
+          -1 * (queueItem?.subtotal_nett - queueItem?.total_bill + queueItem?.discount_value),
+        total_after_discount: -1 * (queueItem?.total_bill - queueItem?.discount_value),
+        total_service: -1 * queueItem?.service_charge_value,
+        total_charges: -1 * queueItem?.total_charges,
+        outstanding_bill_payment: outstandingBillPayment,
+        order: queueItem,
+      });
+    }
+
+    if (type === 'topup') {
+      try {
+        deleteTopup(queueItem?.sync_id, sessionAuth?.user?.id);
+      } catch (err) {
+        // ignore
+      }
+
+      try {
+        const membership = showMembership(queueItem?.membership?.card_id);
+        membership.saldo -= queueItem.nominal;
+
+        const logsIdx = membership.saldo_logs.findIndex(p => p.sync_id === queueItem?.sync_id);
+
+        membership.saldo_logs.splice(logsIdx, 1);
+
+        perbaharuiMembership(membership);
+      } catch (err) {
+        // ignore
+      }
+
+      updateSessionSummary({
+        type: 'deleted_topup',
+        topup_method: queueItem?.payment_type,
+        topup_nominal: -1 * queueItem?.nominal,
+      });
+    }
+
+    triggerQueueRefresh();
   };
 
   useEffect(() => {
     summary();
   }, []);
 
-  // Start/stop device tracking based on active session
   useEffect(() => {
-    if (SalesSession?.hasSession) {
-      startDeviceTracking();
-    } else {
-      stopDeviceTracking();
-    }
-  }, [SalesSession?.hasSession, startDeviceTracking, stopDeviceTracking]);
+    summary();
+  }, [lastSyncTime]);
 
   return (
     <div
@@ -204,7 +393,7 @@ const Navbar = () => {
           <small>Member</small>
         </div>
 
-        {User?.role === "manager" && (
+        {sessionAuth?.user?.role === 'manager' && (
           <div
             className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'shifts')}`}
             onClick={() => navigate('/shifts')}
@@ -229,36 +418,16 @@ const Navbar = () => {
           <ReceiptIcon />
           <small>Saved Bills</small>
         </div>
-
-        <div
-          className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'delivery')}`}
-          onClick={() => navigate('/delivery')}
-        >
-          <TruckIcon />
-          <small>Delivery</small>
-        </div>
       </div>
 
       <div className="mb-5">
         <div className="px-2 pb-2">
           <SyncIndicator
-            pendingCount={Offline?.pendingCount || 0}
+            pendingCount={queueCount}
             failedCount={Offline?.failedCount || 0}
             onClick={() => setDrawerOpen(true)}
           />
         </div>
-        {SalesSession?.hasSession && (
-          <div
-            className={`nav-items mb-3 place-items-center`}
-            onClick={() => !updateDeviceResult?.isLoading && sendDeviceData()}
-          >
-            {updateDeviceResult?.isLoading ? (
-              <span className="loading loading-spinner loading-sm"></span>
-            ) : (
-              <DeviceIcon />
-            )}
-          </div>
-        )}
         <div
           className={`nav-items mb-3`}
           onClick={
@@ -276,7 +445,7 @@ const Navbar = () => {
             ></span>
             <div className={`-ms-2 flex flex-col place-items-center`}>
               <UserIcon />
-              <small>{User?.name}</small>
+              <small>{sessionAuth?.user?.name}</small>
             </div>
           </div>
         </div>
@@ -284,9 +453,8 @@ const Navbar = () => {
       <PendingDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        onRetry={retryFailedItem}
-        onRemove={removeFailedItem}
         onOpenBill={handleOpenBill}
+        onRemove={handleRemoveOffline}
       />
     </div>
   );

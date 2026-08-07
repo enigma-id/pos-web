@@ -1,12 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
-import {
-  useCheckoutMutation,
-  useLazyGetBillQuery,
-  useCloseBillMutation,
-  useLazyGetMethodQuery,
-} from './action';
+import { useCheckoutMutation, useLazyGetBillQuery, useCloseBillMutation } from './action';
 import { useUpdateMutation } from '../sales/order/action';
 import {
   customer,
@@ -21,40 +16,42 @@ import {
   changeBillItem,
   addItem,
   changeServiceCharge,
+  changeBillName,
 } from './slice';
 import {
-  getPaymentMethodsCache,
-  setPaymentMethodsCache,
   getCatalogDetailCache,
   getCatalogDetailCacheByCategory,
   getCatalogCacheValue,
   getCatalogItemFromPricingCache,
-  setSalesCacheValue,
 } from '../../utils/cache';
 import { useLazyGetCatalogDetailQuery } from '../catalog/action';
 import { $failure } from '../form/action';
 import { useLazyShowQuery } from '../sales/order/action';
+import { getCache, setCache } from '../../utils/cache';
+import { rest } from 'underscore';
+
+const BILLS_CACHE_KEY = 'cache_openbills';
 
 const useCart = catalog_id => {
   const dispatch = useDispatch();
+  const sessionOutlet = useSelector(state => state?.Auth?.session?.outlet);
   const selectedChannel = useSelector(state => state?.SalesChannel?.selectedChannel);
   const CartState = useSelector(state => state?.Cart);
 
   const [triggerCatalogDetail, catalogDetailResult] = useLazyGetCatalogDetailQuery();
   const [checkoutMutation, checkoutResult] = useCheckoutMutation();
   const [closeBillMutation, closeBillResult] = useCloseBillMutation();
-  const [triggerPaymentMethod] = useLazyGetMethodQuery();
   const [triggerBill, billResult] = useLazyGetBillQuery();
   const [updateMutation, updateResult] = useUpdateMutation();
 
   const [showOrder] = useLazyShowQuery();
   const [offlineCatalogDetail, setOfflineCatalogDetail] = useState(null);
+  const [mergedBillData, setMergedBillData] = useState(null);
+  const queueItemsMapRef = useRef({});
 
   // All cart items
   const cartItems = useSelector(state => state?.Cart?.items?.list || []);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
-
-  const charge = useSelector(state => state?.Auth?.session?.sales_session?.outlet?.service_charges);
 
   // Cek apakah item sudah ada
   const existingIndex = cartItems.findIndex(item => item?.id === catalog_id);
@@ -63,8 +60,6 @@ const useCart = catalog_id => {
 
   const reset = () => {
     dispatch(resetCart());
-    setSalesCacheValue('service_charge', charge);
-    dispatch(changeServiceCharge(charge));
   };
 
   const isCheckoutRunning = useRef(false);
@@ -84,6 +79,9 @@ const useCart = catalog_id => {
 
   const isBillRunning = useRef(false);
   const closeBill = async (id, payload) => {
+    if (isBillRunning.current) return;
+    isBillRunning.current = true;
+
     try {
       const res = await closeBillMutation({ id, payload }).unwrap();
       if (res?.message === 'success') reset();
@@ -94,23 +92,8 @@ const useCart = catalog_id => {
     }
   };
 
-  const getPaymentMethod = async () => {
-    const channelId = selectedChannel?.id ?? 'default';
-    const fallback = getPaymentMethodsCache(channelId);
-
-    try {
-      const req = await triggerPaymentMethod().unwrap();
-      const data = req?.data || [];
-      setPaymentMethodsCache(channelId, data);
-      return data;
-    } catch (error) {
-      if ((fallback || []).length > 0) {
-        return fallback;
-      }
-
-      dispatch($failure(error));
-      return [];
-    }
+  const onUpdateBillName = billName => {
+    dispatch(changeBillName(billName));
   };
 
   const add = catalog => {
@@ -231,21 +214,37 @@ const useCart = catalog_id => {
     );
   };
 
-  const bill = async () => {
-    try {
-      await triggerBill().unwrap();
-    } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error('error:', error);
+  const bill = async (params = {}) => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    const apiDead = apiReachable === false;
+    const searchCacheKey = `${BILLS_CACHE_KEY}_search`;
+
+    if (!isOffline && !apiDead) {
+      try {
+        const res = await triggerBill(params).unwrap();
+        const serverData = res?.data || [];
+
+        // Online search → simpan di cache search; online no-search → simpan di cache utama
+        if (params?.search) {
+          setCache(searchCacheKey, serverData);
+        } else {
+          setCache(BILLS_CACHE_KEY, serverData);
+        }
+        setMergedBillData(serverData);
+        return;
+      } catch (error) {
+        // fetch error
       }
     }
+
+    // Offline — selalu baca cache utama, filter client
+    const cached = getCache(BILLS_CACHE_KEY) || [];
+    setMergedBillData(cached);
   };
 
   const update = async ({ id, payload }) => {
     try {
-      const res = await updateMutation({ id, payload }).unwrap();
-      if (res?.message === 'success') reset();
-      return res;
+      await updateMutation({ id, payload }).unwrap();
     } catch (error) {
       dispatch($failure(error));
       throw error;
@@ -258,6 +257,14 @@ const useCart = catalog_id => {
     isBillSelected.current = true;
 
     try {
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+      if (isOffline || apiReachable === false) {
+        billItems({ items: data?.items, category_discounts: data?.category_discounts });
+        dispatch(selectedBill(data));
+        showSetDiscount(data);
+        return;
+      }
+
       const res = await showOrder({ id: data?.id }).unwrap();
       if (res?.message === 'success') {
         billItems({ items: res?.data?.items, category_discounts: res?.data?.category_discounts });
@@ -280,7 +287,8 @@ const useCart = catalog_id => {
   const showSetDiscount = data => {
     if (data?.discount_value > 0) {
       const discountType = data?.is_discount_percentage ? 'percentage' : 'nominal';
-      const discountValue = discountType === 'percentage' ? data?.discount : data?.discount_value;
+      const discountValue =
+        discountType === 'percentage' ? data?.discount_percentage : data?.discount_value;
 
       dispatch(updateCartDiscount({ discount_type: discountType, discount_value: discountValue }));
     }
@@ -314,6 +322,11 @@ const useCart = catalog_id => {
     });
   }, [catalog_id, selectedChannel, apiReachable, triggerCatalogDetail]);
 
+  useEffect(() => {
+    if (sessionOutlet?.service_charges == null) return;
+    dispatch(changeServiceCharge(sessionOutlet.service_charges));
+  }, [sessionOutlet?.service_charges]);
+
   return {
     catalogDetail: offlineCatalogDetail || catalogDetailResult?.data?.data,
     isLoading: catalogDetailResult.isFetching,
@@ -321,7 +334,6 @@ const useCart = catalog_id => {
     isItemInCart,
     existingItem,
     existingIndex,
-    getPaymentMethod,
     checkout,
     checkoutResult,
     closeBill,
@@ -336,10 +348,12 @@ const useCart = catalog_id => {
     onChangeCartDiscount,
     bill,
     billResult,
+    billData: mergedBillData, // merged server + offline queue
     onBillSelected,
     billItems,
     update,
     updateResult,
+    onUpdateBillName,
   };
 };
 

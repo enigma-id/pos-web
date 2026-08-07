@@ -7,9 +7,10 @@ export const salesChannelApi = createApi({
   baseQuery: baseQuery,
   endpoints: builder => ({
     getSalesChannels: builder.query({
-      query: () => ({
+      query: params => ({
         url: '/sales/channel',
         method: 'GET',
+        params,
       }),
     }),
   }),

@@ -36,44 +36,6 @@ const useCatalog = () => {
   const [triggerCategories, categoriesResult] = useLazyGetCategoriesQuery();
   const [triggerCatalogDetail] = useLazyGetCatalogDetailQuery();
 
-  const prewarmCatalogDetails = useCallback(
-    async ({ catalogList, channelId, categoryId }) => {
-      if (!channelId || !Array.isArray(catalogList) || catalogList.length === 0) return;
-      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
-
-      const targetCategoryId = categoryId ?? 0;
-      const toPrefetch = catalogList.slice(0, 30);
-
-      await Promise.allSettled(
-        toPrefetch.map(async item => {
-          const catalogId = item?.id ?? item?.catalog_id;
-          if (!catalogId) return;
-
-          const cachedByCategory = getCatalogDetailCacheByCategory(
-            catalogId,
-            channelId,
-            targetCategoryId
-          );
-          if (cachedByCategory) return;
-
-          const cachedLegacy = getCatalogDetailCache(catalogId, channelId);
-          if (cachedLegacy) {
-            setCatalogDetailCacheByCategory(catalogId, channelId, targetCategoryId, cachedLegacy);
-            return;
-          }
-
-          const res = await triggerCatalogDetail({ id: catalogId, channel_id: channelId }).unwrap();
-          const data = res?.data;
-          if (data) {
-            setCatalogDetailCache(catalogId, channelId, data);
-            setCatalogDetailCacheByCategory(catalogId, channelId, targetCategoryId, data);
-          }
-        })
-      );
-    },
-    [triggerCatalogDetail]
-  );
-
   const create = async payload => {
     try {
       await createCatalog(payload).unwrap();
@@ -136,12 +98,7 @@ const useCatalog = () => {
     setFilteredCatalog(filtered);
     setIsLoading(false);
 
-    prewarmCatalogDetails({
-      catalogList: filtered,
-      channelId: selectedChannel.id,
-      categoryId: activeCategory?.id ?? 0,
-    });
-  }, [selectedChannel, triggerPricing, triggerCategories, applyFilter, prewarmCatalogDetails]);
+  }, [selectedChannel, triggerPricing, triggerCategories, applyFilter]);
 
   const onSelectCategory = useCallback(
     category => {
@@ -231,18 +188,12 @@ const useCatalog = () => {
       setAllCatalog(catalogData);
       setCategories(categoryData);
       setFilteredCatalog(catalogData); // tampilkan semua tanpa filter
-
-      prewarmCatalogDetails({
-        catalogList: catalogData,
-        channelId: selectedChannel.id,
-        categoryId: fallbackCategory?.id ?? 0,
-      });
     } catch (error) {
       console.log('Error refreshing catalog:', error);
     }
 
     setIsLoading(false);
-  }, [selectedChannel, triggerPricing, triggerCategories, prewarmCatalogDetails]);
+  }, [selectedChannel, triggerPricing, triggerCategories]);
 
   const getCategory = async () => {
     try {

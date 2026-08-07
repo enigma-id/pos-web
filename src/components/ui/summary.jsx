@@ -6,6 +6,9 @@ const Summary = ({ data }) => {
   if (!data) return;
 
   const formatFinishedAt = dateString => {
+    if (dateString === '0001-01-01T00:00:00Z') {
+      return '(Ongoing)';
+    }
     const date = new Date(dateString);
     const year = date.getFullYear();
 
@@ -124,7 +127,9 @@ const Summary = ({ data }) => {
             }}
           >
             <p style={{ marginBlock: 2, fontSize: 11 }}>Expected Cash</p>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(data?.summary?.cash?.expected_cash, false)}</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>
+              {currencyFormat(data?.summary?.cash?.expected_cash, false)}
+            </p>
           </div>
           <div
             style={{
@@ -201,10 +206,7 @@ const Summary = ({ data }) => {
           >
             <p style={{ marginBlock: 2, fontSize: 11 }}>After Discount</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
-              {currencyFormat(
-                data?.summary?.sales?.total_after_discount,
-                false
-              )}
+              {currencyFormat(data?.summary?.sales?.total_after_discount, false)}
             </p>
           </div>
           <div
@@ -263,7 +265,9 @@ const Summary = ({ data }) => {
               }}
             >
               <p style={{ marginBlock: 2, fontSize: 11, textTransform: 'uppercase' }}>{t?.type}</p>
-              <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(t?.total_nominal, false)}</p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>
+                {currencyFormat(t?.total_nominal, false)}
+              </p>
             </div>
           ))}
         </div>
@@ -296,7 +300,9 @@ const Summary = ({ data }) => {
               }}
             >
               <p style={{ marginBlock: 2, fontSize: 11 }}>{cat?.name}</p>
-              <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(cat?.total_paid, false)}</p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>
+                {currencyFormat(cat?.total_paid, false)}
+              </p>
             </div>
           ))}
         </div>

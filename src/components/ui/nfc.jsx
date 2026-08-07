@@ -3,10 +3,12 @@ import { useSelector } from 'react-redux';
 
 import Modal from './modal';
 
-const NFCField = ({ onRead, isOpen, onClose, result, message }) => {
+const NFCField = ({ onRead, isOpen, onClose, result }) => {
   const FormState = useSelector(state => state?.Form);
+
   const ref = useRef();
   const [status, setStatus] = useState('idle');
+  const [message, setMessage] = useState(null);
 
   const handleInput = e => {
     const value = e.target.value.trim();
@@ -40,11 +42,10 @@ const NFCField = ({ onRead, isOpen, onClose, result, message }) => {
 
       return () => clearTimeout(timeout);
     }
-  }, [result]);
 
-  useEffect(() => {
     if (result?.isError) {
       setStatus('failed');
+      setMessage(result?.message);
     }
   }, [result]);
 
@@ -63,6 +64,11 @@ const NFCField = ({ onRead, isOpen, onClose, result, message }) => {
       if (FormState?.errors?.saldo) {
         return 'Click the icon above to try again';
       }
+
+      if (message) {
+        return message;
+      }
+
       return 'The card could not be registered. It may be unreadable or already linked to another account.';
     }
     if (status === 'scanning') return 'Hold your card near the reader. Scanning in progress...';
@@ -97,11 +103,6 @@ const NFCField = ({ onRead, isOpen, onClose, result, message }) => {
           <p className="text-sm text-gray-600">{getSubtitle()}</p>
           <small className="text-error">{FormState?.errors?.card_id}</small>
           <small className="text-error">{FormState?.errors?.saldo}</small>
-          {message && (
-            <p className="mt-4 rounded bg-warning/10 px-4 py-3 text-sm font-medium text-warning">
-              {message}
-            </p>
-          )}
           <input
             id="nfc"
             ref={ref}

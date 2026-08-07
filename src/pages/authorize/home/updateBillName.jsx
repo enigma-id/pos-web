@@ -5,39 +5,50 @@ import { useSelector } from 'react-redux';
 import { Input, Modal } from '../../../components/ui';
 import useModal from '../../../components/ui/modal/hook';
 
-const UpdateTicket = ({ data, onSubmit, isLoading }) => {
+const UpdateBillName = ({ data, onSubmit, isLoading, onClose }) => {
   const FormState = useSelector(state => state?.Form);
   const { closeModal } = useModal();
-  const [ticket, setTicket] = React.useState('');
+  const [billName, setBillName] = React.useState('');
 
   useEffect(() => {
-    setTicket(data?.ticket);
+    setBillName(data?.bill_name || '');
   }, [data]);
 
   return (
     <>
-      <Modal.Header onClose={closeModal}>
-        <div className="text-lg font-semibold">Update Ticket</div>
+      <Modal.Header
+        onClose={() => {
+          onClose?.();
+          closeModal();
+        }}
+      >
+        <div className="text-lg font-semibold">Update Bill</div>
       </Modal.Header>
       <Modal.Body>
         <div className="mb-3 py-4">
           <Input
-            label="bill name"
-            value={ticket}
-            onChange={e => setTicket(e?.target?.value)}
-            error={FormState?.errors?.ticket}
+            label="Bill Name"
+            value={billName}
+            onChange={e => setBillName(e?.target?.value)}
+            error={FormState?.errors?.billName}
           />
         </div>
       </Modal.Body>
       <Modal.Footer>
-        <div className="btn btn-md px-10" onClick={closeModal}>
+        <div
+          className="btn btn-md px-10"
+          onClick={() => {
+            onClose?.();
+            closeModal();
+          }}
+        >
           Cancel
         </div>
         <div
           className={`btn btn-md btn-primary px-10 text-white ${isLoading ? 'btn-disabled' : ''}`}
-          onClick={() => onSubmit(ticket)}
+          onClick={() => onSubmit(billName)}
         >
-          Update Ticket{' '}
+          Update Bill{' '}
           {isLoading ? <span className="loading loading-spinner loading-sm"></span> : null}
         </div>
       </Modal.Footer>
@@ -45,4 +56,4 @@ const UpdateTicket = ({ data, onSubmit, isLoading }) => {
   );
 };
 
-export default UpdateTicket;
+export default UpdateBillName;

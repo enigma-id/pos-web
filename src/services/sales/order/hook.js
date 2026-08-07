@@ -1,14 +1,27 @@
-import { useEffect } from 'react';
-import { useDispatch } from 'react-redux';
+import { useEffect, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 
-import { useCancelMutation, useUpdateMutation, useLazyShowQuery } from './action';
+import {
+  useCancelMutation,
+  useUpdateMutation,
+  useLazyShowQuery,
+  useLazyHistoryQuery,
+  useCopyMutation,
+} from './action';
 import { $failure } from '../../form/action';
+import { getCache, setCache } from '../../../utils/cache';
+
+const HISTORY_CACHE_KEY = 'cache_order_history';
 
 const useOrder = id => {
   const dispatch = useDispatch();
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
   const [triggerShow, showResult] = useLazyShowQuery();
+  const [triggerHistory, historyResult] = useLazyHistoryQuery();
   const [cancelMutation, cancelResult] = useCancelMutation();
   const [updateMutation, updateResult] = useUpdateMutation();
+  const [copyMutation, copyResult] = useCopyMutation();
+  const [mergedHistoryData, setMergedHistoryData] = useState(null);
 
   const show = async id => {
     try {
@@ -18,6 +31,34 @@ const useOrder = id => {
         console.error('error:', error);
       }
     }
+  };
+
+  const history = async (params = {}) => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    const apiDead = apiReachable === false;
+    const searchCacheKey = `${HISTORY_CACHE_KEY}_search`;
+
+    if (!isOffline && !apiDead) {
+      try {
+        const res = await triggerHistory(params).unwrap();
+        const serverData = res?.data || [];
+
+        // Online search → simpan di cache search; online no-search → simpan di cache utama
+        if (params?.search) {
+          setCache(searchCacheKey, serverData);
+        } else {
+          setCache(HISTORY_CACHE_KEY, serverData);
+        }
+        setMergedHistoryData(serverData);
+        return;
+      } catch (error) {
+        // fetch error
+      }
+    }
+
+    // Offline — selalu baca cache utama, filter client
+    const cached = getCache(HISTORY_CACHE_KEY) || [];
+    setMergedHistoryData(cached);
   };
 
   const cancel = async ({ id, payload }) => {
@@ -40,6 +81,16 @@ const useOrder = id => {
     }
   };
 
+  const copy = async ({ id, payload }) => {
+    try {
+      const result = await copyMutation({ id, payload }).unwrap();
+      return result;
+    } catch (error) {
+      dispatch($failure(error));
+      throw error;
+    }
+  };
+
   useEffect(() => {
     if (!id) return;
 
@@ -50,10 +101,15 @@ const useOrder = id => {
   return {
     show,
     showResult,
+    history,
+    historyResult,
+    historyData: mergedHistoryData,
     cancel,
     cancelResult,
     update,
     updateResult,
+    copy,
+    copyResult,
   };
 };
 

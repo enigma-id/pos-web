@@ -42,7 +42,7 @@ const CopyOrder = ({ detail, orders, onClose, onSuccess }) => {
             <div className="text-base-300 text-sm">Source Order</div>
             <div className="mt-1 flex justify-between">
               <div>
-                <div className="font-medium">Bills Name: {detail?.ticket || '-'}</div>
+                <div className="font-medium">Bills Name: {detail?.bill_name || '-'}</div>
                 <div className="font-medium">Cashier: {detail?.session?.cashier?.name || '-'}</div>
                 <div className="text-base-300 text-xs">{detail?.code}</div>
               </div>
@@ -62,7 +62,7 @@ const CopyOrder = ({ detail, orders, onClose, onSuccess }) => {
                 .filter(o => o.id !== detail?.id)
                 .map(o => (
                   <option key={o.id} value={o.id}>
-                    {o.ticket || '-'} — {currencyFormat(o.total_charges)}
+                    {o.bill_name || '-'} — {currencyFormat(o.total_charges)}
                   </option>
                 ))}
             </select>

@@ -3,30 +3,46 @@ import React from 'react';
 import { useSelector } from 'react-redux';
 
 import { Input, Modal } from '../../../components/ui';
-import { SearchIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useCart from '../../../services/cart/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 
 const BillModal = ({ mode, count, onBillCreate }) => {
   const FormState = useSelector(state => state?.Form);
-  const { closeModal } = useModal();
-  const [ticket, setTicket] = React.useState('');
-  const { bill, billResult, onBillSelected } = useCart();
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
 
+  const isOffline = !isOnline || apiReachable === false;
+
+  const { closeModal } = useModal();
+  const [billName, setBillName] = React.useState('');
+  const { bill, billResult, billData, onBillSelected } = useCart();
+  const [errorBillName, setErrorBillName] = React.useState(null);
 
   React.useEffect(() => {
     if (mode === 'create') return;
     bill();
   }, [mode]);
 
-  const billData = billResult?.data?.data || [];
+  const onSubmit = () => {
+    if (isOffline) {
+      if (billName === '') {
+        setErrorBillName('Bill name harus diisi.');
+
+        return;
+      }
+    }
+
+    onBillCreate(billName);
+  };
+
+  const billList = billData || billResult?.data?.data || [];
 
   return (
     <>
       <Modal.Header onClose={closeModal}>
         <div className="text-lg font-semibold">
-          {mode === 'open' ? `Open Bills (${count})` : 'Save Bills'}
+          {mode === 'open' ? `Open Bills (${count})` : 'Save Bill'}
         </div>
       </Modal.Header>
       <Modal.Body full={mode === 'open'}>
@@ -46,7 +62,7 @@ const BillModal = ({ mode, count, onBillCreate }) => {
               />
             </div> */}
             <div className="min-h-0 flex-1 overflow-y-auto">
-              {billData?.map((bill, idx) => (
+              {billList?.map((bill, idx) => (
                 <div
                   key={idx}
                   className="border-base-200 flex cursor-pointer place-content-between place-items-center border-b p-4"
@@ -56,7 +72,12 @@ const BillModal = ({ mode, count, onBillCreate }) => {
                   }}
                 >
                   <div>
-                    <div className="font-semibold">{bill?.bill_name || "-"} </div>
+                    <div className="font-semibold">
+                      {bill?.bill_name || '-'}
+                      {bill?.is_synced === false && (
+                        <span className="badge badge-warning badge-xs ms-1">pending sync</span>
+                      )}
+                    </div>
                     <div className="text-xs">{dateFormat(bill?.created_at)}</div>
                   </div>
                   <div className="font-semibold">{currencyFormat(bill?.total_charges)}</div>
@@ -68,9 +89,9 @@ const BillModal = ({ mode, count, onBillCreate }) => {
           <div className="mb-3 py-4">
             <Input
               label="bill name"
-              value={ticket}
-              onChange={e => setTicket(e?.target?.value)}
-              error={FormState?.errors?.ticket}
+              value={billName}
+              onChange={e => setBillName(e?.target?.value)}
+              error={FormState?.errors?.billName || FormState?.errors?.items || errorBillName}
             />
           </div>
         )}
@@ -79,7 +100,7 @@ const BillModal = ({ mode, count, onBillCreate }) => {
         <Modal.Footer>
           <div
             className={`btn btn-block btn-primary btn-lg ${billResult?.isLoading ? 'btn-disabled' : ''}`}
-            onClick={() => onBillCreate(ticket)}
+            onClick={onSubmit}
           >
             Save Bill
             {billResult?.isLoading && <span className="loading loading-spinner loading-sm"></span>}
