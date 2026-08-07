@@ -747,6 +747,9 @@ const CheckoutScreen = () => {
       handleModalPrint(dataOfflineToOnline);
       dispatch(resetCart());
       setDiscountInputs([]);
+      setPaymentRef('');
+      setPay(0);
+      setBillName('');
     }
   };
 
@@ -770,14 +773,25 @@ const CheckoutScreen = () => {
   };
 
   const onPayOfflinePayAndDeleteBill = async dataOfflineToOnline => {
+    console.log('[DEBUG]', session?.user?.id);
     try {
       await createOrderPayment(dataOfflineToOnline, session?.user?.id);
+    } catch (err) {
+      handleModalError();
+      dispatch($failure(err));
+      console.error('[SAVE ON PAY AND Delete Bill] create order payment error:', err);
 
+      return;
+    }
+
+    try {
       // kita hapus delete order bill jika ada di IDB
       await deleteOrderBill(CartState?.bill?.sync_id, session?.user?.id);
     } catch (err) {
       handleModalError();
       dispatch($failure(err));
+      console.error('[SAVE ON PAY AND Delete Bill] delete order bills error:', err);
+
       return;
     }
 
@@ -786,7 +800,7 @@ const CheckoutScreen = () => {
       await saveOrderHistory(dataOfflineToOnline);
     } catch (err) {
       handleModalError();
-      console.error('[SAVE ON PAY AND Delete Bill] cache error:', err);
+      console.error('[SAVE ON PAY AND Delete Bill] save order payment cache error:', err);
     }
 
     // delete open bill ke localStorage delete bill cache
@@ -794,7 +808,7 @@ const CheckoutScreen = () => {
       await deleteOpenBills(dataOfflineToOnline);
     } catch (err) {
       handleModalError();
-      console.error('[SAVE ON PAY AND Delete Bill] cache error:', err);
+      console.error('[SAVE ON PAY AND Delete Bill] delete open bill cache error:', err);
     }
 
     triggerQueueRefresh();
@@ -826,6 +840,7 @@ const CheckoutScreen = () => {
     } catch (err) {
       handleModalError();
       dispatch($failure(err));
+      console.error('[SAVE ON PAY AND Split Bill] create order payment error:', err);
       return;
     }
 
@@ -834,7 +849,7 @@ const CheckoutScreen = () => {
       saveOrderHistory(dataOfflineToOnline);
     } catch (err) {
       handleModalError();
-      console.error('[SAVE ON PAY AND Update Bill] cache error:', err);
+      console.error('[SAVE ON PAY AND Split Bill] create order payment cache error:', err);
     }
 
     const dataOfflineToOnlineUpdated = makeUpdatePendingBillFromSplitBill(
@@ -848,6 +863,8 @@ const CheckoutScreen = () => {
       handleModalError();
       dispatch($failure(err));
 
+      console.error('[SAVE ON PAY AND Split Bill] update order bill error:', err);
+
       return;
     }
 
@@ -858,6 +875,7 @@ const CheckoutScreen = () => {
       updateOpenBills(dataOfflineToOnlineUpdated);
     } catch (err) {
       handleModalError();
+      console.error('[SAVE ON PAY AND Split Bill] update order bill cache error:', err);
     }
 
     // 🔁 Update sessionSummary incremental
@@ -1112,6 +1130,9 @@ const CheckoutScreen = () => {
       }
 
       setDiscountInputs([]);
+      setPaymentRef('');
+      setPay(0);
+      setBillName('');
       closeBillResult?.reset();
       checkoutResult?.reset();
     }
