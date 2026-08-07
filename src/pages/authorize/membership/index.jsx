@@ -168,18 +168,6 @@ const MembershipScreen = () => {
           <div className="flex-1 overflow-x-auto">
             <div className="flex h-full place-content-end place-items-center gap-2">
               <div
-                className="btn bg-primary/15 text-primary h-full rounded-none border-0 px-4"
-                onClick={() => navigate('/membership/create-manual')}
-              >
-                <EditIcon /> Create (Manual)
-              </div>
-              <div
-                className="btn bg-primary/15 text-primary h-full rounded-none border-0 px-4"
-                onClick={() => navigate('/membership/topup-manual')}
-              >
-                <CardSearchIcon /> Topup (Manual)
-              </div>
-              <div
                 className="btn bg-primary/15 text-primary h-full rounded-none border-0 px-6"
                 onClick={onScan}
               >
