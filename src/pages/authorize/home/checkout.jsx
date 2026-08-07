@@ -1119,15 +1119,7 @@ const CheckoutScreen = () => {
       // Ambil data berdasarkan mana yang sukses
       const data = isCheckoutSuccess ? checkoutResult?.data?.data : closeBillResult?.data?.data;
 
-      // Cek QRIS khusus untuk checkout yang sukses
-      if (selectedMethod?.provider === 'qris') {
-        setTimeout(() => {
-          // Sesuaikan durasi timeout dengan komentar (misal 1 detik -> 1000)
-          show(data?.id);
-        }, 1000);
-      } else {
-        show(data?.id);
-      }
+      show(data?.id);
 
       setDiscountInputs([]);
       setPaymentRef('');
