@@ -10,13 +10,19 @@ function flattenAdditionals(additionals = []) {
   const result = [];
 
   additionals.forEach(add => {
-    const { id: addon_group_id, type, items = [] } = add;
+    const { id: addonGroupId, type, name: addonGroupName, items = [] } = add;
 
     items.forEach(child => {
       const isSelected = type === 'quantity' ? (child.quantity || 0) > 0 : !!child.selected;
 
       if (isSelected) {
-        const entry = { addon_group_id, addon_item_id: child.addon_item_id ?? child.id };
+        const entry = {
+          addon_group: { id: addonGroupId, name: addonGroupName || '', type: type || '' },
+          addon_group_id: addonGroupId,
+          addon_item_id: child.catalog_id ?? child.addon_item_id ?? child.id,
+          name: child.catalog_name ?? child.name,
+          unit_nett: Number(child.unit_nett ?? 0) || 0,
+        };
 
         if (child.addon_item_id) {
           entry.id = child.id;
@@ -38,14 +44,14 @@ function extractUniqueCategories(items) {
     const cat = { id: item.category_id, name: item.category_name };
 
     const discountType =
-      item?.discount_amount > 0 ? (item.is_discount_percentage ? 'percentage' : 'nominal') : null;
+      item?.unit_discount > 0 ? (item.is_discount_percentage ? 'percentage' : 'nominal') : null;
 
     const discoutnValue =
       discountType === null
         ? null
         : discountType === 'percentage'
           ? item?.discount_percentage
-          : item?.discount_amount;
+          : item?.unit_discount;
 
     if (cat?.id !== null) {
       if (!map.has(cat.id)) {
@@ -70,30 +76,40 @@ function extractUniqueCategories(items) {
   return Array.from(map.values());
 }
 
+// getCategoryDiscount ini result-nya adalah data discount (is_discount_percentage, discount_value, discount_percentage, unit_discount)
 function getCategoryDiscount(item, itemCategories) {
   const cat = { id: item.category_id, name: item.category_name };
   const found = itemCategories.find(c => c.id === cat?.id);
-  if (!found) return 0;
+  if (!found) return null;
 
   const { discount_type, discount_value } = found;
-  if (!discount_type || !discount_value) return 0;
+  if (!discount_type || !discount_value) return null;
+
+  const result = {
+    is_discount_percentage: discount_type === 'percentage' ? true : false,
+    discount_percentage: discount_type === 'percentage' ? discount_value : 0,
+    discount_value: discount_type === 'percentage' ? 0 : discount_value,
+    unit_discount: 0,
+  };
 
   if (discount_type === 'percentage') {
-    return Math.floor(item.unit_price * (discount_value / 100));
+    result.unit_discount = Math.ceil(item.unit_nett * (discount_value / 100));
   }
 
   if (discount_type === 'nominal') {
-    return Math.floor(discount_value > item?.unit_price ? item?.unit_price : discount_value);
+    result.unit_discount = Math.ceil(
+      discount_value > item?.unit_nett ? item?.unit_nett : discount_value
+    );
   }
 
-  return 0;
+  return result;
 }
 
 function calculateCartLevelDiscount(subtotal, type, value) {
   if (!type || !value) return 0;
 
   if (type === 'percentage') {
-    return Math.floor((subtotal * value) / 100);
+    return Math.ceil((subtotal * value) / 100);
   }
 
   if (type === 'nominal') {
@@ -111,12 +127,17 @@ function recalculateTotals(state) {
   const allItems = getAllItems(state);
 
   const itemWithDiscounts = allItems.map(item => {
-    const discount = getCategoryDiscount(item, state.discount.category);
+    const resultDiscount = getCategoryDiscount(item, state.discount.category);
+    let unit_discount = 0;
+    if (resultDiscount) {
+      unit_discount = resultDiscount.unit_discount;
+    }
 
     return {
       ...item,
-      discount_amount: discount,
-      final_total: Math.max(0, item.subtotal - discount * item?.quantity),
+      ...resultDiscount,
+      unit_discount: unit_discount,
+      final_total: Math.max(0, item.subtotal - unit_discount * item?.quantity),
     };
   });
 
@@ -151,10 +172,9 @@ function convertApiOrderToCartItem(item) {
   const groupedAdditionals = {};
 
   for (const add of item.addons || []) {
-    const addon = add.addon || {};
-    const addonId = addon.id || add.addon_group_id;
+    const group = add.addon_group || {};
+    const addonId = group.id;
 
-    // Flat order response (no group metadata) → group under shared sentinel
     if (!addonId) {
       if (!groupedAdditionals._flat_addons_) {
         groupedAdditionals._flat_addons_ = {
@@ -164,13 +184,11 @@ function convertApiOrderToCartItem(item) {
           items: [],
         };
       }
-      const qty = add.quantity > 0 ? add.quantity / item.quantity : 1;
       groupedAdditionals._flat_addons_.items.push({
-        id: add.id || add.catalog_id,
+        id: add.catalog_id,
         catalog_id: add.catalog_id,
-        name: add.catalog_name || '',
-        unit_price: add.unit_nett || add.unit_price || 0,
-        quantity: qty,
+        name: add.catalog_name || add.catalog?.name || '',
+        unit_nett: add.unit_nett || 0,
         selected: true,
       });
       continue;
@@ -179,63 +197,67 @@ function convertApiOrderToCartItem(item) {
     if (!groupedAdditionals[addonId]) {
       groupedAdditionals[addonId] = {
         id: addonId,
-        name: addon.name || add.name || '',
-        type: addon.type || add.addon_type || '',
+        name: group.name || '',
+        type: group.type || '',
         items: [],
       };
     }
 
-    const qty = add.quantity > 0 ? add.quantity / item.quantity : 0;
-    const addCatalog = add.catalog || {};
-
-    groupedAdditionals[addonId].items.push({
+    const grpEntry = {
       id: add.id,
-      catalog_id: addCatalog.id || add.catalog_id,
-      name: addCatalog.name || add.name || add.catalog_name || '',
-      unit_price: addCatalog.unit_price || add.unit_nett || add.unit_price || 0,
-      quantity: qty,
+      catalog_id: add.catalog?.id || add.catalog_id,
+      name: add.catalog_name || add.catalog?.name || '',
+      unit_nett: add.unit_nett || 0,
       selected: true,
-    });
+      // options/checkbox → qty=1, quantity → add.quantity / item.quantity
+      quantity: add.quantity / item.quantity,
+    };
+    groupedAdditionals[addonId].items.push(grpEntry);
   }
 
   const additionalsGrouped = Object.values(groupedAdditionals);
 
-  const additionalsFlat = (item.addons || []).map(add => ({
-    id: add.id,
-    addon_group_id: add.addon?.id || add.addon_group_id || add.id,
-    addon_item_id: add.catalog?.id || add.catalog_id || add.addon_item_id,
-    quantity: add.quantity > 0 ? add.quantity / item.quantity : 1,
-  }));
+  const additionalsFlat = (item.addons || []).map(add => {
+    const addonGroup = add.addon_group || {};
+    const grpType = addonGroup.type || '';
+    const entry = {
+      addon_group: {
+        id: addonGroup.id || add.addon_group_id,
+        name: addonGroup.name || '',
+        type: grpType,
+      },
+      addon_group_id: addonGroup.id || add.addon_group_id,
+      addon_item_id: add.catalog?.id || add.catalog_id,
+      name: add.catalog_name || add.catalog?.name || '',
+      unit_nett: Number(add.unit_nett ?? 0) || 0,
+      quantity: add.quantity / item.quantity,
+    };
+    return entry;
+  });
 
   const additionalPerItem = calculateAdditionalsPerItem(additionalsGrouped);
   const subtotal = (item.unit_nett + additionalPerItem) * item.quantity;
 
   return {
-    id: item.id,
+    // ini convertion dari id saels order item
+    order_item_id: item?.id,
     category_id: item.catalog?.category_id,
-    category_name: item?.category_name,
-    brand_id: item.catalog.brand_id,
-    ref_id: item.catalog.ref_id,
-    code: item.catalog.code,
-    name: item.catalog.name || item?.description,
-    base_price: item.catalog.base_price,
-    image: item.catalog.image,
-    is_custom: item.catalog.is_custom,
-    is_vatable: item.catalog.is_vatable,
-    is_active: item.catalog.is_active,
-    is_additional: item.catalog.is_additional,
-    is_deleted: item.catalog.is_deleted,
-    unit_price: item.unit_nett,
+    category_name: item.category_name,
+    code: item.catalog?.code,
+    name: item.catalog_name || item.catalog?.name || '',
+    image: item.catalog?.image,
+    is_custom: !!item.catalog?.is_custom,
+    unit_nett: item.unit_nett || 0,
     quantity: item.quantity,
     subtotal,
-    catalog_id: item.catalog.id,
+    catalog_id: item.catalog?.id,
     addons: additionalsGrouped,
     additionals_flat: additionalsFlat,
-    discount_amount: item.discount_value || 0,
-    discount_percentage: item.discount || 0,
-    final_total: item.unit_bill * item.quantity,
+    unit_discount: item.discount_value || 0,
+    discount_percentage: item.discount_percentage || 0,
+    final_total: item.unit_bill ? item.unit_bill * item.quantity : subtotal,
     from_bill: true,
-    is_discount_percentage: item.is_discount_percentage,
+    is_discount_percentage: !!item.is_discount_percentage,
   };
 }
 
@@ -246,17 +268,18 @@ function calculateAdditionalsPerItem(additionals = []) {
     return (
       total +
       items.reduce((sum, child) => {
-        return sum + (child.unit_price || 0) * (child.quantity || 0);
+        return sum + (child.unit_nett || 0) * (child.quantity || 0);
       }, 0)
     );
   }, 0);
 }
 
 function recalculateGrandTotalWithServiceCharge(state) {
+  const baseGrandTotal = Math.max(0, state.meta.subtotal - state.discount.cart.amount);
+
   if (state.meta.service_charge_percentage > 0) {
-    state.meta.service_charge_value = Math.floor(
-      (state.meta.subtotal - state.discount.cart.amount) *
-        (state.meta.service_charge_percentage / 100)
+    state.meta.service_charge_value = Math.ceil(
+      baseGrandTotal * (state.meta.service_charge_percentage / 100)
     );
   } else {
     // If percentage is 0, preserve existing value if it was set manually from preview
@@ -266,70 +289,7 @@ function recalculateGrandTotalWithServiceCharge(state) {
     }
   }
 
-  state.meta.grand_total += state.meta.service_charge_value;
-}
-
-// Convert offline queue item (open-bill) to cart item format
-function convertOfflineQueueItemToCartItem(item) {
-  const additionalsGrouped = {};
-  const rawAdditionals = Array.isArray(item?.addons) ? item.addons : [];
-
-  rawAdditionals.forEach(add => {
-    const addon = add.addon || {};
-    const addonId = addon.id || add.addon_group_id;
-    if (!addonId) return;
-
-    if (!additionalsGrouped[addonId]) {
-      additionalsGrouped[addonId] = {
-        id: addonId,
-        name: addon.name || add.name || '',
-        type: addon.type || add.addon_type || '',
-        items: [],
-      };
-    }
-
-    const addCatalog = add.catalog || {};
-    additionalsGrouped[addonId].items.push({
-      id: add?.id,
-      catalog_id: addCatalog.id || add?.catalog_id,
-      name: addCatalog.name || add?.name || '',
-      unit_price: addCatalog.unit_price || add?.unit_nett || 0,
-      quantity: add?.quantity || 1,
-      selected: true,
-    });
-  });
-
-  const additionalsFlat = rawAdditionals.map(add => ({
-    addon_group_id: add.addon?.id || add?.addon_group_id,
-    addon_item_id: add.catalog?.id || add?.addon_item_id,
-    quantity: add?.quantity || 1,
-  }));
-
-  const unitPrice = Number(item?.unit_price ?? item?.unit_nett) || 0;
-  const qty = Number(item?.quantity) || 1;
-
-  const additionalsGroupedArray = Object.values(additionalsGrouped);
-  const additionalPerItem = calculateAdditionalsPerItem(additionalsGroupedArray);
-  const subtotal = (unitPrice + additionalPerItem) * qty;
-
-  return {
-    id: item?.id || Date.now(),
-    catalog_id: item?.catalog_id,
-    category: item?.category || { id: item?.category_id || 0 },
-    name: item?.catalog_name || item?.name || 'Item',
-    unit_price: unitPrice,
-    quantity: qty,
-    subtotal,
-    final_total: subtotal,
-    is_custom: item?.is_custom || false,
-    is_vatable: item?.is_vatable || false,
-    addons: additionalsGroupedArray,
-    additionals_flat: additionalsFlat,
-    discount_amount: 0,
-    discount_percentage: 0,
-    from_bill: true,
-    from_offline_queue: true,
-  };
+  state.meta.grand_total = baseGrandTotal + state.meta.service_charge_value;
 }
 
 // Initial State
@@ -376,7 +336,7 @@ const cartSlice = createSlice({
             !item.from_bill &&
             item.is_custom === true &&
             item.name?.trim().toLowerCase() === catalog.name?.trim().toLowerCase() &&
-            item.unit_price === catalog.unit_price
+            item.unit_nett === catalog.unit_nett
         );
       } else {
         existingIndex = state.items.list.findIndex(
@@ -420,7 +380,7 @@ const cartSlice = createSlice({
           ...state.items.list[key],
           name: catalog.name,
           quantity: catalog.quantity,
-          unit_price: catalog.unit_price,
+          unit_nett: catalog.unit_nett,
           addons: catalog.addons,
           additionals_flat: flattenAdditionals(catalog.addons),
           subtotal: catalog.subtotal,
@@ -497,7 +457,18 @@ const cartSlice = createSlice({
     },
 
     setBillItems: (state, action) => {
-      const { items, category_discounts } = action.payload;
+      const raw = action.payload;
+      let items, category_discounts;
+
+      if (Array.isArray(raw)) {
+        items = raw;
+        category_discounts = undefined;
+      } else if (raw && Array.isArray(raw.items)) {
+        items = raw.items;
+        category_discounts = raw.category_discounts;
+      } else {
+        return;
+      }
 
       state.items.bill = items.map(item => convertApiOrderToCartItem(item));
 
@@ -519,8 +490,9 @@ const cartSlice = createSlice({
           };
         });
       } else {
-        state.discount.category = extractUniqueCategories(allItems);
       }
+
+      state.discount.category = extractUniqueCategories(allItems);
 
       recalculateTotals(state);
     },
@@ -533,7 +505,7 @@ const cartSlice = createSlice({
           ...state.items.bill[key],
           name: catalog.name,
           quantity: catalog.quantity,
-          unit_price: catalog.unit_price,
+          unit_nett: catalog.unit_nett,
           addons: catalog.addons,
           additionals_flat: flattenAdditionals(catalog.addons),
           subtotal: catalog.subtotal,
@@ -564,61 +536,8 @@ const cartSlice = createSlice({
       recalculateTotals(state);
     },
 
-    loadOfflineBill: (state, action) => {
-      const queueItem = action.payload;
-      const preview = queueItem?.transaction_preview || {};
-      const body = queueItem?.body || {};
-
-      // Set bill metadata from preview, falling back to body
-      state.bill = {
-        id: preview?.id,
-        bill_name: preview?.bill_name || body?.bill_name || '',
-        total_bill: preview?.total_charges || preview?.total_bill || 0,
-        membership:
-          preview?.membership || (body?.membership_id ? { id: body.membership_id } : null),
-        from_offline_queue: true,
-        queue_id: queueItem?.id,
-      };
-
-      // Reset cart items
-      state.items.list = [];
-      state.items.bill = [];
-
-      // Use items from transaction_preview if available (they are in Order Item format)
-      if (Array.isArray(preview?.items) && preview.items.length > 0) {
-        state.items.bill = preview.items.map(item => convertApiOrderToCartItem(item));
-      } else {
-        // Fallback to body items (raw format)
-        const rawItems = Array.isArray(body?.items) ? body.items : [];
-        state.items.bill = rawItems.map(item => convertOfflineQueueItemToCartItem(item));
-      }
-
-      state.items.count = 0; // bill items don't count as new items
-
-      // Set customer
-      if (preview?.membership) {
-        state.meta.customer = preview.membership;
-      } else if (body?.membership_id) {
-        state.meta.customer = { id: body.membership_id };
-      }
-
-      // Apply cart discount
-      const isPercentage = preview?.is_discount_percentage || body?.discount_percentage > 0;
-      const discountVal =
-        preview?.discount_value || body?.discount_percentage || body?.discount_value || 0;
-
-      if (discountVal > 0) {
-        state.discount.cart = {
-          type: isPercentage ? 'percentage' : 'nominal',
-          value: discountVal,
-          amount: 0,
-        };
-      }
-
-      // Extract categories and recalculate
-      const allItems = [...state.items.list, ...state.items.bill];
-      state.discount.category = extractUniqueCategories(allItems);
-      recalculateTotals(state);
+    changeBillName: (state, action) => {
+      state.bill.bill_name = action.payload;
     },
   },
 });
@@ -636,7 +555,7 @@ export const {
   setBillItems,
   changeBillItem,
   removeBillItem,
-  loadOfflineBill,
+  changeBillName,
 } = cartSlice.actions;
 
 export const cartReducer = cartSlice.reducer;

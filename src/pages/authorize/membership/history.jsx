@@ -1,16 +1,19 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { LuWallet } from 'react-icons/lu';
 
-import CardMockup from '../../../assets/card-mockup.jpg';
-import { NFCField, OrderDetails, Remove } from '../../../components/ui';
-import { PaypassIcon, WalletIcon } from '../../../components/ui/icon';
-import Input from '../../../components/ui/input';
+import { OrderDetails } from '../../../components/ui';
 import useMembership from '../../../services/membership/hook';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
+import { useSelector } from 'react-redux';
 
-const HistorySection = ({ id }) => {
+const HistorySection = ({ id, membership }) => {
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+
+  const isOffline = !isOnline || apiReachable === false;
+
   const [logs, setLogs] = React.useState([]);
   const [page, setPage] = React.useState(1);
   const [hasMore, setHasMore] = React.useState(true);
@@ -26,7 +29,7 @@ const HistorySection = ({ id }) => {
   const processedIdsRef = React.useRef(new Set());
   const hasMoreRef = React.useRef(true);
 
-  const { saldoLog, showResult, saldoLogResult } = useMembership(id);
+  const { saldoLog, show: showMember, showResult, saldoLogResult } = useMembership();
   const { show: orderShow, showResult: orderShowResult } = useOrder();
 
   const LIMIT = 25;
@@ -36,19 +39,19 @@ const HistorySection = ({ id }) => {
     setPage(1);
     setHasMore(true);
     processedIdsRef.current.clear();
-  }, [id, showResult]);
+  }, [showResult]);
 
   // Fetch history
   React.useEffect(() => {
     if (showResult.isSuccess) {
       const params = {
         page,
-        limit: LIMIT
-      }
+        limit: LIMIT,
+      };
 
       saldoLog({ id, params });
     }
-  }, [showResult, id, page]);
+  }, [showResult, page]);
 
   React.useEffect(() => {
     if (saldoLogResult?.isSuccess) {
@@ -173,9 +176,21 @@ const HistorySection = ({ id }) => {
     }
   }, [orderShowResult?.isSuccess, orderShowResult?.data, selectedOrderId]);
 
+  useEffect(() => {
+    if (isOffline) {
+      setLogs(membership?.saldo_logs || []);
+    }
+  }, [isOffline, membership?.card_id]);
+
+  useEffect(() => {
+    if (!isOffline && membership?.id) {
+      showMember(membership?.id);
+    }
+  }, [membership?.card_id]);
+
   if (showResult?.isLoading) return <div>loading...</div>;
 
-  const data = showResult?.data?.data;
+  const data = showResult?.data?.data || membership;
 
   if (selectedOrder) {
     return (
@@ -252,11 +267,9 @@ const HistorySection = ({ id }) => {
             </span>
           </div>
 
-          {/* Description */}
+          {/* Payment Type */}
           <p className="text-sm leading-snug text-gray-600 capitalize">
-            {item?.reference_type === 'bonus' || item?.reference_type === 'top-up'
-              ? `${item?.payment_type}`
-              : ''}
+            {item?.payment_type ? `${item?.payment_type} - ` : ''} {item?.reference_code}
           </p>
 
           {/* Date */}

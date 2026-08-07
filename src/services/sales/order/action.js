@@ -28,7 +28,27 @@ export const salesOrderApi = createApi({
         },
       }),
     }),
+    history: builder.query({
+      query: (params = {}) => ({
+        url: '/sales/order/history',
+        method: 'GET',
+        params,
+      }),
+    }),
+    copy: builder.mutation({
+      query: ({ id, payload }) => ({
+        url: `/sales/order/${id}/copy`,
+        method: 'POST',
+        body: payload,
+      }),
+    }),
   }),
 });
 
-export const { useLazyShowQuery, useCancelMutation, useUpdateMutation } = salesOrderApi;
+export const {
+  useLazyShowQuery,
+  useCancelMutation,
+  useUpdateMutation,
+  useCopyMutation,
+  useLazyHistoryQuery,
+} = salesOrderApi;

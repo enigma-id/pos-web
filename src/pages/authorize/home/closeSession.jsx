@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { store } from '../../../services/store';
 
 import { Input, Modal, Summary } from '../../../components/ui';
 import { BackIcon } from '../../../components/ui/icon';
@@ -8,23 +9,35 @@ import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useAuth from '../../../services/auth/hook';
 import useSession from '../../../services/sales/session/hook';
-import { syncNow, clearQueue, getPendingCount } from '../../../services/offline';
+import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
+import { resetSummary } from '../../../services/sales/session/slice';
+import { makeEndSession } from '../../../services/offline/shapes';
+import { closeSession } from '../../../services/offline';
+import { updateShifts } from '../../../utils/cache';
 
 const CloseSection = () => {
-  const { summary, summaryResult, end, endResult } = useSession();
-  const pendingCount = useSelector(state => state?.Offline?.pendingCount || 0);
-  const userId = useSelector(state => state?.Auth?.session?.user?.id);
+  const dispatch = useDispatch();
+
+  const sessionSummary = useSelector(state => state?.SalesSession?.sessionSummary);
+  const session = useSelector(s => s.Auth?.session);
+
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+
+  const isOffline = !isOnline || apiReachable === false;
+
+  const { summary, end, endResult } = useSession();
   const { onLogout } = useAuth();
 
   const { showCart } = useSidebar();
   const { openModal, closeModal } = useModal();
-  const [syncing, setSyncing] = React.useState(false);
 
   const { open } = usePrintWindow({
     title: 'Print Preview',
     autoClose: true,
+    onClose: !isOffline ? onLogout : undefined,
   });
 
   const [cash, setCash] = React.useState('');
@@ -34,79 +47,96 @@ const CloseSection = () => {
     open(<Summary data={v} />);
   };
 
-  const doEndSession = () => {
+  const onCloseOffline = async () => {
+    const payload = {
+      ...sessionSummary,
+      cash_finished: Number(cash),
+      status: 'closed',
+      finished_at: new Date(),
+    };
+
+    const dataOfflineToOnline = makeEndSession(payload);
+
+    try {
+      await closeSession(dataOfflineToOnline, session?.user?.id);
+    } catch (err) {
+      handleModalError();
+    }
+
+    triggerQueueRefresh();
+
+    try {
+      updateShifts(dataOfflineToOnline);
+    } catch (err) {
+      handleModalError();
+    }
+
+    handleOpenPrintSummary(dataOfflineToOnline);
+    dispatch(resetSummary());
+  };
+
+  const onCloseOnline = async () => {
     const payload = { cash_finished: Number(cash) };
     end(payload);
   };
 
-  const showFailoverModal = (count = pendingCount) => {
+  const doOnClose = async () => {
+    if (isOffline) {
+      onCloseOffline();
+    } else {
+      onCloseOnline();
+    }
+  };
+
+  const handleModalError = () => {
     openModal(
       <>
         <Modal.Header onClose={closeModal}>
-          <div className="text-[16px] font-semibold tracking-wide">Pending Sync Warning</div>
+          <div className="text-lg font-semibold">Can't save</div>
+        </Modal.Header>
+        <Modal.Body full>
+          <div className="flex place-content-center place-items-center">
+            <img src="./error.png" className="h-64" />
+          </div>
+          <div className="-mt-5 pb-4 text-center">
+            <p className="text-base-300 text-xs">Try another</p>
+          </div>
+        </Modal.Body>
+      </>,
+
+      'w-md'
+    );
+  };
+
+  const openEndSessionConfirm = () => {
+    openModal(
+      <>
+        <Modal.Header onClose={closeModal}>
+          <div className="text-[16px] font-semibold tracking-wide">End Session</div>
         </Modal.Header>
         <Modal.Body>
-          <div className="p-6">
-            <div className="mb-4 text-sm">
-              There are <b>{count}</b> transaction(s) that couldn't be synced.
-              Ending session now will remove these pending transactions.
+          <div className="p-6 text-center">
+            <div className="mb-4 text-[16px] font-semibold tracking-wide">
+              Are you sure to end this session?
             </div>
-            <div className="flex place-content-end gap-3">
-              <button className="btn btn-outline" onClick={closeModal}>
-                Cancel
-              </button>
-              <button
-                className="btn btn-outline"
+            <div className="flex place-content-center place-items-center gap-4">
+              <div
+                className="btn btn-primary btn-lg px-6 text-white"
                 onClick={() => {
-                  setSyncing(true);
-                  handleTrySync();
-                }}
-              >
-                Try Again
-              </button>
-              <button
-                className="btn btn-warning"
-                onClick={async () => {
                   closeModal();
-                  await clearQueue(userId);
-                  doEndSession();
+                  doOnClose();
                 }}
               >
-                Close Anyway
-              </button>
+                Yes
+              </div>
+              <div className="btn btn-outline btn-lg px-6" onClick={closeModal}>
+                Cancel
+              </div>
             </div>
           </div>
         </Modal.Body>
       </>
     );
-  };
-
-  const handleTrySync = async () => {
-    try {
-      await syncNow();
-    } catch {
-      // sync failed silently
-    }
-    setSyncing(false);
-
-    // Re-check queue after sync attempt
-    const remaining = await getPendingCount(userId);
-    if (remaining > 0) {
-      showFailoverModal(remaining);
-    } else {
-      doEndSession();
-    }
-  };
-
-  const onSubmit = async () => {
-    if (pendingCount > 0) {
-      // Option 1: Try sync first
-      setSyncing(true);
-      await handleTrySync();
-      return;
-    }
-
-    doEndSession();
   };
 
   const openLogout = () => {
@@ -132,16 +162,17 @@ const CloseSection = () => {
     );
   };
 
+  // Summary fetch
   React.useEffect(() => {
     summary();
   }, []);
 
+  // Trigger print untuk online end
   React.useEffect(() => {
-    if (endResult?.isSuccess) {
-      handleOpenPrintSummary(endResult?.data?.data);
+    if (endResult?.isSuccess && endResult?.data?.data) {
+      handleOpenPrintSummary(endResult.data.data);
     }
   }, [endResult]);
-
 
   const List = ({ title, value }) => {
     return (
@@ -152,7 +183,7 @@ const CloseSection = () => {
     );
   };
 
-  const data = summaryResult?.data?.data;
+  const data = sessionSummary;
 
   return (
     <div className="border-base-200 bg-base-100 flex h-screen flex-col border-l">
@@ -173,12 +204,14 @@ const CloseSection = () => {
       </div>
 
       <div className="mt-4 flex-1 overflow-y-auto px-6 py-4">
+        {isOffline && (
+          <div className="bg-warning/10 text-warning mb-3 rounded-md p-3 text-sm">
+            Offline mode — summary data will be complete after sync.
+          </div>
+        )}
         <List title="Session Started" value={dateFormat(data?.started_at)} />
         <List title="Cashier" value={data?.cashier?.name} />
-        <List
-          title="Starting Cash"
-          value={currencyFormat(data?.cash_started || 0)}
-        />
+        <List title="Starting Cash" value={currencyFormat(data?.cash_started || 0)} />
         <List
           title="Outstanding Bill Payments"
           value={currencyFormat(data?.summary?.sales?.outstanding_bill_payment || 0)}
@@ -187,49 +220,37 @@ const CloseSection = () => {
           title="Outstanding Bills"
           value={currencyFormat(data?.summary?.sales?.outstanding_bill || 0)}
         />
-        <List
-          title="Total Sales"
-          value={currencyFormat(data?.summary?.sales?.total_sales || 0)}
-        />
+        <List title="Total Sales" value={currencyFormat(data?.summary?.sales?.total_sales || 0)} />
         <List
           title="Total Discount"
           value={currencyFormat(data?.summary?.sales?.total_discount || 0)}
         />
         <List
           title="Total After Discount"
-          value={currencyFormat(
-            data?.summary?.sales?.total_after_discount || 0
-          )}
+          value={currencyFormat(data?.summary?.sales?.total_after_discount || 0)}
         />
         <List
           title="Total Service"
-          value={currencyFormat(
-            data?.summary?.sales?.total_service || 0
-          )}
+          value={currencyFormat(data?.summary?.sales?.total_service || 0)}
         />
-        <List
-          title="Grand Total"
-          value={currencyFormat(data?.summary?.sales?.grand_total || 0)}
-        />
+        <List title="Grand Total" value={currencyFormat(data?.summary?.sales?.grand_total || 0)} />
 
         {data?.summary?.topups?.length > 0 && (
           <div className="bg-accent mb-3 rounded-md p-3">
             {data?.summary?.topups?.map((t, i) => (
-              <List key={i} title={`Topup ${t?.type}`} value={currencyFormat(t?.total_nominal || 0)} />
+              <List
+                key={i}
+                title={`Topup ${t?.type}`}
+                value={currencyFormat(t?.total_nominal || 0)}
+              />
             ))}
           </div>
         )}
 
-        {data?.summary?.payment_methods
-?.length > 0 && (
+        {data?.summary?.payment_methods?.length > 0 && (
           <div className="bg-accent mb-3 rounded-md p-3">
-            {data?.summary?.payment_methods
-?.map((pm, i) => (
-              <List
-                key={i}
-                title={pm?.name}
-                value={currencyFormat(pm?.total_paid || 0)}
-              />
+            {data?.summary?.payment_methods?.map((pm, i) => (
+              <List key={i} title={pm?.name} value={currencyFormat(pm?.total_paid || 0)} />
             ))}
           </div>
         )}
@@ -257,11 +278,12 @@ const CloseSection = () => {
 
       <div className="border-base-200 min-h-15 border-t">
         <button
-          className={`btn btn-block btn-xl btn-primary rounded-none ${endResult?.isLoading || syncing ? 'btn-disabled' : ''}`}
-          onClick={onSubmit}
+          className={`btn btn-block btn-xl btn-primary rounded-none ${endResult?.isLoading ? 'btn-disabled' : ''}`}
+          onClick={openEndSessionConfirm}
+          disabled={endResult?.isLoading}
         >
-          {syncing ? 'Syncing pending transactions...' : 'End Session'}
-          {(endResult?.isLoading || syncing) && <span className="loading loading-spinner"></span>}
+          End Session
+          {endResult?.isLoading && <span className="loading loading-spinner"></span>}
         </button>
       </div>
     </div>

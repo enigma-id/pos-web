@@ -1,83 +1,103 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import CardContent from './card.content';
 import DrawerCreate from './drawer.create';
 import DrawerDetail from './drawer.detail';
-import createTableConfig from './table.config';
 import { Drawer, Modal, NFCField } from '../../../components/ui';
-import { CardSearchIcon, PlusIcon } from '../../../components/ui/icon';
+import {
+  CardSearchIcon,
+  PlusIcon,
+  EditIcon,
+  SearchIcon,
+  WalletIcon,
+} from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
-import useTable from '../../../components/ui/table';
 import useMembership from '../../../services/membership/hook';
-import { getCache, getMemberCache, setMemberCache } from '../../../utils/cache';
+import { showMembership } from '../../../utils/cache';
 import useDrawer from '../../../utils/drawer';
-
-const TABLE_CACHE_KEY = 'cache_table_membership';
+import { useSelector } from 'react-redux';
+import { currencyFormat } from '../../../utils/common';
 
 const MembershipScreen = () => {
-  const {  open: openDrawer, isOpen: drawerOpen } = useDrawer();
+  const navigate = useNavigate();
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+  const lastSyncTime = useSelector(state => state?.Offline?.lastSyncTime);
 
-  const { checkSaldo, checkResult } = useMembership();
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const itemsPerPage = 200;
+
+  const isOffline = !isOnline || apiReachable === false;
+
+  const { open: openDrawer, isOpen: drawerOpen } = useDrawer();
   const { openModal, closeModal } = useModal();
 
-  const [type, setType] = React.useState('');
-  const [data, setData] = React.useState(null);
-  const [cardIdBuffer, setCardIdBuffer] = React.useState('');
-  const [offlineMessage, setOfflineMessage] = React.useState('');
-  const scanConsumed = React.useRef(false);
+  const [search, setSearch] = React.useState('');
 
-  const tableConfig = React.useMemo(() => {
-    return createTableConfig({
-      onShow: v => {
-        setData(v);
-        setType('detail');
-        openDrawer();
+  const [type, setType] = React.useState('');
+  const [memberships, setMemberships] = React.useState([]);
+  const [data, setData] = React.useState(null);
+
+  const { checkSaldo, checkResult, getMember, getMemberResult, membershipData } = useMembership();
+
+  React.useEffect(() => {
+    getMember({ limit: itemsPerPage, page: 1 });
+  }, [lastSyncTime]);
+
+  // Search online → panggil endpoint; kosong → baca cache
+  React.useEffect(() => {
+    const t = setTimeout(
+      () => {
+        getMember(search ? { search } : {});
       },
-    });
+      search ? 1000 : 0
+    );
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Re-read cache ketika queue berubah (remove/sync dari PendingDrawer)
+  const isOnlineRef = React.useRef(isOnline);
+  const apiReachableRef = React.useRef(apiReachable);
+  isOnlineRef.current = isOnline;
+  apiReachableRef.current = apiReachable;
+  React.useEffect(() => {
+    const handler = () => {
+      if (isOnlineRef.current && apiReachableRef.current !== false) return;
+      getMember({ limit: itemsPerPage, page: 1 });
+    };
+    window.addEventListener('pending-queue-changed', handler);
+    return () => window.removeEventListener('pending-queue-changed', handler);
   }, []);
 
-  const Table = useTable('membership', tableConfig);
-
-  const handleRead = uid => {
-    scanConsumed.current = false;
-    setCardIdBuffer(uid);
-
-    // Offline + cache hit → skip fetch entirely
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      const cached = getMemberCache(uid);
-      if (cached) {
-        setOfflineMessage('');
-        onScanSuccess(cached);
-        return;
-      }
-      // No cache → show message, re-open modal so message prop applies
-      const msg = 'Member data not available offline. Please scan while online first to cache.';
-      setOfflineMessage(msg);
-      openModal(
-        <NFCField onRead={handleRead} isOpen={true} onClose={closeModal} result={checkResult} message={msg} />,
-        'w-md'
-      );
-      return;
+  // Sync sessionData from hook into local state
+  React.useEffect(() => {
+    if (membershipData || getMemberResult?.isSuccess) {
+      setMemberships(membershipData || getMemberResult?.data?.data || []);
     }
+  }, [membershipData, getMemberResult]);
 
-    const params = { card_id: uid };
-    checkSaldo(params);
+  const openScan = result => {
+    openModal(<NFCField onRead={handleRead} isOpen onClose={closeModal} result={result} />, 'w-md');
   };
 
-  const onScan = () => {
-    openModal(
-      <NFCField onRead={handleRead} isOpen={true} onClose={closeModal} result={checkResult} message={offlineMessage} />,
-      'w-md'
-    );
+  const handleRead = uid => {
+    if (isOffline) {
+      const membership = showMembership(uid);
+      if (membership) {
+        onScanSuccess(membership);
+      } else {
+        // Re-open modal → NFCField reconcile (bukan remount), result isError → status 'failed'
+        openScan({ isError: true });
+      }
+    } else {
+      const params = { card_id: uid };
+      checkSaldo(params);
+    }
   };
 
   const onScanSuccess = data => {
-    // Cache member data for offline use
-    if (data?.card_id) {
-      setMemberCache(data.card_id, data);
-    }
-
     openModal(
       <>
         <Modal.Header
@@ -92,11 +112,10 @@ const MembershipScreen = () => {
           <CardContent
             data={data}
             onClose={() => {
-              setOfflineMessage('')
               closeModal();
               setData(null);
-              Table.boot();
             }}
+            onRefresh={() => getMember()}
           />
         </Modal.Body>
       </>,
@@ -104,36 +123,16 @@ const MembershipScreen = () => {
     );
   };
 
-  // Online success → cache + proceed
+  // Online success → CardContent; error → re-open NFCField (result terbaru, reconcile)
   React.useEffect(() => {
-    if (checkResult?.isSuccess && !scanConsumed.current) {
-      scanConsumed.current = true;
+    if (checkResult?.isSuccess) {
       onScanSuccess(checkResult?.data?.data);
+    } else if (checkResult?.isError) {
+      // Tanpa re-open, modal via openScan() menampilkan result yang dibekukan (stale)
+      // → error scan tidak pernah terlihat.
+      openScan(checkResult);
     }
   }, [checkResult]);
-
-  // Offline/error fallback → try cache (individual first, then table list)
-  React.useEffect(() => {
-    if (checkResult?.isError && cardIdBuffer && !scanConsumed.current) {
-      scanConsumed.current = true;
-
-      // 1. Try individual cache
-      let cached = getMemberCache(cardIdBuffer);
-
-      // 2. Fallback: lookup from cached table list by card_id
-      if (!cached) {
-        const tableCache = getCache(TABLE_CACHE_KEY);
-        const list = Array.isArray(tableCache?.data) ? tableCache.data : [];
-        cached = list.find(m => String(m?.card_id) === String(cardIdBuffer));
-      }
-
-      if (cached) {
-        // closeModal();
-        // setOfflineMessage('');
-        onScanSuccess(cached);
-      }
-    }
-  }, [checkResult, cardIdBuffer]);
 
   React.useEffect(() => {
     if (!drawerOpen) {
@@ -141,35 +140,111 @@ const MembershipScreen = () => {
     }
   }, [drawerOpen]);
 
+  const onScan = () => {
+    openScan(checkResult);
+  };
+
   return (
     <Drawer.Wrapper>
       <div>
-        <Table.Tools>
-          <div className="flex h-full place-content-end place-items-center">
-            <div
-              className="btn bg-primary/15 text-primary h-full rounded-none border-0 px-6"
-              onClick={onScan}
-            >
-              <CardSearchIcon /> Scan Card
-            </div>
-            <div
-              className="btn btn-primary h-full rounded-none border-0 px-6"
-              onClick={() => {
-                setType('create');
-                openDrawer();
-              }}
-            >
-              <PlusIcon /> New Membership
+        {/* Header */}
+        <div className="border-base-200 bg-base-100 flex h-[62px] border-t border-b">
+          <div className="border-base-200 flex-1 border-r">
+            <div className="relative flex h-full w-full items-center">
+              <div className="absolute left-4">
+                <SearchIcon />
+              </div>
+              <input
+                name="search"
+                placeholder="Search..."
+                value={search}
+                onChange={e => {
+                  setSearch(e.target.value);
+                }}
+                className="h-full w-full pl-15 focus-visible:!outline-none"
+              />
             </div>
           </div>
-        </Table.Tools>
-        <Table.Card />
-        <Table.Pagination />
+          <div className="flex-1 overflow-x-auto">
+            <div className="flex h-full place-content-end place-items-center gap-2">
+              <div
+                className="btn bg-primary/15 text-primary h-full rounded-none border-0 px-6"
+                onClick={onScan}
+              >
+                <CardSearchIcon /> Scan Card
+              </div>
+              <div
+                className="btn btn-primary h-full rounded-none border-0 px-6"
+                onClick={() => {
+                  setType('create');
+                  openDrawer();
+                }}
+              >
+                <PlusIcon /> New Membership
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Card */}
+        <div>
+          <div className="flex h-[calc(100vh-160px)] flex-col">
+            <div className="flex-1 overflow-auto">
+              <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {memberships
+                  .filter(item => {
+                    if (!search) return true;
+                    const q = search.toLowerCase();
+                    return (
+                      (item?.name || '').toLowerCase().includes(q) ||
+                      (item?.reff_code || '').toLowerCase().includes(q)
+                    );
+                  })
+                  .map((item, index) => (
+                    <div
+                      key={index}
+                      className="border-base-200 bg-base-100 h-50 cursor-pointer overflow-auto rounded-xl border p-4"
+                    >
+                      <div className="text-2xl font-semibold tracking-wide capitalize">
+                        {item?.name}
+                      </div>
+                      <div className="text-base-300 mt-2 text-[16px] font-thin tracking-wide">
+                        {item?.reff_code}
+                      </div>
+                      <div className="text-primary mt-2 flex place-items-center gap-2 text-[16px] font-semibold tracking-wide">
+                        <WalletIcon />
+                        {currencyFormat(item?.saldo)}
+                      </div>
+                      <div
+                        className="btn btn-block btn-soft btn-primary mt-4"
+                        onClick={() => {
+                          setData(item);
+                          setType('detail');
+                          openDrawer();
+                        }}
+                      >
+                        See details
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <DrawerCreate type={type} onClose={() => setType('')} onRefresh={() => Table.boot()} />
+      {type && (
+        <>
+          <DrawerCreate type={type} onClose={() => setType('')} onRefresh={() => getMember()} />
 
-      <DrawerDetail membership={data} type={type} onClose={() => setType('')} />
+          <DrawerDetail
+            membership={data}
+            type={type}
+            onClose={() => setType('')}
+            onRefresh={() => getMember()}
+          />
+        </>
+      )}
     </Drawer.Wrapper>
   );
 };

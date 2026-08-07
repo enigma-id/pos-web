@@ -22,7 +22,7 @@ const useSalesChannel = () => {
 
   const loadChannels = async () => {
     const res = await getOrFetchSales('sales_channels', async () => {
-      const req = await trigger().unwrap();
+      const req = await trigger({ search: 'Retail' }).unwrap();
       return req?.data || [];
     });
 
@@ -33,7 +33,7 @@ const useSalesChannel = () => {
 
   const getChannel = async () => {
     try {
-      await trigger().unwrap();
+      await trigger({ search: 'Retail' }).unwrap();
     } catch (err) {
       console.log('error', err);
     }

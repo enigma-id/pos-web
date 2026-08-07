@@ -90,7 +90,14 @@ export const setPaymentMethodsCache = (channelId, methods) => {
 
 export const getPaymentMethodsCache = channelId => {
   const key = `payment_methods_${channelId ?? 'default'}`;
-  return getSalesCacheValue(key) || [];
+  const data = getSalesCacheValue(key);
+  if (data && data.length > 0) return data;
+
+  // Fallback to default key if channel-specific not found
+  if (channelId) {
+    return getSalesCacheValue('payment_methods_default') || [];
+  }
+  return [];
 };
 
 //
@@ -189,51 +196,211 @@ export const clearCatalogCache = () => {
   localStorage.removeItem(CATALOG_CACHE_KEY);
 };
 
-// Look up a catalog item from the cached pricing list (not detail cache)
-// Used as fallback when server is unreachable and no detail cache exists
-//
-// Grouped cache: cache_members
-//
-
-const MEMBER_CACHE_KEY = 'cache_members';
-
-const getMemberCacheRaw = () => {
-  try {
-    const raw = localStorage.getItem(MEMBER_CACHE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-};
-
-const setMemberCacheRaw = data => {
-  const existing = getMemberCacheRaw();
-  const updated = { ...existing, ...data };
-  localStorage.setItem(MEMBER_CACHE_KEY, JSON.stringify(updated));
-};
-
-export const getMemberCache = cardId => {
-  const cache = getMemberCacheRaw();
-  return cache?.[cardId] ?? null;
-};
-
-export const setMemberCache = (cardId, memberData) => {
-  setMemberCacheRaw({ [cardId]: memberData });
-};
-
-export const updateMemberCacheSaldo = (cardId, newSaldo) => {
-  const existing = getMemberCache(cardId);
-  if (!existing) return;
-  setMemberCacheRaw({ [cardId]: { ...existing, saldo: newSaldo } });
-};
-
-export const clearMemberCache = () => {
-  localStorage.removeItem(MEMBER_CACHE_KEY);
-};
-
 export const getCatalogItemFromPricingCache = (id, channelId) => {
   const key = `catalog_pricing_${channelId}`;
   const list = getCatalogCacheValue(key);
   if (!Array.isArray(list)) return null;
-  return list.find(item => String(item.id) === String(id) || String(item.catalog_id) === String(id)) || null;
+  return (
+    list.find(item => String(item.id) === String(id) || String(item.catalog_id) === String(id)) ||
+    null
+  );
+};
+
+const BILLS_CACHE_KEY = 'cache_openbills';
+
+const getOpenBillsCacheRaw = () => {
+  try {
+    const raw = localStorage.getItem(BILLS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveOpenBills = data => {
+  const existing = getOpenBillsCacheRaw();
+
+  if (!existing.data) {
+    existing.data = [];
+  }
+
+  existing.data.unshift(data);
+
+  localStorage.setItem(BILLS_CACHE_KEY, JSON.stringify(existing));
+
+  return data;
+};
+
+export const updateOpenBills = data => {
+  const existing = getOpenBillsCacheRaw();
+
+  const index = existing.data.findIndex(
+    item => item.id === data.id || item.sync_id === data.sync_id
+  );
+
+  if (index === -1) return null;
+
+  existing.data[index] = {
+    ...existing.data[index],
+    ...data,
+  };
+
+  localStorage.setItem(BILLS_CACHE_KEY, JSON.stringify(existing));
+
+  return existing.data[index];
+};
+
+export const deleteOpenBills = data => {
+  const existing = getOpenBillsCacheRaw();
+
+  existing.data = existing.data.filter(
+    item => item.id !== data?.id || item.sync_id !== data?.sync_id
+  );
+
+  localStorage.setItem(BILLS_CACHE_KEY, JSON.stringify(existing));
+};
+
+const HISTORY_CACHE_KEY = 'cache_order_history';
+
+const getOrderHistoryCacheRaw = () => {
+  try {
+    const raw = localStorage.getItem(HISTORY_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveOrderHistory = data => {
+  const existing = getOrderHistoryCacheRaw();
+
+  if (!existing.data) {
+    existing.data = [];
+  }
+
+  existing.data.unshift(data);
+
+  localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(existing));
+
+  return data;
+};
+
+export const deleteOrderHistory = data => {
+  const existing = getOrderHistoryCacheRaw();
+
+  existing.data = existing.data.filter(
+    item => item.id !== data?.id || item.sync_id !== data?.sync_id
+  );
+
+  localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(existing));
+};
+
+const SHIFTS_CACHE_KEY = 'cache_shifts';
+
+const getShiftsCacheRaw = () => {
+  try {
+    const raw = localStorage.getItem(SHIFTS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveShifts = data => {
+  const existing = getShiftsCacheRaw();
+
+  if (!existing.data) {
+    existing.data = [];
+  }
+
+  existing.data.unshift(data);
+
+  localStorage.setItem(SHIFTS_CACHE_KEY, JSON.stringify(existing));
+
+  return data;
+};
+
+export const updateShifts = data => {
+  const existing = getShiftsCacheRaw();
+
+  const index = existing.data.findIndex(
+    item => item.id === data.id || item.sync_id === data.sync_id
+  );
+
+  if (index === -1) return null;
+
+  existing.data[index] = {
+    ...existing.data[index],
+    ...data,
+  };
+
+  localStorage.setItem(SHIFTS_CACHE_KEY, JSON.stringify(existing));
+
+  return existing.data[index];
+};
+
+export const showShifts = data => {
+  const existing = getShiftsCacheRaw();
+
+  const index = existing.data.findIndex(
+    item => item.id === data.id || item.sync_id === data.sync_id
+  );
+
+  if (index === -1) return null;
+
+  return existing.data[index];
+};
+
+const MEMBERSHIP_CACHE_KEY = 'cache_membership';
+
+export const getMembersipCacheRaw = () => {
+  try {
+    const raw = localStorage.getItem(MEMBERSHIP_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const showMembership = id => {
+  const existing = getMembersipCacheRaw();
+
+  const index = existing.data.findIndex(item => item.card_id === id);
+
+  if (index === -1) return null;
+
+  return existing.data[index];
+};
+
+export const saveMembership = data => {
+  const existing = getMembersipCacheRaw();
+
+  if (!existing.data) {
+    existing.data = [];
+  }
+
+  existing.data.unshift(data);
+
+  localStorage.setItem(MEMBERSHIP_CACHE_KEY, JSON.stringify(existing));
+
+  return data;
+};
+
+export const perbaharuiMembership = data => {
+  const existing = getMembersipCacheRaw();
+
+  const index = existing.data.findIndex(
+    item => item.id === data.id || item.card_id === data.card_id
+  );
+
+  if (index === -1) return null;
+
+  existing.data[index] = {
+    ...existing.data[index],
+    ...data,
+  };
+
+  localStorage.setItem(MEMBERSHIP_CACHE_KEY, JSON.stringify(existing));
+
+  return existing.data[index];
 };

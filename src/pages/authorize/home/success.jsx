@@ -1,3 +1,4 @@
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Kitchen, Receipt, Modal } from '../../../components/ui';
@@ -6,8 +7,16 @@ import useModal from '../../../components/ui/modal/hook';
 // import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
+import { useSelector } from 'react-redux';
 
 const SuccessModal = ({ data, backToMenu }) => {
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+
+  const isOffline = !isOnline || apiReachable === false;
+
+  const isCompletedFlow = data?.status === 'completed';
+
   const navigate = useNavigate();
   const { closeModal } = useModal();
   const { open: openPrint } = usePrintWindow({ title: 'Print Preview', autoClose: true });
@@ -23,17 +32,6 @@ const SuccessModal = ({ data, backToMenu }) => {
     openPrint(<Kitchen data={data} />);
   };
 
-  //   React.useEffect(() => {
-  //     if (!id) return;
-  //     show(id);
-  //   }, [id]);
-
-  //   React.useEffect(() => {
-  //     if (showResult?.isSuccess) {
-  //       setData(showResult?.data?.data);
-  //     }
-  //   }, [showResult]);
-
   return (
     <>
       <Modal.Header
@@ -47,7 +45,11 @@ const SuccessModal = ({ data, backToMenu }) => {
         }
       >
         <div className="text-lg font-semibold tracking-wide uppercase">
-          {data?.offline_queued ? 'Payment Queued' : 'Bill Saved'}
+          {isOffline && isCompletedFlow
+            ? 'Payment Queued'
+            : isCompletedFlow
+              ? 'Payment success'
+              : 'Bill Saved'}
         </div>
       </Modal.Header>
 
@@ -57,7 +59,27 @@ const SuccessModal = ({ data, backToMenu }) => {
         </div>
 
         <div className="py-4 text-center">
-          {data?.offline_queued && data?.status !== 'pending' ? (
+          {isCompletedFlow && !isOffline ? (
+            <>
+              <p className="text-base font-semibold">Payment success.</p>
+
+              <div className="flex h-16 place-items-center">
+                <div className="flex flex-1 flex-col place-content-center place-items-center">
+                  <div className="text-xl font-semibold">{currencyFormat(data?.total_payment)}</div>
+                  <div className="text-base-300 text-base font-thin capitalize">total paid</div>
+                </div>
+
+                {data?.payment_method?.provider === 'cash' && (
+                  <div className="border-base-200 flex flex-1 flex-col place-content-center place-items-center border-l">
+                    <div className="text-xl font-semibold text-red-500">
+                      {currencyFormat(data?.total_payment - data?.total_charges)}
+                    </div>
+                    <div className="text-base-300 text-base font-thin capitalize">change</div>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : isOffline && isCompletedFlow ? (
             <>
               <p className="text-base font-semibold">Payment saved locally.</p>
               <p className="text-base-300 text-sm">
@@ -80,7 +102,7 @@ const SuccessModal = ({ data, backToMenu }) => {
                 )}
               </div>
             </>
-          ) : data?.offline_queued ? (
+          ) : isOffline ? (
             <>
               <p className="text-base font-semibold">Bill saved locally.</p>
               <p className="text-base-300 text-sm">

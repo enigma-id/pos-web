@@ -20,7 +20,12 @@ const CatalogScreen = () => {
   const dropdownRef = React.useRef(null);
   const dropdownRefs = React.useRef(null);
   const selectedChannel = useSelector(state => state?.SalesChannel?.selectedChannel);
-  const User = useSelector(state => state?.Auth?.session?.user);
+  const sessionUser = useSelector(state => state?.Auth?.session?.user);
+
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+
+  const isOffline = !isOnline || apiReachable === false;
 
   const {
     refreshCatalog,
@@ -174,7 +179,7 @@ const CatalogScreen = () => {
                   <div
                     key={cat?.id}
                     className="catalog-card"
-                    onClick={mode === 'open_session' ? false : () => onShow(cat, null)}
+                    onClick={mode === 'open_session' ? () => {} : () => onShow(cat, null)}
                   >
                     <div className="catalog-img">
                       {cat?.image ? (
@@ -184,7 +189,7 @@ const CatalogScreen = () => {
                           className="bg-secondary h-full w-full rounded-xl object-cover"
                         />
                       ) : (
-                        <div className="bg-base-200 flex h-full w-full items-center place-content-center rounded-xl text-base-content/40 text-sm font-medium">
+                        <div className="bg-base-200 text-base-content/40 flex h-full w-full place-content-center items-center rounded-xl text-sm font-medium">
                           No Image
                         </div>
                       )}
@@ -195,7 +200,7 @@ const CatalogScreen = () => {
                       </div>
                       <div className="text-primary text-center text-[16px] font-semibold">
                         {currencyFormat(
-                          cat?.unit_price,
+                          cat?.unit_nett,
                           undefined,
                           cat?.is_custom ? '{custom price}' : 'Free'
                         )}
@@ -207,20 +212,22 @@ const CatalogScreen = () => {
             </div>
           </div>
 
-          <div className="absolute bottom-5 left-5 flex flex-col gap-2">
-            <div
-              className="btn btn-circle btn-xl btn-info btn-outline hover:!text-info bg-base-100 shadow-lg"
-              onClick={() => refreshCatalog()}
-            >
-              <RefreshIcon />
-            </div>
-
-            {User?.role === "manager" && (
-              <div className="btn btn-circle btn-xl btn-primary" onClick={openDrawer}>
-                <PlusIcon />
+          {!isOffline && (
+            <div className="absolute bottom-5 left-5 flex flex-col gap-2">
+              <div
+                className="btn btn-circle btn-xl btn-info btn-outline hover:!text-info bg-base-100 shadow-lg"
+                onClick={() => refreshCatalog()}
+              >
+                <RefreshIcon />
               </div>
-            )}
-          </div>
+
+              {sessionUser?.role === 'manager' && (
+                <div className="btn btn-circle btn-xl btn-primary" onClick={openDrawer}>
+                  <PlusIcon />
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="w-100 transition-all duration-300 ease-in-out">

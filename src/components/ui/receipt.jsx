@@ -3,44 +3,6 @@ import React from 'react';
 import { currencyFormat, dateFormat } from '../../utils/common';
 
 const Receipt = ({ data }) => {
-  const [discountMap, setDiscountMap] = React.useState([]);
-
-  const groupedCategories = (items, category_discounts) => {
-    if (!category_discounts || category_discounts.length === 0) {
-      setDiscountMap([]);
-      return;
-    }
-
-    const group = {};
-
-    category_discounts.forEach(discount => {
-      const categoryId = discount.category_id;
-
-      // The category name is outside the catalog, so it's item.category_name
-      const itemWithCategory = items.find(item => item?.catalog?.category_id === categoryId);
-      const categoryName = itemWithCategory?.category_name || 'Unknown Category';
-
-      if (!group[categoryId]) {
-        group[categoryId] = {
-          id: categoryId,
-          name: categoryName,
-          subtotal: 0,
-        };
-      }
-      group[categoryId].subtotal += itemWithCategory?.discount_value;
-    });
-
-
-    const result = Object.values(group).filter(item => item.subtotal > 0);
-    setDiscountMap(result);
-  };
-
-  React.useEffect(() => {
-    if (!data) return;
-    groupedCategories(data?.items, data?.category_discounts);
-
-  }, [data]);
-
   if (!data) return;
 
   return (
@@ -53,15 +15,17 @@ const Receipt = ({ data }) => {
           marginBottom: 20,
         }}
       >
-        <img src="./logo.png" style={{ height: 50, width: 'auto' }} />
+        <img src="/logo.png" style={{ height: 50, width: 'auto' }} />
       </div>
 
       <div style={{ paddingBottom: 5, marginBottom: 5 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p style={{ marginBlock: 2, fontSize: 11 }}>
-            {dateFormat(data?.paid_at, 'DD-MM-YYYY')}
+            {dateFormat(data?.paid_at || data?.created_at, 'DD-MM-YYYY')}
           </p>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>{dateFormat(data?.paid_at, 'HH:mm')}</p>
+          <p style={{ marginBlock: 2, fontSize: 11 }}>
+            {dateFormat(data?.paid_at || data?.created_at, 'HH:mm')}
+          </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p style={{ marginBlock: 2, fontSize: 11 }}>Transaction</p>
@@ -73,7 +37,7 @@ const Receipt = ({ data }) => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p style={{ marginBlock: 2, fontSize: 11 }}>Cashier</p>
-          <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.session?.cashier?.name || data?.session?.name}</p>
+          <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.session?.cashier?.name || '-'}</p>
         </div>
 
         {data?.bill_name && (
@@ -89,13 +53,6 @@ const Receipt = ({ data }) => {
             <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.membership?.name}</p>
           </div>
         )}
-
-        {/* {data?.ticket && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>Bill Name</p>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.ticket}</p>
-          </div>
-        )} */}
       </div>
 
       <div
@@ -119,7 +76,8 @@ const Receipt = ({ data }) => {
           <div style={{ display: 'flex', alignItems: '', justifyContent: 'space-between' }}>
             <div>
               <p style={{ marginBlock: 2, fontSize: 11, textTransform: 'capitalize' }}>
-                {item?.catalog?.name || item?.catalog_name || item?.description}
+                {item?.catalog_name || item?.catalog?.name || '-'}{' '}
+                {/* catalog_name langsung, catalog?.name fallback struktural */}
               </p>
               <p style={{ marginBlock: 2, fontSize: 9 }}>
                 {item?.quantity} x {currencyFormat(item?.unit_nett, false)}
@@ -129,26 +87,24 @@ const Receipt = ({ data }) => {
               {currencyFormat(item?.quantity * item?.unit_nett, false)}
             </p>
           </div>
-          {item?.addons?.map((addon, idx) => (
-            <div
-              key={idx}
-              style={{ display: 'flex', alignItems: '', justifyContent: 'space-between' }}
-            >
-              <p style={{ marginBlock: 2, fontSize: 9, textTransform: 'capitalize' }}>
-                + {addon?.catalog_name}{' '}
-                {addon?.addon?.type === 'options' ? ''
-                  : `${addon?.quantity > 0 ? `(${addon?.quantity} x ${currencyFormat(addon?.unit_nett)})` : ""}`}
-              </p>
-              <p style={{ marginBlock: 2, fontSize: 9 }}>
-                {currencyFormat(
-                  addon?.quantity > 0
-                    ? addon?.quantity * addon?.unit_nett
-                    : item?.quantity * addon?.unit_nett,
-                  false
-                )}
-              </p>
-            </div>
-          ))}
+          {item?.addons &&
+            item?.addons?.map((addon, idx) => (
+              <div
+                key={idx}
+                style={{ display: 'flex', alignItems: '', justifyContent: 'space-between' }}
+              >
+                <p style={{ marginBlock: 2, fontSize: 9, textTransform: 'capitalize' }}>
+                  + {addon?.catalog_name || '-'}{' '}
+                  {/* catalog_name langsung, catalog?.name fallback struktural */}{' '}
+                  {addon?.addon_group?.type === 'options'
+                    ? ''
+                    : `${addon?.quantity > 0 ? `(${addon?.quantity} x ${currencyFormat(addon?.unit_nett)})` : ''}`}
+                </p>
+                <p style={{ marginBlock: 2, fontSize: 9 }}>
+                  {currencyFormat(addon?.quantity * addon?.unit_nett, false)}
+                </p>
+              </div>
+            ))}
         </div>
       ))}
 
@@ -167,35 +123,19 @@ const Receipt = ({ data }) => {
           </div>
         )}
 
-        {discountMap?.length > 0 &&
-          discountMap?.map((d, i) => (
+        {data?.category_discounts
+          ?.filter(d => (d?.total_discount || d?.discount_value || 0) > 0)
+          ?.map((d, i) => (
             <div
               key={i}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
             >
-              <p style={{ marginBlock: 2, fontSize: 11 }}>Discount Category {d?.name}</p>
-              <p style={{ marginBlock: 2, fontSize: 11 }}>-{currencyFormat(d?.subtotal)}</p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>
+                Discount Category {d?.category?.name || '-'}
+              </p>
+              <p style={{ marginBlock: 2, fontSize: 11 }}>-{currencyFormat(d?.total_discount)}</p>
             </div>
           ))}
-        {/* {data?.items.reduce((sum, item) => {
-          const qty = item.quantity ?? 1;
-          const discount = item.discount_value ?? 0;
-          return sum + discount * qty;
-        }, 0) > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>Discount Category</p>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>
-              -
-              {currencyFormat(
-                data?.items.reduce((sum, item) => {
-                  const qty = item.quantity ?? 1;
-                  const discount = item.discount_value ?? 0;
-                  return sum + discount * qty;
-                }, 0)
-              )}
-            </p>
-          </div>
-        )} */}
         {data?.discount_value > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <p style={{ marginBlock: 2, fontSize: 11 }}>Discount Order</p>
@@ -252,6 +192,42 @@ const Receipt = ({ data }) => {
           </div>
         )}
       </div>
+
+      {data?.payment_method?.provider === 'qris' && data?.payment && data?.payment?.qr_url && (
+        <div
+          style={{
+            borderTop: '1px dashed #000',
+            paddingTop: 8,
+            marginTop: 5,
+            textAlign: 'center',
+          }}
+        >
+          <p style={{ marginBlock: '2px 6px', fontSize: 11, fontWeight: 'bold' }}>
+            Scan QRIS to Pay
+          </p>
+
+          {/* Jika backend menyediakan URL Gambar QR */}
+          {data?.payment?.qr_url && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 5 }}>
+              <img
+                src={data?.payment?.qr_url}
+                alt="QRIS Code"
+                style={{ width: 130, height: 130, objectFit: 'contain' }}
+              />
+            </div>
+          )}
+
+          {import.meta.env.DEV && (
+            <>
+              {data?.payment?.qr_url && (
+                <p style={{ marginBlock: 2, fontSize: 9, wordBreak: 'break-all', color: '#555' }}>
+                  {data?.payment?.qr_url}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 };

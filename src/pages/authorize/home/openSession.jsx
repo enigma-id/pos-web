@@ -1,24 +1,115 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 
+import { v4 as uuidv4 } from 'uuid';
 import { Input, Modal } from '../../../components/ui';
 import useModal from '../../../components/ui/modal/hook';
 import useAuth from '../../../services/auth/hook';
 import useSession from '../../../services/sales/session/hook';
 import { currencyFormat } from '../../../utils/common';
+import { resetCart } from '../../../services/cart/slice';
+import useCatalog from '../../../services/catalog/hooks';
+import { makeStartSession } from '../../../services/offline/shapes';
+import { startSession } from '../../../services/offline';
+import { saveShifts } from '../../../utils/cache';
+import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
+import { setSummary } from '../../../services/sales/session/slice';
 
 const OpenSection = () => {
-  const { start, startResult } = useSession();
+  const dispatch = useDispatch();
+  const isOnline = useSelector(state => state?.Offline?.isOnline);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+  const sessionAuth = useSelector(state => state?.Auth?.session);
+
+  const { start, startResult, summary } = useSession();
+  const { refreshCatalog } = useCatalog();
   const { onLogout } = useAuth();
   const { openModal, closeModal } = useModal();
 
   const [cash, setCash] = React.useState('');
 
-  const onSubmit = async () => {
+  const isOffline = !isOnline || apiReachable === false;
+
+  const onStartOffline = async () => {
+    let now = new Date();
+    const payload = {
+      cash_started: parseFloat(cash) || 0,
+      sync_id: uuidv4(),
+      outlet_id: sessionAuth?.outlet?.id,
+      cashier_id: sessionAuth?.user?.id,
+      transaction_date: now,
+      started_at: now,
+      status: 'opened',
+      outlet: sessionAuth?.outlet,
+      cashier: sessionAuth?.user,
+    };
+
+    const dataOfflineToOnline = makeStartSession(payload);
+
+    try {
+      await startSession(dataOfflineToOnline, sessionAuth?.user?.id);
+    } catch (err) {
+      handleModalError(err);
+
+      return;
+    }
+
+    triggerQueueRefresh();
+
+    // Push ke localStorage session cache
+    try {
+      saveShifts(dataOfflineToOnline);
+    } catch (err) {
+      handleModalError(err);
+    }
+
+    dispatch(resetCart());
+
+    dispatch(setSummary(dataOfflineToOnline));
+  };
+
+  const onStartOnline = async () => {
     const payload = {
       cash_started: parseFloat(cash) || 0,
     };
 
-    start(payload);
+    await start(payload);
+  };
+
+  const onStart = async () => {
+    if (isOffline) {
+      onStartOffline();
+    } else {
+      onStartOnline();
+    }
+  };
+
+  useEffect(() => {
+    if (startResult?.isSuccess) {
+      refreshCatalog();
+      dispatch(resetCart());
+      summary();
+    }
+  }, [startResult?.isSuccess]);
+
+  const handleModalError = () => {
+    openModal(
+      <>
+        <Modal.Header onClose={closeModal}>
+          <div className="text-lg font-semibold">Can't save</div>
+        </Modal.Header>
+        <Modal.Body full>
+          <div className="flex place-content-center place-items-center">
+            <img src="./error.png" className="h-64" />
+          </div>
+          <div className="-mt-5 pb-4 text-center">
+            <p className="text-base-300 text-xs">Try another</p>
+          </div>
+        </Modal.Body>
+      </>,
+
+      'w-md'
+    );
   };
 
   const openLogout = () => {
@@ -61,6 +152,11 @@ const OpenSection = () => {
           You are about to start a sales session. All transactions made will be grouped into this
           session, making it easier to manage and track your cash flow.
         </div>
+        {isOffline && (
+          <div className="bg-warning/10 text-warning mb-3 rounded-md p-3 text-sm">
+            You are offline. Session will be saved locally and synced when connection is restored.
+          </div>
+        )}
         <label>Starting Cash</label>
         <Input
           value={currencyFormat(cash)}
@@ -77,10 +173,17 @@ const OpenSection = () => {
       <div className="border-base-200 min-h-15 border-t">
         <button
           className={`btn btn-block btn-xl btn-primary rounded-none ${startResult?.isLoading ? 'btn-disabled' : ''}`}
-          onClick={onSubmit}
+          onClick={onStart}
+          disabled={startResult?.isLoading}
         >
-          Start Session
-          {startResult?.isLoading && <span className="loading loading-spinner"></span>}
+          {startResult?.isLoading ? (
+            <>
+              Starting Session...
+              <span className="loading loading-spinner"></span>
+            </>
+          ) : (
+            'Start Session'
+          )}
         </button>
       </div>
     </div>
