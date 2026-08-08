@@ -273,7 +273,7 @@ const HistorySection = ({ id, membership }) => {
           </p>
 
           {/* Date */}
-          <p className="mt-1 text-xs text-gray-400">{dateFormat(item?.recorded_at)}</p>
+          <p className="mt-1 text-xs text-gray-400">{dateFormat(item?.created_at)}</p>
         </div>
       ))}
 
