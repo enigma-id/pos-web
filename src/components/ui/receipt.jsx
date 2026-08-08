@@ -183,7 +183,7 @@ const Receipt = ({ data }) => {
             </p>
           </div>
         )}
-        {data?.status === 'completed' && data?.payment_method?.is_nfc == 1 && (
+        {data?.status === 'completed' && data?.payment_method?.is_member_payment && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <p style={{ marginBlock: 2, fontSize: 11 }}>Saldo Member</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
