@@ -146,9 +146,15 @@ export const syncPendingSessions = async () => {
 
     let hadSyncFailure = false;
 
+    // Flag: true jika ada data pending yang benar-benar diproses. Dipakai buat
+    // ngehindarin `setLastSyncTime` yang gak perlu — kalau queue kosong, jangan
+    // advance lastSyncTime (nyebabin re-fetch summary dobel di layout).
+    let hadPendingData = false;
+
     // ===== 1. MEMBERSHIPS → POST /membership/sync =====
     const memberships = await db.getAll(STORES.memberships);
     if (memberships.length > 0) {
+      hadPendingData = true;
       const payload = {
         members: memberships.map(m => ({
           id: m.id,
@@ -207,6 +213,9 @@ export const syncPendingSessions = async () => {
     const allBills = await db.getAll(STORES.orderBills);
     const allPayments = await db.getAll(STORES.orderPayments);
     const allTopups = await db.getAll(STORES.topups);
+    if (allSessions.length > 0 || allBills.length > 0 || allPayments.length > 0 || allTopups.length > 0) {
+      hadPendingData = true;
+    }
 
     // Group by session ID (origin_session_id / paid_session_id / session_sync_id / sessions.sync_id)
     const grouped = {};
@@ -323,9 +332,12 @@ export const syncPendingSessions = async () => {
 
     triggerQueueRefresh();
 
-    // Update last sync time
-    await setLastSyncTimeMeta(now, userId);
-    storeRef.dispatch(setLastSyncTime(now));
+    // Update last sync time — hanya kalau ada data yang diproses. Queue kosong
+    // jangan advance (hindari re-fetch summary dobel di layout).
+    if (hadPendingData) {
+      await setLastSyncTimeMeta(now, userId);
+      storeRef.dispatch(setLastSyncTime(now));
+    }
     storeRef.dispatch(setFailedCount(hadSyncFailure ? 1 : 0));
   } catch (error) {
     if (storeRef) {

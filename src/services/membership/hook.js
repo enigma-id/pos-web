@@ -12,7 +12,7 @@ import {
   useLazyGetQuery,
 } from './action';
 import { $failure } from '../form/action';
-import { getCache, setCache } from '../../utils/cache';
+import { getCache, saveMembershipList } from '../../utils/cache';
 
 const MEMBERSHIP_CACHE_KEY = 'cache_membership';
 
@@ -42,9 +42,9 @@ const useMembership = id => {
 
         // Online search → simpan di cache search; online no-search → simpan di cache utama
         if (params?.search) {
-          setCache(searchCacheKey, serverData);
+          saveMembershipList(searchCacheKey, serverData);
         } else {
-          setCache(MEMBERSHIP_CACHE_KEY, serverData);
+          saveMembershipList(MEMBERSHIP_CACHE_KEY, serverData);
         }
         setMergedMembershipData(serverData);
         return;

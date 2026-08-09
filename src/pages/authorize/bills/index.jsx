@@ -57,7 +57,7 @@ const BillScreen = () => {
         id={id}
         status={status}
         onClose={() => {
-          bill();
+          bill({ limit: 200, page: 1 });
           closeModal();
         }}
       />,
@@ -65,26 +65,24 @@ const BillScreen = () => {
     );
   };
 
-  React.useEffect(() => {
-    bill({ limit: itemsPerPage, page: 1 });
-  }, [lastSyncTime]);
-
-  // Search online → panggil endpoint; kosong → baca cache
+  // Load list: search online (debounce) / pagination → satu effect, satu request.
+  // On mount (search='', page=1) → bill({ limit, page }) — App.jsx prefetch
+  // pakai params sama → RTK Query dedupe. Page change → { page } aja.
   React.useEffect(() => {
     const t = setTimeout(
       () => {
-        bill(search ? { search } : {});
+        bill(search ? { search } : { limit: 200, page: currentPage });
       },
       search ? 1000 : 0
     );
     return () => clearTimeout(t);
-  }, [search]);
+  }, [search, currentPage, lastSyncTime]);
 
   // Re-read cache when offline pending count changes
   const offlinePendingCount = useSelector(state => state?.Offline?.pendingCount);
   React.useEffect(() => {
     if (isOnline && apiReachable !== false) return;
-    bill({ limit: itemsPerPage, page: 1 });
+    bill({ limit: 200, page: 1 });
   }, [offlinePendingCount]);
 
   // Re-read cache ketika queue berubah (remove/sync dari PendingDrawer)
@@ -95,7 +93,7 @@ const BillScreen = () => {
   React.useEffect(() => {
     const handler = () => {
       if (isOnlineRef.current && apiReachableRef.current !== false) return;
-      bill({ limit: itemsPerPage, page: 1 });
+      bill({ limit: 200, page: 1 });
     };
     window.addEventListener('pending-queue-changed', handler);
     return () => window.removeEventListener('pending-queue-changed', handler);
@@ -212,7 +210,7 @@ const BillScreen = () => {
                     </div>
 
                     <div className="text-base-300 text-end text-xs">
-                      {dateFormat(item?.ordered_at)}
+                      {dateFormat(item?.created_at)}
                     </div>
                   </div>
                 </div>

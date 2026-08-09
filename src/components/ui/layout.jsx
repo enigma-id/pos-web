@@ -6,7 +6,15 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import CashDrawerTrigger from './cashdrawer';
-import { BurgerIcon, HistoryIcon, ListIcon, MenuIcon, ReceiptIcon, UserIcon, MoneysIcon } from './icon';
+import {
+  BurgerIcon,
+  HistoryIcon,
+  ListIcon,
+  MenuIcon,
+  ReceiptIcon,
+  UserIcon,
+  MoneysIcon,
+} from './icon';
 import { OfflineBanner, PendingDrawer, SyncIndicator } from './offline';
 import useSidebar from './sidebar/hook';
 import useCart from '../../services/cart/hook';
@@ -99,19 +107,15 @@ const Layout = ({ children }) => {
     navigate('/');
   };
 
-  const handleRemoveOffline = (type, queueItem) => {
+  const handleRemoveOffline = async (type, queueItem) => {
     if (type === 'bill') {
       try {
-        deleteOrderBill(queueItem, sessionAuth?.user?.id);
-      } catch (err) {
-
-      }
+        await deleteOrderBill(queueItem, sessionAuth?.user?.id);
+      } catch (err) {}
 
       try {
-        deleteOpenBills(queueItem);
-      } catch (err) {
-
-      }
+        await deleteOpenBills(queueItem);
+      } catch (err) {}
 
       updateSessionSummary({
         type: 'update',
@@ -121,14 +125,14 @@ const Layout = ({ children }) => {
 
     if (type === 'payment') {
       try {
-        deleteOrderPayment(queueItem?.sync_id, sessionAuth?.user?.id);
-      } catch (err) { /* empty */ }
+        await deleteOrderPayment(queueItem?.sync_id, sessionAuth?.user?.id);
+      } catch (err) {
+        /* empty */
+      }
 
       try {
-        deleteOrderHistory(queueItem);
-      } catch (err) {
-
-      }
+        await deleteOrderHistory(queueItem);
+      } catch (err) {}
 
       let outstandingBillPayment = 0;
 
@@ -157,10 +161,8 @@ const Layout = ({ children }) => {
 
     if (type === 'topup') {
       try {
-        deleteTopup(queueItem?.sync_id, sessionAuth?.user?.id);
-      } catch (err) {
-
-      }
+        await deleteTopup(queueItem?.sync_id, sessionAuth?.user?.id);
+      } catch (err) {}
 
       try {
         const membership = showMembership(queueItem?.membership?.card_id);
@@ -170,10 +172,8 @@ const Layout = ({ children }) => {
 
         membership.saldo_logs.splice(logsIdx, 1);
 
-        perbaharuiMembership(membership);
-      } catch (err) {
-
-      }
+        await perbaharuiMembership(membership);
+      } catch (err) {}
 
       updateSessionSummary({
         type: 'deleted_topup',
@@ -283,19 +283,15 @@ const Navbar = () => {
     navigate('/');
   };
 
-  const handleRemoveOffline = (type, queueItem) => {
+  const handleRemoveOffline = async (type, queueItem) => {
     if (type === 'bill') {
       try {
-        deleteOrderBill(queueItem, sessionAuth?.user?.id);
-      } catch (err) {
-
-      }
+        await deleteOrderBill(queueItem, sessionAuth?.user?.id);
+      } catch (err) {}
 
       try {
-        deleteOpenBills(queueItem);
-      } catch (err) {
-
-      }
+        await deleteOpenBills(queueItem);
+      } catch (err) {}
 
       updateSessionSummary({
         type: 'update',
@@ -305,16 +301,12 @@ const Navbar = () => {
 
     if (type === 'payment') {
       try {
-        deleteOrderPayment(queueItem?.sync_id, sessionAuth?.user?.id);
-      } catch (err) {
-
-      }
+        await deleteOrderPayment(queueItem?.sync_id, sessionAuth?.user?.id);
+      } catch (err) {}
 
       try {
-        deleteOrderHistory(queueItem);
-      } catch (err) {
-
-      }
+        await deleteOrderHistory(queueItem);
+      } catch (err) {}
 
       let outstandingBillPayment = 0;
 
@@ -343,10 +335,8 @@ const Navbar = () => {
 
     if (type === 'topup') {
       try {
-        deleteTopup(queueItem?.sync_id, sessionAuth?.user?.id);
-      } catch (err) {
-
-      }
+        await deleteTopup(queueItem?.sync_id, sessionAuth?.user?.id);
+      } catch (err) {}
 
       try {
         const membership = showMembership(queueItem?.membership?.card_id);
@@ -356,10 +346,8 @@ const Navbar = () => {
 
         membership.saldo_logs.splice(logsIdx, 1);
 
-        perbaharuiMembership(membership);
-      } catch (err) {
-
-      }
+        await perbaharuiMembership(membership);
+      } catch (err) {}
 
       updateSessionSummary({
         type: 'deleted_topup',
@@ -370,10 +358,6 @@ const Navbar = () => {
 
     triggerQueueRefresh();
   };
-
-  useEffect(() => {
-    summary();
-  }, []);
 
   useEffect(() => {
     summary();
@@ -431,10 +415,7 @@ const Navbar = () => {
       </div>
 
       <div className="mb-5">
-        <div
-          className="nav-items mb-3 place-items-center"
-          onClick={handleOpenCashDrawer}
-        >
+        <div className="nav-items mb-3 place-items-center" onClick={handleOpenCashDrawer}>
           <MoneysIcon />
           <small>Open Drawer</small>
         </div>

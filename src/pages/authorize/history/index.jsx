@@ -60,26 +60,24 @@ const HistoryScreen = () => {
     );
   };
 
-  React.useEffect(() => {
-    history({ limit: itemsPerPage, page: 1 });
-  }, [lastSyncTime]);
-
-  // Search online → panggil endpoint; kosong → baca cache
+  // Load list: search online (debounce) / pagination → satu effect, satu request.
+  // On mount (search='', page=1) → history() polos — App.jsx prefetch pakai
+  // history() juga → RTK Query dedupe. Page change → { page } aja.
   React.useEffect(() => {
     const t = setTimeout(
       () => {
-        history(search ? { search } : {});
+        history(search ? { search } : currentPage === 1 ? undefined : { page: currentPage });
       },
       search ? 1000 : 0
     );
     return () => clearTimeout(t);
-  }, [search]);
+  }, [search, currentPage, lastSyncTime]);
 
   // Re-read cache when offline pending count changes
   const offlinePendingCount = useSelector(state => state?.Offline?.pendingCount);
   React.useEffect(() => {
     if (isOnline && apiReachable !== false) return;
-    history({ limit: itemsPerPage, page: 1 });
+    history();
   }, [offlinePendingCount]);
 
   // Re-read cache when queue changed (remove from PendingDrawer)
@@ -90,7 +88,7 @@ const HistoryScreen = () => {
   React.useEffect(() => {
     const handler = () => {
       if (isOnlineRef.current && apiReachableRef.current !== false) return;
-      history({ limit: itemsPerPage, page: 1 });
+      history();
     };
     window.addEventListener('pending-queue-changed', handler);
     return () => window.removeEventListener('pending-queue-changed', handler);
@@ -204,7 +202,7 @@ const HistoryScreen = () => {
                     </div>
 
                     <div className="text-base-300 text-end text-xs">
-                      {dateFormat(item?.created_at)}
+                      {dateFormat(item?.paid_at)}
                     </div>
                   </div>
                 </div>

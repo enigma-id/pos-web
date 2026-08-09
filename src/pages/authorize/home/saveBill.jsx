@@ -3,6 +3,7 @@ import React from 'react';
 import { useSelector } from 'react-redux';
 
 import { Input, Modal } from '../../../components/ui';
+import { SearchIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useCart from '../../../services/cart/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
@@ -16,12 +17,14 @@ const BillModal = ({ mode, count, onBillCreate }) => {
 
   const { closeModal } = useModal();
   const [billName, setBillName] = React.useState('');
+  const [search, setSearch] = React.useState('');
   const { bill, billResult, billData, onBillSelected } = useCart();
   const [errorBillName, setErrorBillName] = React.useState(null);
 
   React.useEffect(() => {
     if (mode === 'create') return;
-    bill();
+    // { limit: 200, page: 1 } — sama kayak App prefetch → RTK Query dedupe.
+    bill({ limit: 200, page: 1 });
   }, [mode]);
 
   const onSubmit = () => {
@@ -48,7 +51,7 @@ const BillModal = ({ mode, count, onBillCreate }) => {
       <Modal.Body full={mode === 'open'}>
         {mode === 'open' ? (
           <>
-            {/* <div className="border-base-200 relative !min-h-16 w-full place-content-center place-items-center border-b">
+            <div className="border-base-200 relative !min-h-16 w-full place-content-center place-items-center border-b">
               <div className="absolute top-1/3 left-4">
                 <SearchIcon />
               </div>
@@ -60,9 +63,15 @@ const BillModal = ({ mode, count, onBillCreate }) => {
                 onChange={e => setSearch(e.target.value)}
                 className="!min-h-16 w-full pl-15 focus-visible:!outline-none"
               />
-            </div> */}
+            </div>
             <div className="min-h-0 flex-1 overflow-y-auto">
-              {billList?.map((bill, idx) => (
+              {billList
+                ?.filter(bill => {
+                  if (!search) return true;
+                  const q = search.toLowerCase();
+                  return (bill?.bill_name || '').toLowerCase().includes(q);
+                })
+                ?.map((bill, idx) => (
                 <div
                   key={idx}
                   className="border-base-200 flex cursor-pointer place-content-between place-items-center border-b p-4"
