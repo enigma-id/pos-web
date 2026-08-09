@@ -8,7 +8,7 @@ import {
   useLazySessionQuery,
   useLazyShowSessionQuery,
 } from './action';
-import { setSummary, updateSummary } from './slice';
+import { resetSummary, setSummary, updateSummary } from './slice';
 import { $failure } from '../../form/action';
 import { getCache, setCache, updateShifts } from '../../../utils/cache';
 import { useState } from 'react';
@@ -52,11 +52,12 @@ const useSession = () => {
     if (!isOffline && !apiDead) {
       try {
         const res = await triggerSummary().unwrap();
-
         dispatch(setSummary(res.data));
 
         return;
       } catch (err) {
+        dispatch(resetSummary());
+
         if (import.meta.env.DEV) {
           console.error('[SESSION HOOK] summary error:', err);
         }
