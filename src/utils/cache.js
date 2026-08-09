@@ -14,11 +14,7 @@ export const getCache = key => {
 };
 
 export const setCache = (key, data) => {
-  try {
-    localStorage.setItem(key, JSON.stringify({ data }));
-  } catch (err) {
-    console.error('Error setting cache', err);
-  }
+  setItemQuotaSafe(key, JSON.stringify({ data }));
 };
 
 export const getOrFetch = async (key, fetcher) => {
@@ -32,6 +28,46 @@ export const getOrFetch = async (key, fetcher) => {
   } catch (e) {
     console.error('getOrFetch error for', key, e);
     return null;
+  }
+};
+
+//
+// Quota-safe writes
+//
+
+// localStorage shares one quota (~5 MB) across all keys. When full, setItem
+// throws QuotaExceededError and a cache silently stops updating. These grouped
+// caches regenerate on demand, so drop them to free space and retry the write.
+const CACHE_MAX_ITEMS = 500;
+const DETAIL_CACHE_MAX = 40;
+const EVICTABLE_CACHE_KEYS = ['cache_sales', 'cache_catalog', 'cache_membership', 'cache_membership_search'];
+
+const trimDetailCache = obj => {
+  const keys = Object.keys(obj);
+  while (keys.length > DETAIL_CACHE_MAX) {
+    delete obj[keys.shift()];
+  }
+  return obj;
+};
+
+const setItemQuotaSafe = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+    return;
+  } catch (err) {
+    if (err?.name === 'QuotaExceededError') {
+      const evictable = EVICTABLE_CACHE_KEYS.filter(k => k !== key);
+      for (const evictKey of [...evictable, key]) {
+        try {
+          localStorage.removeItem(evictKey);
+        } catch {}
+        try {
+          localStorage.setItem(key, value);
+          return;
+        } catch {}
+      }
+    }
+    console.error('Error setting cache', err);
   }
 };
 
@@ -53,7 +89,7 @@ const getSalesCacheRaw = () => {
 const setSalesCacheRaw = data => {
   const existing = getSalesCacheRaw();
   const updated = { ...existing, ...data };
-  localStorage.setItem(SALES_CACHE_KEY, JSON.stringify(updated));
+  setItemQuotaSafe(SALES_CACHE_KEY, JSON.stringify(updated));
 };
 
 export const getSalesCacheValue = key => {
@@ -118,7 +154,11 @@ const getCatalogCacheRaw = () => {
 const setCatalogCacheRaw = data => {
   const existing = getCatalogCacheRaw();
   const updated = { ...existing, ...data };
-  localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(updated));
+  // Prune oversized/legacy detail sub-caches so cache_catalog stays bounded.
+  if (updated.detail_catalog) updated.detail_catalog = trimDetailCache(updated.detail_catalog);
+  if (updated.detail_catalog_by_category)
+    updated.detail_catalog_by_category = trimDetailCache(updated.detail_catalog_by_category);
+  setItemQuotaSafe(CATALOG_CACHE_KEY, JSON.stringify(updated));
 };
 
 export const getCatalogCacheValue = key => {
@@ -154,7 +194,7 @@ export const setCatalogDetailCache = (id, channelId, data) => {
   const current = raw?.detail_catalog || {};
 
   const key = getCatalogDetailCacheKey(id, channelId);
-  const updatedDetail = { ...current, [key]: data };
+  const updatedDetail = trimDetailCache({ ...current, [key]: data });
 
   setCatalogCacheRaw({ ...raw, detail_catalog: updatedDetail });
 };
@@ -169,7 +209,7 @@ export const setCatalogDetailCacheByCategory = (id, channelId, categoryId, data)
   const raw = getCatalogCacheRaw();
   const current = raw?.detail_catalog_by_category || {};
   const key = getCatalogDetailByCategoryCacheKey(id, channelId, categoryId);
-  const updated = { ...current, [key]: data };
+  const updated = trimDetailCache({ ...current, [key]: data });
 
   setCatalogCacheRaw({ ...raw, detail_catalog_by_category: updated });
 };
@@ -225,11 +265,13 @@ export const saveOpenBills = data => {
   }
 
   existing.data.unshift(data);
+  existing.data = existing.data.slice(0, CACHE_MAX_ITEMS);
 
-  localStorage.setItem(BILLS_CACHE_KEY, JSON.stringify(existing));
+  setItemQuotaSafe(BILLS_CACHE_KEY, JSON.stringify(existing));
 
   return data;
 };
+
 
 export const updateOpenBills = data => {
   const existing = getOpenBillsCacheRaw();
@@ -245,7 +287,7 @@ export const updateOpenBills = data => {
     ...data,
   };
 
-  localStorage.setItem(BILLS_CACHE_KEY, JSON.stringify(existing));
+  setItemQuotaSafe(BILLS_CACHE_KEY, JSON.stringify(existing));
 
   return existing.data[index];
 };
@@ -257,7 +299,7 @@ export const deleteOpenBills = data => {
     item => item.id !== data?.id || item.sync_id !== data?.sync_id
   );
 
-  localStorage.setItem(BILLS_CACHE_KEY, JSON.stringify(existing));
+  setItemQuotaSafe(BILLS_CACHE_KEY, JSON.stringify(existing));
 };
 
 const HISTORY_CACHE_KEY = 'cache_order_history';
@@ -279,8 +321,9 @@ export const saveOrderHistory = data => {
   }
 
   existing.data.unshift(data);
+  existing.data = existing.data.slice(0, CACHE_MAX_ITEMS);
 
-  localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(existing));
+  setItemQuotaSafe(HISTORY_CACHE_KEY, JSON.stringify(existing));
 
   return data;
 };
@@ -292,7 +335,7 @@ export const deleteOrderHistory = data => {
     item => item.id !== data?.id || item.sync_id !== data?.sync_id
   );
 
-  localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(existing));
+  setItemQuotaSafe(HISTORY_CACHE_KEY, JSON.stringify(existing));
 };
 
 const SHIFTS_CACHE_KEY = 'cache_shifts';
@@ -314,8 +357,9 @@ export const saveShifts = data => {
   }
 
   existing.data.unshift(data);
+  existing.data = existing.data.slice(0, CACHE_MAX_ITEMS);
 
-  localStorage.setItem(SHIFTS_CACHE_KEY, JSON.stringify(existing));
+  setItemQuotaSafe(SHIFTS_CACHE_KEY, JSON.stringify(existing));
 
   return data;
 };
@@ -334,7 +378,7 @@ export const updateShifts = data => {
     ...data,
   };
 
-  localStorage.setItem(SHIFTS_CACHE_KEY, JSON.stringify(existing));
+  setItemQuotaSafe(SHIFTS_CACHE_KEY, JSON.stringify(existing));
 
   return existing.data[index];
 };
@@ -352,6 +396,38 @@ export const showShifts = data => {
 };
 
 const MEMBERSHIP_CACHE_KEY = 'cache_membership';
+// Membership payloads are large (card + saldo + nested saldo_logs per member).
+// Cap by count AND strip saldo_logs (only the detail/history view needs it), so
+// a single list write can't blow the shared localStorage quota (~5 MB).
+const MEMBERSHIP_CACHE_MAX = 200;
+const MEMBERSHIP_VALUE_BUDGET_BYTES = 1.5 * 1024 * 1024;
+
+const stripSaldoLogs = m => {
+  if (m && typeof m === 'object' && 'saldo_logs' in m) {
+    const { saldo_logs, ...rest } = m;
+    return rest;
+  }
+  return m;
+};
+
+const boundMembershipList = data => {
+  if (!Array.isArray(data)) return data;
+  let out = [];
+  let bytes = 0;
+  for (const m of data) {
+    const slim = stripSaldoLogs(m);
+    bytes += JSON.stringify(slim).length;
+    if (out.length >= MEMBERSHIP_CACHE_MAX || bytes > MEMBERSHIP_VALUE_BUDGET_BYTES) break;
+    out.push(slim);
+  }
+  return out;
+};
+
+export const saveMembershipList = (key, data) => {
+  const bounded = boundMembershipList(data);
+  setItemQuotaSafe(key, JSON.stringify({ data: bounded }));
+  return bounded;
+};
 
 export const getMembersipCacheRaw = () => {
   try {
@@ -380,8 +456,9 @@ export const saveMembership = data => {
   }
 
   existing.data.unshift(data);
+  existing.data = existing.data.slice(0, CACHE_MAX_ITEMS);
 
-  localStorage.setItem(MEMBERSHIP_CACHE_KEY, JSON.stringify(existing));
+  setItemQuotaSafe(MEMBERSHIP_CACHE_KEY, JSON.stringify(existing));
 
   return data;
 };
@@ -400,7 +477,7 @@ export const perbaharuiMembership = data => {
     ...data,
   };
 
-  localStorage.setItem(MEMBERSHIP_CACHE_KEY, JSON.stringify(existing));
+  setItemQuotaSafe(MEMBERSHIP_CACHE_KEY, JSON.stringify(existing));
 
   return existing.data[index];
 };

@@ -20,6 +20,7 @@ const App = () => {
   const { history } = useOrder();
   const { session } = useSession();
   const { getPaymentMethods, getSchemaBonus } = useMaster();
+  const { bill } = useCart();
   const { getMember } = useMembership();
 
   React.useEffect(() => {
@@ -34,11 +35,14 @@ const App = () => {
     if (!isAuthenticated) return;
 
     const fetchAndCache = async () => {
+      // Param sama persis kayak page mount → RTK Query dedupe, gak dobel fetch.
+      // Bill & membership pakai limit 200 buat ambil semua; history/session polos.
       history();
       session();
+      bill({ limit: 200, page: 1 });
       getPaymentMethods();
       getSchemaBonus();
-      getMember();
+      getMember({ limit: 200, page: 1 });
     };
 
     fetchAndCache();

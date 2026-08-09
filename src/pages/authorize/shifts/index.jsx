@@ -103,20 +103,18 @@ const ShiftScreen = () => {
     );
   };
 
-  React.useEffect(() => {
-    session({ limit: itemsPerPage, page: 1 });
-  }, [lastSyncTime]);
-
-  // Search online → panggil endpoint; kosong → baca cache
+  // Load list: search online (debounce) / pagination → satu effect, satu request.
+  // On mount (search='', page=1) → session() polos — App.jsx prefetch pakai
+  // session() juga → RTK Query dedupe. Page change → { page } aja.
   React.useEffect(() => {
     const t = setTimeout(
       () => {
-        session(search ? { search } : {});
+        session(search ? { search } : currentPage === 1 ? undefined : { page: currentPage });
       },
       search ? 1000 : 0
     );
     return () => clearTimeout(t);
-  }, [search]);
+  }, [search, currentPage, lastSyncTime]);
 
   // Re-read cache ketika queue berubah (remove/sync dari PendingDrawer)
   const isOnlineRef = React.useRef(isOnline);
@@ -126,7 +124,7 @@ const ShiftScreen = () => {
   React.useEffect(() => {
     const handler = () => {
       if (isOnlineRef.current && apiReachableRef.current !== false) return;
-      session({ limit: itemsPerPage, page: 1 });
+      session();
     };
     window.addEventListener('pending-queue-changed', handler);
     return () => window.removeEventListener('pending-queue-changed', handler);

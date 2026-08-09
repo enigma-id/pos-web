@@ -23,6 +23,7 @@ import { $failure } from '../form/action';
 const useCatalog = () => {
   const dispatch = useDispatch();
   const selectedChannel = useSelector(state => state.SalesChannel?.selectedChannel);
+  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
 
   const [createCatalog, createResult] = useCreateMutation();
   const [allCatalog, setAllCatalog] = useState([]);
@@ -66,18 +67,26 @@ const useCatalog = () => {
     const catalogKey = `catalog_pricing_${selectedChannel.id}`;
     const categoryKey = `categories`;
 
-    const catalogData = await getOrFetchCatalog(catalogKey, async () => {
-      const res = await triggerPricing({
-        sales_channel_id: selectedChannel.id,
-      }).unwrap();
-      return res?.data || [];
-    });
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    const apiDead = apiReachable === false;
 
-    const categoryData = await getOrFetchCatalog(categoryKey, async () => {
-      const res = await triggerCategories().unwrap();
-      const data = res?.data || [];
-      return [{ id: 0, name: 'All Category' }, ...data];
-    });
+    // Offline → baca cache dulu, jangan fetch API.
+    const catalogData = isOffline || apiDead
+      ? (getCatalogCacheValue(catalogKey) || [])
+      : await getOrFetchCatalog(catalogKey, async () => {
+          const res = await triggerPricing({
+            sales_channel_id: selectedChannel.id,
+          }).unwrap();
+          return res?.data || [];
+        });
+
+    const categoryData = isOffline || apiDead
+      ? (getCatalogCacheValue(categoryKey) || [])
+      : await getOrFetchCatalog(categoryKey, async () => {
+          const res = await triggerCategories().unwrap();
+          const data = res?.data || [];
+          return [{ id: 0, name: 'All Category' }, ...data];
+        });
 
     setAllCatalog(catalogData);
     setCategories(categoryData);
@@ -98,7 +107,7 @@ const useCatalog = () => {
     setFilteredCatalog(filtered);
     setIsLoading(false);
 
-  }, [selectedChannel, triggerPricing, triggerCategories, applyFilter]);
+  }, [selectedChannel, triggerPricing, triggerCategories, applyFilter, apiReachable]);
 
   const onSelectCategory = useCallback(
     category => {
@@ -127,8 +136,6 @@ const useCatalog = () => {
     setCatalogCacheValue('selected_category', null);
     applyFilter(null, searchTerm);
   }, [applyFilter, searchTerm]);
-
-  const apiReachable = useSelector(state => state?.Offline?.apiReachable);
 
   const getDetail = useCallback(
     async ({ id, channel_id = selectedChannel.id, category_id }) => {
@@ -166,6 +173,27 @@ const useCatalog = () => {
 
     setIsLoading(true);
 
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    const apiDead = apiReachable === false;
+
+    // Offline → ambil dari cache, jangan fetch API.
+    if (isOffline || apiDead) {
+      const cachedCatalog = getCatalogCacheValue(`catalog_pricing_${selectedChannel.id}`) || [];
+      const cachedCategory = getCatalogCacheValue(`categories`) || [];
+
+      const fallbackCategory = cachedCategory.find(cat => cat.id === 0) || null;
+      setCatalogCacheValue('selected_category', fallbackCategory);
+      setCatalogCacheValue('search_term', '');
+
+      setSelectedCategory(fallbackCategory);
+      setSearchTerm('');
+      setAllCatalog(cachedCatalog);
+      setCategories(cachedCategory);
+      setFilteredCatalog(cachedCatalog);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const resCatalog = await triggerPricing({ sales_channel_id: selectedChannel.id }).unwrap();
       const resCategory = await triggerCategories().unwrap();
@@ -196,6 +224,16 @@ const useCatalog = () => {
   }, [selectedChannel, triggerPricing, triggerCategories]);
 
   const getCategory = async () => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    const apiDead = apiReachable === false;
+
+    // Offline → ambil dari cache, jangan fetch API.
+    if (isOffline || apiDead) {
+      const cached = getCatalogCacheValue(`categories`) || [];
+      setCategories(cached);
+      return;
+    }
+
     try {
       await triggerCategories().unwrap();
     } catch (error) {

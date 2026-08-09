@@ -28,7 +28,8 @@ const CustomerSection = () => {
 
   const [search, setSearch] = React.useState('');
 
-  // Search online → panggil endpoint; kosong → baca cache
+  // Search online → panggil endpoint; kosong → baca cache.
+  // No-search = {} polos — sama kayak App prefetch → RTK Query dedupe.
   React.useEffect(() => {
     const t = setTimeout(
       () => {

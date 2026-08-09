@@ -167,7 +167,7 @@ const OrderDetails = ({ data }) => {
       </div>
 
       <div className="text-base-300 flex place-content-between place-items-center py-4 text-base">
-        <div>{dateFormat(data?.ordered_at)}</div>
+        <div>{dateFormat(data?.status === 'completed' ? data?.paid_at : data?.created_at)}</div>
         <div>{data?.code}</div>
       </div>
     </div>

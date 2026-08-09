@@ -16,7 +16,7 @@ const CreateSection = ({ onClose }) => {
   const [price, setPrice] = React.useState(0);
   const [category, setCategory] = React.useState(null);
 
-  const { getCategory, categoriesResult, create, createResult } = useCatalog();
+  const { getCategory, categoriesResult, categories, create, createResult } = useCatalog();
 
   const onSubmit = () => {
     const payload = {
@@ -41,7 +41,7 @@ const CreateSection = ({ onClose }) => {
     }
   }, [createResult]);
 
-  const categories = categoriesResult?.data?.data;
+  const categoriesList = categories?.length ? categories : categoriesResult?.data?.data;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -83,7 +83,7 @@ const CreateSection = ({ onClose }) => {
             </div>
             {isOpen && (
               <ul className="menu dropdown-content rounded-box bg-base-100 z-1 mt-4 w-full p-2 shadow-sm">
-                {categories?.map(cat => (
+                {categoriesList?.map(cat => (
                   <li key={cat.id}>
                     <a
                       className={`category ${isActive(category?.id, cat?.id)}`}

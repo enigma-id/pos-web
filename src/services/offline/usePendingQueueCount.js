@@ -39,7 +39,8 @@ const usePendingQueueCount = () => {
       const pendingSessions = sessions.filter(s => !s.is_synced).length;
       const pendingMemberships = memberships.length; // semua memberships pending sync
 
-      const total = pendingBills + pendingPayments + pendingTopups + pendingSessions + pendingMemberships;
+      const total =
+        pendingBills + pendingPayments + pendingTopups + pendingSessions + pendingMemberships;
 
       setCount(total);
       dispatch(setPendingCount(total));

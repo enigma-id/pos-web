@@ -42,20 +42,18 @@ const MembershipScreen = () => {
 
   const { checkSaldo, checkResult, getMember, getMemberResult, membershipData } = useMembership();
 
-  React.useEffect(() => {
-    getMember({ limit: itemsPerPage, page: 1 });
-  }, [lastSyncTime]);
-
-  // Search online → panggil endpoint; kosong → baca cache
+  // Load list: search online (debounce) / pagination → satu effect, satu request.
+  // Membership exception: no-search = { limit: 200, page: 1 } (ambit semua),
+  // sama kayak App.jsx prefetch → RTK Query dedupe.
   React.useEffect(() => {
     const t = setTimeout(
       () => {
-        getMember(search ? { search } : {});
+        getMember(search ? { search } : { limit: itemsPerPage, page: currentPage });
       },
       search ? 1000 : 0
     );
     return () => clearTimeout(t);
-  }, [search]);
+  }, [search, currentPage, lastSyncTime]);
 
   // Re-read cache ketika queue berubah (remove/sync dari PendingDrawer)
   const isOnlineRef = React.useRef(isOnline);

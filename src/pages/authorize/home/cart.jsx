@@ -180,7 +180,7 @@ const Cart = ({ onUpdate }) => {
     handleModalPrint(dataOfflineToOnline);
 
     // Refresh bills list biar button jadi Open Bill
-    bill();
+    bill({ limit: 200, page: 1 });
 
     dispatch(resetCart());
   };
@@ -683,7 +683,7 @@ const Cart = ({ onUpdate }) => {
       dataModalSuccess.current = null;
 
       handleModalPrint(data);
-      bill();
+      bill({ limit: 200, page: 1 });
       checkoutResult?.reset();
     }
   }, [checkoutResult]);
@@ -712,7 +712,8 @@ const Cart = ({ onUpdate }) => {
   }, [updateResult]);
 
   React.useEffect(() => {
-    bill();
+    // { limit: 200, page: 1 } — sama kayak App.jsx prefetch → RTK Query dedupe.
+    bill({ limit: 200, page: 1 });
     // getServiceCharge();
   }, []);
 
