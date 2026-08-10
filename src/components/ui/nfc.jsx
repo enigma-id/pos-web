@@ -103,6 +103,7 @@ const NFCField = ({ onRead, isOpen, onClose, result }) => {
           <p className="text-sm text-gray-600">{getSubtitle()}</p>
           <small className="text-error">{FormState?.errors?.card_id}</small>
           <small className="text-error">{FormState?.errors?.saldo}</small>
+          <small className="text-error">{FormState?.errors?.id}</small>
           <input
             id="nfc"
             ref={ref}
