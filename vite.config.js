@@ -85,6 +85,6 @@ export default defineConfig({
   server: {
     host: true, // atau '0.0.0.0' biar bisa diakses dari semua IP
     port: 5177, // opsional
-    allowedHosts: ['7678-118-136-58-128.ngrok-free.app'],
+    allowedHosts: ['51ea-36-69-181-90.ngrok-free.app'],
   },
 });
