@@ -9,9 +9,10 @@ import useMembership from '../../../services/membership/hook';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 
-const CancelTopupModal = ({ log, cancelTopup, cancelTopupResult, onClose }) => {
+const CancelTopupModal = ({ log, membership, onClose }) => {
   const [reason, setReason] = React.useState('');
   const [pin, setPin] = React.useState('');
+  const { cancelTopup, cancelTopupResult, show: showMember, saldoLog } = useMembership();
 
   const onConfirm = () => {
     const targetId = log?.id ?? log?.sync_id;
@@ -23,6 +24,11 @@ const CancelTopupModal = ({ log, cancelTopup, cancelTopupResult, onClose }) => {
 
   React.useEffect(() => {
     if (cancelTopupResult?.isSuccess) {
+      // refresh saldo & list log
+      if (membership?.id) {
+        showMember(membership?.id);
+        saldoLog({ id: membership?.id, params: { page: 1, limit: 25 } });
+      }
       onClose?.();
       setReason('');
       setPin('');
@@ -103,8 +109,6 @@ const HistorySection = ({ id, membership }) => {
     show: showMember,
     showResult,
     saldoLogResult,
-    cancelTopup,
-    cancelTopupResult,
   } = useMembership();
   const { show: orderShow, showResult: orderShowResult } = useOrder();
   const { openModal, closeModal } = useModal();
@@ -254,18 +258,8 @@ const HistorySection = ({ id, membership }) => {
   };
 
   const handleCancel = item => {
-    openModal(<CancelTopupModal log={item} cancelTopup={cancelTopup} cancelTopupResult={cancelTopupResult} onClose={closeModal} />);
+    openModal(<CancelTopupModal log={item} membership={membership} onClose={closeModal} />);
   };
-
-  // Setelah cancel sukses: refresh saldo & list log
-  React.useEffect(() => {
-    if (cancelTopupResult?.isSuccess) {
-      if (!isOffline && membership?.id) {
-        showMember(membership?.id);
-        saldoLog({ id: membership?.id, params: { page, limit: LIMIT } });
-      }
-    }
-  }, [cancelTopupResult]);
 
   React.useEffect(() => {
     if (
