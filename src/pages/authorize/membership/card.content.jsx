@@ -245,7 +245,7 @@ const CardContent = ({ data, onClose, onRefresh }) => {
             <small className="text-error">{FormState?.errors?.nominal}</small>
           </div>
 
-          {isSpecial && (
+          {!isSpecial && (
             <div className="mt-4 mb-2 px-4">
               <div className="mb-2 text-sm font-semibold tracking-wider uppercase">
                 Payment Method
