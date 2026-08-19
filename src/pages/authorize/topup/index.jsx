@@ -61,7 +61,11 @@ const TopUpScreen = () => {
           <div className="text-[16px] font-semibold tracking-wide">Membership Card</div>
         </Modal.Header>
         <Modal.Body full>
-          <CardContent data={data} onClose={closeModal} />
+          <CardContent
+            data={data}
+            onClose={closeModal}
+            onRefresh={() => topupTableRef.current?.boot()}
+          />
         </Modal.Body>
       </>,
       'w-md'
