@@ -3,13 +3,14 @@ import React from 'react';
 import { useSelector } from 'react-redux';
 
 import CardContent from '../membership/card.content';
-import { Drawer, Modal, NFCField } from '../../../components/ui';
+import { Modal, NFCField } from '../../../components/ui';
 import { CardSearchIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useTable from '../../../components/ui/table';
 import useMembership from '../../../services/membership/hook';
 import CancelTopupModal from './cancel.modal';
 import createTableConfig from './table.config';
+import TableFilter from './filter';
 
 const TopUpScreen = () => {
   const isOnline = useSelector(state => state?.Offline?.isOnline);
@@ -18,7 +19,6 @@ const TopUpScreen = () => {
 
   const { openModal, closeModal } = useModal();
   const { checkSaldo, checkResult } = useMembership();
-  const [status, setStatus] = React.useState('completed');
 
   // Stable config → useTable only boots once (config identity must not change per render,
   // otherwise useTable's useEffect([config]) loops: boot → setTable → render → new config → boot...)
@@ -26,6 +26,7 @@ const TopUpScreen = () => {
 
   const onRemove = React.useCallback(
     log => {
+      if (isOffline) return;
       openModal(
         <CancelTopupModal
           log={log}
@@ -35,23 +36,13 @@ const TopUpScreen = () => {
         'w-md'
       );
     },
-    [openModal, closeModal]
+    [openModal, closeModal, isOffline]
   );
 
   const tableConfig = React.useMemo(() => createTableConfig({ onRemove }), [onRemove]);
 
   const topupTable = useTable('topup_saldo_logs', tableConfig);
   topupTableRef.current = topupTable;
-
-  const STATUS_FILTERS = [
-    { label: 'Completed', value: 'completed' },
-    { label: 'Cancelled', value: 'cancelled' },
-  ];
-
-  const handleStatusChange = value => {
-    setStatus(value);
-    topupTable.filter('status', value === 'all' ? null : value);
-  };
 
   // ── Scan card (mirror membership/index.jsx) ──
   const openScan = result => {
@@ -70,10 +61,7 @@ const TopUpScreen = () => {
           <div className="text-[16px] font-semibold tracking-wide">Membership Card</div>
         </Modal.Header>
         <Modal.Body full>
-          <CardContent
-            data={data}
-            onClose={closeModal}
-          />
+          <CardContent data={data} onClose={closeModal} />
         </Modal.Body>
       </>,
       'w-md'
@@ -89,32 +77,39 @@ const TopUpScreen = () => {
   }, [checkResult]);
 
   return (
-    <Drawer.Wrapper>
-      <topupTable.Tools>
-        <div className="flex h-full place-content-end place-items-center gap-2 px-4">
-          <button
-            className="btn bg-primary/15 text-primary rounded-none border-0 px-6"
-            onClick={() => openScan(checkResult)}
-          >
+    <div className="flex h-full min-h-screen flex-col bg-slate-50">
+      {/* Header */}
+      <div className="flex flex-col gap-4 px-6 py-5 md:flex-row md:items-center md:justify-between">
+        <div>
+          <div className="text-xs font-semibold tracking-wider text-gray-400 uppercase">
+            Membership
+          </div>
+          <h1 className="text-xl font-bold text-gray-900">Top Up</h1>
+          <p className="mt-1 text-sm text-gray-500">Kelola riwayat top-up & bonus seluruh member.</p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button className="btn btn-primary btn-sm px-5" onClick={() => openScan(checkResult)}>
             <CardSearchIcon /> Scan Card
           </button>
-          <select
-            name="filter-status"
-            value={status}
-            onChange={e => handleStatusChange(e.target.value)}
-            className="select select-sm select-bordered"
-          >
-            {STATUS_FILTERS.map(f => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
         </div>
-      </topupTable.Tools>
-      <topupTable.Render />
-      <topupTable.Pagination />
-    </Drawer.Wrapper>
+      </div>
+
+      {/* Body: card container */}
+      <div className="mx-6 mb-6 min-h-0 flex-1">
+        <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <topupTable.Tools>
+            <div className="flex h-full items-center justify-end px-4">
+              <TableFilter table={topupTable} />
+            </div>
+          </topupTable.Tools>
+          <div className="min-h-0 flex-1">
+            <topupTable.Render />
+          </div>
+          <topupTable.Pagination />
+        </div>
+      </div>
+    </div>
   );
 };
 

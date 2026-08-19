@@ -79,7 +79,7 @@ const TableTool = ({ name, onSearch, children, downloadable, onDownload }) => {
           />
         </div>
       </div>
-      {children && <div className="flex-1 overflow-x-auto">{children}</div>}
+      {children && <div className="relative flex-1 overflow-visible">{children}</div>}
     </div>
   );
 };

@@ -11,7 +11,6 @@ import {
   HistoryIcon,
   ListIcon,
   MenuIcon,
-  MoneyIcon,
   ReceiptIcon,
   UserIcon,
   MoneysIcon,
@@ -411,7 +410,7 @@ const Navbar = () => {
             className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'topup')}`}
             onClick={() => navigate('/topup')}
           >
-            <MoneyIcon />
+            <MoneysIcon />
             <small>Top Up</small>
           </div>
         )}

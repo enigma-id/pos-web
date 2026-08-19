@@ -13,7 +13,7 @@ table td:last-child {
 }
 
 .table thead th {
-  @apply ! sticky top-0 z-5 border-b border-gray-200 bg-[#FCFDFE] px-4 py-5 align-middle text-[11px] font-bold tracking-[0.05em] text-gray-400 uppercase shadow-none;
+  @apply sticky top-0 z-5 border-b border-gray-200 bg-[#FCFDFE] px-4 py-5 align-middle text-[11px] font-bold tracking-[0.05em] text-gray-400 uppercase shadow-none;
 }
 
 @media print {
