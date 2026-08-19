@@ -11,6 +11,7 @@ import {
   HistoryIcon,
   ListIcon,
   MenuIcon,
+  MoneyIcon,
   ReceiptIcon,
   UserIcon,
   MoneysIcon,
@@ -404,6 +405,16 @@ const Navbar = () => {
           <HistoryIcon />
           <small>History</small>
         </div>
+
+        {Offline?.isOnline && Offline?.apiReachable !== false && (
+          <div
+            className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'topup')}`}
+            onClick={() => navigate('/topup')}
+          >
+            <MoneyIcon />
+            <small>Top Up</small>
+          </div>
+        )}
 
         <div
           className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'bills')}`}

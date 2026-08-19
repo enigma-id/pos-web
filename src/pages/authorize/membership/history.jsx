@@ -1,91 +1,16 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect } from 'react';
-import { LuTrash2, LuWallet } from 'react-icons/lu';
+import { LuWallet } from 'react-icons/lu';
 import { useSelector } from 'react-redux';
 
-import { Input, Modal, OrderDetails } from '../../../components/ui';
-import useModal from '../../../components/ui/modal/hook';
+import { OrderDetails } from '../../../components/ui';
 import useMembership from '../../../services/membership/hook';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 
-const CancelTopupModal = ({ log, membership, onClose }) => {
-  const [reason, setReason] = React.useState('');
-  const [pin, setPin] = React.useState('');
-  const { cancelTopup, cancelTopupResult, show: showMember, saldoLog } = useMembership();
-
-  const onConfirm = () => {
-    const targetId = log?.id ?? log?.sync_id;
-    if (!targetId) return;
-
-    const payload = { cancelled_reason: reason, password: pin };
-    cancelTopup({ id: targetId, payload });
-  };
-
-  React.useEffect(() => {
-    if (cancelTopupResult?.isSuccess) {
-      // refresh saldo & list log
-      if (membership?.id) {
-        showMember(membership?.id);
-        saldoLog({ id: membership?.id, params: { page: 1, limit: 25 } });
-      }
-      onClose?.();
-      setReason('');
-      setPin('');
-    }
-  }, [cancelTopupResult]);
-
-  return (
-    <>
-      <Modal.Header onClose={onClose}>
-        <div className="text-lg font-semibold">Cancel Topup</div>
-      </Modal.Header>
-      <Modal.Body>
-        <div className="mb-3 py-4">
-          <div className="mb-3">
-            Are you sure you want to cancel this topup?
-            <div className="text-gray-500 text-sm">
-              {log?.reference_code} · {currencyFormat(log?.nominal)}
-            </div>
-          </div>
-          <div className="space-y-4">
-            <Input
-              label="Reason"
-              value={reason}
-              onChange={e => setReason(e?.target?.value)}
-              placeholder="Required"
-            />
-
-            <Input
-              label="Enter PIN"
-              value={pin}
-              onChange={e => setPin(e?.target?.value)}
-              type="password"
-            />
-          </div>
-        </div>
-      </Modal.Body>
-      <Modal.Footer>
-        <div className="btn btn-md px-10" onClick={onClose}>
-          Cancel
-        </div>
-        <div
-          className={`btn btn-md btn-error px-10 text-white ${
-            cancelTopupResult?.isLoading || !reason || !pin ? 'btn-disabled' : ''
-          }`}
-          onClick={onConfirm}
-        >
-          Confirm {cancelTopupResult?.isLoading ? <span className="loading loading-spinner loading-sm"></span> : null}
-        </div>
-      </Modal.Footer>
-    </>
-  );
-};
-
 const HistorySection = ({ id, membership }) => {
   const isOnline = useSelector(state => state?.Offline?.isOnline);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
-  const sessionAuth = useSelector(state => state?.Auth?.session);
 
   const isOffline = !isOnline || apiReachable === false;
 
@@ -111,7 +36,6 @@ const HistorySection = ({ id, membership }) => {
     saldoLogResult,
   } = useMembership();
   const { show: orderShow, showResult: orderShowResult } = useOrder();
-  const { openModal, closeModal } = useModal();
 
   const LIMIT = 25;
 
@@ -247,20 +171,6 @@ const HistorySection = ({ id, membership }) => {
     orderShow(item.ref_id); // fetch
   };
 
-  const isCancellable = item => {
-    // Cancel online-only: tidak tampil saat offline
-    if (isOffline) return false;
-    // Hanya role manager yang boleh cancel
-    if (sessionAuth?.user?.role !== 'manager') return false;
-    if (!['top-up', 'bonus'].includes(item?.reference_type)) return false;
-    if (!item?.id && !item?.sync_id) return false;
-    return true;
-  };
-
-  const handleCancel = item => {
-    openModal(<CancelTopupModal log={item} membership={membership} onClose={closeModal} />);
-  };
-
   React.useEffect(() => {
     if (
       orderShowResult?.isSuccess &&
@@ -355,25 +265,11 @@ const HistorySection = ({ id, membership }) => {
                   ? 'Topup'
                   : `${item?.reference_type}`}
             </h3>
-            <div className="flex items-center gap-2">
-              <span
-                className={`font-semibold ${item?.nominal < 0 ? 'text-red-600' : 'text-green-600'}`}
-              >
-                {currencyFormat(item?.nominal)}
-              </span>
-              {isCancellable(item) && (
-                <button
-                  className="btn btn-ghost btn-circle btn-xs !text-error"
-                  title="Cancel topup"
-                  onClick={e => {
-                    e.stopPropagation();
-                    handleCancel(item);
-                  }}
-                >
-                  <LuTrash2 className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+            <span
+              className={`font-semibold ${item?.nominal < 0 ? 'text-red-600' : 'text-green-600'}`}
+            >
+              {currencyFormat(item?.nominal)}
+            </span>
           </div>
 
           {/* Payment Type */}

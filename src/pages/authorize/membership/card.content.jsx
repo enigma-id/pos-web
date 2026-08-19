@@ -31,6 +31,7 @@ const CardContent = ({ data, onClose, onRefresh }) => {
 
   const [value, setValue] = React.useState('');
   const [method, setMethod] = React.useState('');
+  const [isSpecial, setIsSpecial] = React.useState(false);
   const { open: openPrint } = usePrintWindow({ title: 'Topup Receipt', autoClose: true });
 
   const onTopupOffline = async () => {
@@ -124,6 +125,7 @@ const CardContent = ({ data, onClose, onRefresh }) => {
     const payload = {
       nominal: parseFloat(nominal) || 0,
       payment_type: method,
+      is_special_member: isSpecial,
     };
 
     topup({ id: data?.id, payload });
@@ -189,10 +191,33 @@ const CardContent = ({ data, onClose, onRefresh }) => {
       </div>
 
       {/* Form Section */}
-      {hasSession && (
+      {(hasSession || isSpecial) && (
         <div className="pt-4">
+          {/* Special membership toggle (online only) */}
           <div className="px-4">
-            <div className="mb-2 text-sm font-semibold tracking-wider uppercase">Topup Amount</div>
+            <label className="flex cursor-pointer place-items-center gap-3">
+              <input
+                type="checkbox"
+                className="toggle toggle-sm toggle-primary"
+                checked={isSpecial}
+                disabled={isOffline}
+                onChange={e => setIsSpecial(e.target.checked)}
+              />
+              <span className="text-sm font-semibold tracking-wider uppercase">
+                Topup Special Membership
+              </span>
+            </label>
+            <small className="text-base-300 block text-xs">
+              {isOffline
+                ? 'Special membership topup only available online.'
+                : isSpecial
+                  ? 'No active session required. Payment method optional.'
+                  : 'Requires an active sales session.'}
+            </small>
+          </div>
+
+          <div className="px-4">
+            <div className="mt-4 mb-2 text-sm font-semibold tracking-wider uppercase">Topup Amount</div>
             <input
               type="text"
               inputMode="decimal"
@@ -233,7 +258,9 @@ const CardContent = ({ data, onClose, onRefresh }) => {
           <div className="mt-4">
             <div
               className={`btn btn-primary btn-block btn-xl !rounded-none !rounded-b ${
-                topupResult?.isLoading || (!isOffline && !sessionSummary) ? 'btn-disabled' : ''
+                topupResult?.isLoading || (!isOffline && !sessionSummary && !isSpecial)
+                  ? 'btn-disabled'
+                  : ''
               }`}
               onClick={onTopup}
             >
