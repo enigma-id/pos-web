@@ -120,7 +120,7 @@ const TableRender = ({ name, columns = {}, onSorted, onRowClick }) => {
     if (StateEmpty) return <EmptyData />;
 
     return (
-      <div className="table-responsive m-0 flex h-full min-h-0 flex-col">
+      <div className="table-responsive absolute inset-0 m-0 flex min-h-0 flex-col">
         <div className="flex-1 overflow-auto">
           <table
             className="table-hover table-vcenter card-table datatable table-striped table"
@@ -136,7 +136,7 @@ const TableRender = ({ name, columns = {}, onSorted, onRowClick }) => {
             <tbody>
               {rows.map((row, rowIndex) => (
                 <tr
-                  className={`text-gray-700 hover:text-gray-900 text-[13px] font-medium tracking-wide hover:cursor-pointer`}
+                  className={`text-[13px] font-medium tracking-wide text-gray-700 hover:cursor-pointer hover:text-gray-900`}
                   key={rowIndex}
                   onClick={() => {
                     if (typeof onRowClick === 'function') {

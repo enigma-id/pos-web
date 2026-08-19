@@ -85,7 +85,9 @@ const TopUpScreen = () => {
             Membership
           </div>
           <h1 className="text-xl font-bold text-gray-900">Top Up</h1>
-          <p className="mt-1 text-sm text-gray-500">Kelola riwayat top-up & bonus seluruh member.</p>
+          <p className="mt-1 text-sm text-gray-500">
+            Kelola riwayat top-up & bonus seluruh member.
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -103,7 +105,7 @@ const TopUpScreen = () => {
               <TableFilter table={topupTable} />
             </div>
           </topupTable.Tools>
-          <div className="min-h-0 flex-1">
+          <div className="relative min-h-0 flex-1 overflow-hidden">
             <topupTable.Render />
           </div>
           <topupTable.Pagination />
