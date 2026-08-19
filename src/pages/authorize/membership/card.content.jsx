@@ -202,27 +202,29 @@ const CardContent = ({ data, onClose, onRefresh }) => {
       {(hasSession || isSpecial) && (
         <div className="pt-4">
           {/* Special membership toggle (online only) */}
-          <div className="px-4">
-            <label className="flex cursor-pointer place-items-center gap-3">
-              <input
-                type="checkbox"
-                className="toggle toggle-sm toggle-primary"
-                checked={isSpecial}
-                disabled={isOffline}
-                onChange={e => setIsSpecial(e.target.checked)}
-              />
-              <span className="text-sm font-semibold tracking-wider uppercase">
-                Topup Special Membership
-              </span>
-            </label>
-            <small className="text-base-300 block text-xs">
-              {isOffline
-                ? 'Special membership topup only available online.'
-                : isSpecial
-                  ? 'No active session required. Payment method optional.'
-                  : 'Requires an active sales session.'}
-            </small>
-          </div>
+          {!isOffline && (
+            <div className="px-4">
+              <label className="flex cursor-pointer place-items-center gap-3">
+                <input
+                  type="checkbox"
+                  className="toggle toggle-sm toggle-primary"
+                  checked={isSpecial}
+                  disabled={isOffline || !hasSession}
+                  onChange={e => setIsSpecial(e.target.checked)}
+                />
+                <span className="text-sm font-semibold tracking-wider uppercase">
+                  Topup Special Membership
+                </span>
+              </label>
+              <small className="text-base-300 block text-xs">
+                {isOffline
+                  ? 'Special membership topup only available online.'
+                  : isSpecial
+                    ? 'No active session required. Payment method optional.'
+                    : 'Requires an active sales session.'}
+              </small>
+            </div>
+          )}
 
           <div className="px-4">
             <div className="mt-4 mb-2 text-sm font-semibold tracking-wider uppercase">
