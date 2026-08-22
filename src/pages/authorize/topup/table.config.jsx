@@ -2,7 +2,7 @@ import { TrashIcon } from '../../../components/ui/icon';
 import config from '../../../services/table/const';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 
-const createTableConfig = ({ onRemove, filter = {} }) => ({
+const createTableConfig = ({ onRemove, filter = {}, role }) => ({
   ...config,
   url: '/saldo_logs',
   filter,
@@ -14,7 +14,9 @@ const createTableConfig = ({ onRemove, filter = {} }) => ({
       component: row => (
         <div>
           <span className="block font-medium">{dateFormat(row?.created_at, 'DD/MM/YYYY')}</span>
-          <span className="block text-xs text-gray-400">{dateFormat(row?.created_at, 'HH:mm')}</span>
+          <span className="block text-xs text-gray-400">
+            {dateFormat(row?.created_at, 'HH:mm')}
+          </span>
         </div>
       ),
     },
@@ -27,8 +29,8 @@ const createTableConfig = ({ onRemove, filter = {} }) => ({
         const isBonus = row?.reference_type === 'bonus';
         return (
           <span
-            className={`badge badge-sm px-2.5 font-semibold tracking-wider ${
-              isBonus ? 'badge-soft' : 'badge-soft badge-primary'
+            className={`badge badge-sm px-2.5 font-semibold tracking-wider text-white ${
+              isBonus ? 'badge-error' : 'badge-primary'
             }`}
           >
             {isBonus ? 'Bonus' : 'Topup'}
@@ -54,7 +56,9 @@ const createTableConfig = ({ onRemove, filter = {} }) => ({
       sortable: true,
       class: 'text-sm capitalize',
       component: row => (
-        <span className="capitalize">{row?.payment_type || <span className="text-gray-400">-</span>}</span>
+        <span className="capitalize">
+          {row?.payment_type || <span className="text-gray-400">-</span>}
+        </span>
       ),
     },
     membership: {
@@ -113,11 +117,11 @@ const createTableConfig = ({ onRemove, filter = {} }) => ({
       sortable: false,
       align: 'right',
       component: row =>
-        row?.status === 'cancelled' ? (
+        row?.status === 'cancelled' || role !== 'manager' ? (
           <span />
         ) : (
           <button
-            className="btn btn-ghost btn-xs btn-circle text-error/70 transition-colors hover:bg-red-50 hover:text-error"
+            className="btn btn-ghost btn-xs btn-circle text-error/70 hover:text-error transition-colors hover:bg-red-50"
             title="Cancel topup"
             onClick={e => {
               e.stopPropagation();

@@ -16,6 +16,7 @@ const TopUpScreen = () => {
   const isOnline = useSelector(state => state?.Offline?.isOnline);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
   const isOffline = !isOnline || apiReachable === false;
+  const role = useSelector(state => state?.Auth?.session?.user?.role);
 
   const { openModal, closeModal } = useModal();
   const { checkSaldo, checkResult } = useMembership();
@@ -39,7 +40,7 @@ const TopUpScreen = () => {
     [openModal, closeModal, isOffline]
   );
 
-  const tableConfig = React.useMemo(() => createTableConfig({ onRemove }), [onRemove]);
+  const tableConfig = React.useMemo(() => createTableConfig({ onRemove, role }), [onRemove, role]);
 
   const topupTable = useTable('topup_saldo_logs', tableConfig);
   topupTableRef.current = topupTable;
