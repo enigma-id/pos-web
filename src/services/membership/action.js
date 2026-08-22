@@ -61,6 +61,13 @@ export const memberApi = createApi({
         params,
       }),
     }),
+    cancelTopup: builder.mutation({
+      query: ({ id, payload }) => ({
+        url: `/balance/topup/${id}/cancel`,
+        method: 'PUT',
+        body: payload,
+      }),
+    }),
   }),
 });
 
@@ -73,4 +80,5 @@ export const {
   useLazyCheckSaldoQuery,
   useLazyGetSaldoLogQuery,
   useTopupMutation,
+  useCancelTopupMutation,
 } = memberApi;

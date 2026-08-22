@@ -1,12 +1,12 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect } from 'react';
 import { LuWallet } from 'react-icons/lu';
+import { useSelector } from 'react-redux';
 
 import { OrderDetails } from '../../../components/ui';
 import useMembership from '../../../services/membership/hook';
 import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
-import { useSelector } from 'react-redux';
 
 const HistorySection = ({ id, membership }) => {
   const isOnline = useSelector(state => state?.Offline?.isOnline);
@@ -29,7 +29,12 @@ const HistorySection = ({ id, membership }) => {
   const processedIdsRef = React.useRef(new Set());
   const hasMoreRef = React.useRef(true);
 
-  const { saldoLog, show: showMember, showResult, saldoLogResult } = useMembership();
+  const {
+    saldoLog,
+    show: showMember,
+    showResult,
+    saldoLogResult,
+  } = useMembership();
   const { show: orderShow, showResult: orderShowResult } = useOrder();
 
   const LIMIT = 25;

@@ -12,6 +12,7 @@ import { salesOrderApi } from './sales/order/action';
 import { salesSessionApi } from './sales/session/action';
 import { masterApi } from './master/action';
 import { tableApi } from './table/action';
+import { topupApi } from './topup/action';
 
 const persistConfig = {
   key: 'root',
@@ -27,6 +28,7 @@ const persistConfig = {
     'tableApi',
     'memberApi',
     'masterApi',
+    'topupApi',
     '_persist',
   ],
   debug: true,
@@ -44,6 +46,7 @@ const apiMiddleware = [
   tableApi.middleware,
   memberApi.middleware,
   masterApi.middleware,
+  topupApi.middleware,
 ];
 
 const store = configureStore({

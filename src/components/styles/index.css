@@ -22,12 +22,13 @@
   default: true;
   prefersdark: false;
   color-scheme: 'light';
+
   --color-base-100: oklch(1 0 0);
   --color-base-200: oklch(0.293 0.009 264.91 / 0.12);
   --color-base-300: oklch(0.293 0.009 264.91 / 0.4);
   --color-base-content: oklch(0.293 0.009 264.91);
-  --color-primary: oklch(0.701 0.233 49.71);
-  --color-primary-shadow: oklch(0.701 0.233 49.71/0.15);
+  --color-primary: oklch(39.7% 0.044 249);
+  --color-primary-shadow: oklch(39.7% 0.044 249 / 0.2);
   --color-primary-content: oklch(100% 0 0);
   --color-secondary: oklch(0.9189 0 0);
   --color-secondary-shadow: oklch(0.9189 0 0/0.15);

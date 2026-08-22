@@ -405,6 +405,16 @@ const Navbar = () => {
           <small>History</small>
         </div>
 
+        {Offline?.isOnline && Offline?.apiReachable !== false && (
+          <div
+            className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'topup')}`}
+            onClick={() => navigate('/topup')}
+          >
+            <MoneysIcon />
+            <small>Top Up</small>
+          </div>
+        )}
+
         <div
           className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'bills')}`}
           onClick={() => navigate('/bills')}

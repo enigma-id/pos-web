@@ -153,7 +153,13 @@ const useTable = (name, config) => {
 
   const onFilter = (field, value) => {
     dispatch(setFilter({ name, field, value }));
-    refetch();
+    // Jangan pakai refetch() — tableState di closure ini stale (dispatch belum re-render).
+    // Bangun filter baru eksplisit dari tableState + value, lalu fetch langsung.
+    if (tableState) {
+      const nextFilter =
+        field === 'bulk' ? value : { ...tableState.filter, [field]: value };
+      updateAndFetch({ filter: nextFilter, currentPage: 1, page: 1 });
+    }
   };
 
   const onDownload = () => {

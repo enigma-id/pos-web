@@ -1,0 +1,12 @@
+{
+  "buildCommand": "npm run build:sandbox",
+  "routes": [
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}

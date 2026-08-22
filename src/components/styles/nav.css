@@ -1,5 +1,5 @@
 .nav-container {
-  @apply bg-base-100 w-18;
+  @apply bg-base-100 w-20;
 }
 
 .nav-container.expand {

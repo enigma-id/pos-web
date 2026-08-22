@@ -17,6 +17,7 @@ import { sessionReducer } from './sales/session/slice';
 import { masterApi } from './master/action';
 import { tableApi } from './table/action';
 import { tableReducer } from './table/slice';
+import { topupApi } from './topup/action';
 
 const apiReducers = {
   [authApi.reducerPath]: authApi.reducer,
@@ -28,6 +29,7 @@ const apiReducers = {
   [tableApi.reducerPath]: tableApi.reducer,
   [memberApi.reducerPath]: memberApi.reducer,
   [masterApi.reducerPath]: masterApi.reducer,
+  [topupApi.reducerPath]: topupApi.reducer,
 };
 
 const rootReducer = combineReducers({

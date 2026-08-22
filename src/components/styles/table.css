@@ -1,11 +1,11 @@
 table th:first-child,
 table td:first-child {
-  @apply !ps-3.5;
+  @apply ps-3.5;
 }
 
 table th:last-child,
 table td:last-child {
-  @apply !pe-3.5;
+  @apply pe-3.5;
 }
 
 .table {
@@ -13,7 +13,7 @@ table td:last-child {
 }
 
 .table thead th {
-  @apply bg-base-100 relative pt-3 pb-3 font-semibold tracking-wider text-gray-600 uppercase;
+  @apply sticky top-0 z-5 border-b border-gray-200 bg-[#FCFDFE] px-4 py-5 align-middle text-[11px] font-bold tracking-[0.05em] text-gray-400 uppercase shadow-none;
 }
 
 @media print {
@@ -26,42 +26,6 @@ table td:last-child {
 .table thead th.sorting_asc,
 .table thead th.sorting_desc {
   @apply cursor-pointer;
-}
-
-.table thead th.sorting::before,
-.table thead th.sorting_asc::before,
-.table thead th.sorting_desc::before {
-  content: '';
-  position: absolute;
-  z-index: 10;
-  top: 12px;
-  right: 8px;
-  border-width: 4px;
-  border-color: transparent;
-  border-style: solid;
-  border-bottom-color: theme('colors.gray.400');
-}
-
-.table thead th.sorting::after,
-.table thead th.sorting_asc::after,
-.table thead th.sorting_desc::after {
-  content: '';
-  position: absolute;
-  z-index: 10;
-  top: 22px;
-  right: 8px;
-  border-width: 4px;
-  border-color: transparent;
-  border-style: solid;
-  border-top-color: theme('colors.gray.400');
-}
-
-.table thead th.sorting_asc::before {
-  border-bottom-color: theme('colors.gray.800');
-}
-
-.table thead th.sorting_desc::after {
-  border-top-color: theme('colors.gray.800');
 }
 
 .table th.center,
@@ -81,16 +45,24 @@ table td:last-child {
 
 .table-hover tbody tr:hover td,
 .table-hover tbody tr:hover th {
-  @apply cursor-pointer;
+  @apply cursor-pointer bg-gray-50/50;
 }
 
 /* Striped */
 .table-striped tbody tr:nth-of-type(odd) {
-  @apply bg-base-100;
+  @apply bg-white;
 }
 
 .table-striped tbody tr:nth-of-type(even) {
-  @apply bg-base-300/20;
+  @apply bg-white;
+}
+
+.table tbody tr {
+  @apply border-b border-gray-100;
+}
+
+.table tbody tr:last-child {
+  @apply border-b-0;
 }
 
 /* Responsive */

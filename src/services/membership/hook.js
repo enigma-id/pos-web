@@ -9,6 +9,7 @@ import {
   useLazyCheckSaldoQuery,
   useLazyGetSaldoLogQuery,
   useTopupMutation,
+  useCancelTopupMutation,
   useLazyGetQuery,
 } from './action';
 import { $failure } from '../form/action';
@@ -28,6 +29,7 @@ const useMembership = id => {
   const [triggerCheck, checkResult] = useLazyCheckSaldoQuery();
   const [triggerSaldoLog, saldoLogResult] = useLazyGetSaldoLogQuery();
   const [topupBalance, topupResult] = useTopupMutation();
+  const [cancelBalanceTopup, cancelTopupResult] = useCancelTopupMutation();
   const [mergedMembershipData, setMergedMembershipData] = useState(null);
 
   const getMember = async params => {
@@ -116,6 +118,14 @@ const useMembership = id => {
     }
   };
 
+  const cancelTopup = async ({ id, payload }) => {
+    try {
+      await cancelBalanceTopup({ id, payload }).unwrap();
+    } catch (err) {
+      dispatch($failure(err));
+    }
+  };
+
   return {
     getMember,
     getMemberResult,
@@ -133,6 +143,8 @@ const useMembership = id => {
     topupResult,
     saldoLog,
     saldoLogResult,
+    cancelTopup,
+    cancelTopupResult,
     membershipData: mergedMembershipData,
   };
 };
