@@ -26,6 +26,7 @@ const BillScreen = () => {
   const isOnline = useSelector(state => state?.Offline?.isOnline);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
   const lastSyncTime = useSelector(state => state?.Offline?.lastSyncTime);
+  const sessionAuth = useSelector(state => state?.Auth?.session);
 
   const [currentPage, setCurrentPage] = React.useState(1);
   const itemsPerPage = 25;
@@ -266,7 +267,7 @@ const BillScreen = () => {
                 <PrintIcon />
                 print kitchen
               </div>
-              {isOnline && apiReachable !== false && (
+              {isOnline && apiReachable !== false && sessionAuth?.user?.role === 'manager' && (
                 <div
                   className="bg-error text-base-100 flex h-full cursor-pointer place-items-center gap-2 px-4 text-sm capitalize"
                   onClick={() => onRefund(detail?.id, detail?.status)}
