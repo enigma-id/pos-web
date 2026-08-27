@@ -379,13 +379,15 @@ const Navbar = () => {
           <small>Menu</small>
         </div>
 
-        <div
-          className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'membership')}`}
-          onClick={() => navigate('/membership')}
-        >
-          <UserIcon />
-          <small>Member</small>
-        </div>
+        {sessionAuth?.outlet?.outlet_type_id !== '50a0d3c1-f4ae-4f55-9c73-3155de2ad47b' && (
+          <div
+            className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'membership')}`}
+            onClick={() => navigate('/membership')}
+          >
+            <UserIcon />
+            <small>Member</small>
+          </div>
+        )}
 
         {sessionAuth?.user?.role === 'manager' && (
           <div
