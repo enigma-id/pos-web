@@ -407,14 +407,18 @@ const Navbar = () => {
           <small>History</small>
         </div>
 
-        {Offline?.isOnline && Offline?.apiReachable !== false && (
-          <div
-            className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'topup')}`}
-            onClick={() => navigate('/topup')}
-          >
-            <MoneysIcon />
-            <small>Top Up</small>
-          </div>
+        {sessionAuth?.outlet?.outlet_type_id !== '50a0d3c1-f4ae-4f55-9c73-3155de2ad47b' && (
+          <>
+            {Offline?.isOnline && Offline?.apiReachable !== false && (
+              <div
+                className={`nav-items mb-3 place-items-center ${isActive(splitLocation[1], 'topup')}`}
+                onClick={() => navigate('/topup')}
+              >
+                <MoneysIcon />
+                <small>Top Up</small>
+              </div>
+            )}
+          </>
         )}
 
         <div
