@@ -1,12 +1,20 @@
 import { baseQuery } from '../baseQuery';
 import { ensureDB, STORES, setLastSyncTime as setLastSyncTimeMeta } from './queue';
+import {
+  setApiReachable,
+  setFailedCount,
+  setLastSyncTime,
+  setNetworkState,
+  setOfflineError,
+  setSyncing,
+} from './slice';
 import { triggerQueueRefresh } from './usePendingQueueCount';
-import { setFailedCount, setLastSyncTime, setOfflineError, setSyncing } from './slice';
 
 const MAX_RETRY = 5;
 const BASE_DELAY = 1000;
 const RECONNECT_DELAY = 3000;
 const HEARTBEAT_INTERVAL = 30000;
+const PROBE_TIMEOUT = 10000;
 
 let isSyncingInternal = false;
 let reconnectTimer = null;
@@ -213,7 +221,12 @@ export const syncPendingSessions = async () => {
     const allBills = await db.getAll(STORES.orderBills);
     const allPayments = await db.getAll(STORES.orderPayments);
     const allTopups = await db.getAll(STORES.topups);
-    if (allSessions.length > 0 || allBills.length > 0 || allPayments.length > 0 || allTopups.length > 0) {
+    if (
+      allSessions.length > 0 ||
+      allBills.length > 0 ||
+      allPayments.length > 0 ||
+      allTopups.length > 0
+    ) {
       hadPendingData = true;
     }
 
@@ -383,6 +396,8 @@ export const initSyncManager = async store => {
       const userId = getCurrentUserId();
       if (!userId) return;
 
+      probeServer();
+
       if (reconnectTimer) clearTimeout(reconnectTimer);
       reconnectTimer = setTimeout(() => {
         // Gak reset isSyncingInternal di sini — anti-reentrant harus dijaga.
@@ -396,15 +411,75 @@ export const initSyncManager = async store => {
   }
 };
 
+// ===== API REACHABILITY PROBE =====
+
+// navigator.onLine cuma bilang device punya interface jaringan (mis. WiFi nyambung),
+// bukan internet yang beneran nyala. Probe ringan ke API tiap heartbeat biar
+// Offline.apiReachable akurat walau user lagi idle di page (gak ada request lain).
+const classifyProbeResult = result => {
+  if (!result?.error) return { reachable: true, isNetworkError: false };
+  const status = result.error.status;
+  const isNetworkError =
+    status == null ||
+    status === 'TIMEOUT_ERROR' ||
+    status === 'FETCH_ERROR' ||
+    status === 'PARSING_ERROR';
+  const isServerError = typeof status === 'number' && status >= 500;
+
+  // reachable: buat Offline.apiReachable (network error / 5xx = gak reachable).
+  // isNetworkError: buat Offline.isOnline — 5xx/4xx tetep online, server nyaut.
+  return {
+    reachable: !(isNetworkError || isServerError),
+    isNetworkError,
+  };
+};
+
+const probeServer = async () => {
+  if (!storeRef) return;
+  const state = storeRef.getState();
+  if (!state?.Auth?.session?.user?.id) return;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+
+  const fakeApi = {
+    ...storeRef,
+    getState: storeRef.getState,
+    dispatch: storeRef.dispatch,
+    signal: new AbortController().signal,
+  };
+
+  try {
+    const result = await baseQuery(
+      { url: '/payment-method', method: 'GET', __skipOfflineQueue: true, timeout: PROBE_TIMEOUT },
+      fakeApi,
+      {}
+    );
+
+    const { reachable, isNetworkError } = classifyProbeResult(result);
+    storeRef.dispatch(setApiReachable(reachable));
+
+    // navigator.onLine gak ngasih tau kalo koneksi beneran putus (mis. WiFi nyambung
+    // tapi internet mati). Network error = offline; reducer slice yang jagain
+    // invariant-nya: isOnline=false ⇒ apiReachable=false, dan sebaliknya
+    // apiReachable=true (waktu probe sukses lagi) ⇒ isOnline=true.
+    if (isNetworkError) {
+      storeRef.dispatch(setNetworkState({ isOnline: false, wasOffline: false }));
+    }
+  } catch {
+    // baseQuery udah handle error detection; biarkan state terakhir.
+  }
+};
+
 // ===== HEARTBEAT =====
 
 const getSyncingState = () => isSyncingInternal;
 
 const startHeartbeat = () => {
   stopHeartbeat();
+  probeServer();
   heartbeatTimer = setInterval(() => {
     const state = storeRef?.getState();
     const pendingCount = state?.Offline?.pendingCount || 0;
+    probeServer();
     if (pendingCount > 0) {
       syncPendingSessions();
     }

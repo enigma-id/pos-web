@@ -773,7 +773,6 @@ const CheckoutScreen = () => {
   };
 
   const onPayOfflinePayAndDeleteBill = async dataOfflineToOnline => {
-    console.log('[DEBUG]', session?.user?.id);
     try {
       await createOrderPayment(dataOfflineToOnline, session?.user?.id);
     } catch (err) {

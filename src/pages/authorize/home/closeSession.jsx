@@ -195,12 +195,13 @@ const CloseSection = () => {
           <h2 className="text-xl font-bold">Sales Session</h2>
         </div>
 
-        <div
+        <button
           className="bg-error text-base-100 flex h-full cursor-pointer place-items-center px-4 text-center"
           onClick={openLogout}
+          disabled={endResult?.isLoading}
         >
           Logout
-        </div>
+        </button>
       </div>
 
       <div className="mt-4 flex-1 overflow-y-auto px-6 py-4">

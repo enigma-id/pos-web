@@ -9,7 +9,8 @@ const initialState = {
   warning: null,
   error: null,
   lastSyncTime: null,
-  apiReachable: true,
+  // Konsisten sama isOnline sejak awal: kalo device offline di boot, API pasti gak reachable.
+  apiReachable: typeof navigator === 'undefined' ? true : navigator.onLine,
 };
 
 const offlineSlice = createSlice({
@@ -22,6 +23,11 @@ const offlineSlice = createSlice({
         state.isOnline = isOnline;
       }
       state.wasOffline = !!wasOffline;
+
+      // Invariant: isOnline=false ⇒ apiReachable=false.
+      if (!state.isOnline) {
+        state.apiReachable = false;
+      }
     },
     setSyncing: (state, action) => {
       state.isSyncing = !!action.payload;
@@ -49,6 +55,12 @@ const offlineSlice = createSlice({
     },
     setApiReachable: (state, action) => {
       state.apiReachable = !!action.payload;
+
+      // Invariant: apiReachable=true ⇒ isOnline=true. Kalau request/probe sukses,
+      // koneksi jelas ada — navigator.onLine yang telat/ngaco jangan diturutin.
+      if (state.apiReachable) {
+        state.isOnline = true;
+      }
     },
     resetOfflineState: () => initialState,
   },

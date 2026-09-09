@@ -6,7 +6,7 @@ import useCart from '../../../services/cart/hook';
 import { currencyFormat } from '../../../utils/common';
 
 const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = 'cart' }) => {
-  const { catalogDetail, change, add } = useCart(type === 'cart' ? catalog?.id : null);
+  const { catalogDetail, isLoading, change, add } = useCart(type === 'cart' ? catalog?.id : null);
 
   const [catalogData, setCatalogData] = React.useState({});
   const [quantity, setQuantity] = React.useState(0);
@@ -48,8 +48,6 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
       });
 
       setAdditionals(additions);
-
-
     } else {
       setQuantity(0);
       setInitialQuantity(0);
@@ -62,7 +60,6 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
         })),
       }));
       setAdditionals(clearedAdditionals);
-
     }
   }, [catalogDetail, catalog, mode, type]);
 
@@ -151,113 +148,119 @@ const DetailScreen = ({ catalog, onClose, mode = 'add', editKey = null, type = '
 
   return (
     <Modal.Body full>
-      <div className="bg-base-100 flex min-h-1/3 min-w-fit flex-1 flex-col overflow-y-auto p-6 shadow-sm">
-        <div className="border-base-200 mb-3 flex justify-between border-b border-dashed pb-3">
-          <h2 className="card-title text-xl!">{catalogData?.name}</h2>
-          <p className="text-primary text-end text-xl font-semibold">
-            {currencyFormat(catalogData?.unit_nett)}
-          </p>
+      {isLoading ? (
+        <div className="bg-base-100 flex min-h-1/3 min-w-fit flex-1 place-content-center place-items-center p-6 shadow-sm">
+          <span className="loading loading-spinner loading-lg" />
         </div>
+      ) : (
+        <div className="bg-base-100 flex min-h-1/3 min-w-fit flex-1 flex-col overflow-y-auto p-6 shadow-sm">
+          <div className="border-base-200 mb-3 flex justify-between border-b border-dashed pb-3">
+            <h2 className="card-title text-xl!">{catalogData?.name}</h2>
+            <p className="text-primary text-end text-xl font-semibold">
+              {currencyFormat(catalogData?.unit_nett)}
+            </p>
+          </div>
 
-        {catalogDetail?.is_custom === true && (
-          <>
-            <div className="mb-3">
-              <Input
-                label="Catalog Name"
-                value={catalogData?.name || ''}
-                onChange={e => setCatalogData(prev => ({ ...prev, name: e.target.value }))}
-              />
-            </div>
-            <div className="mb-3">
-              <Input
-                label="Catalog Price"
-                value={currencyFormat(catalogData?.unit_nett)}
-                onChange={e => {
-                  const raw = e.target.value.replace(/[^0-9]/g, '');
-                  setCatalogData(prev => ({ ...prev, unit_nett: Number(raw) }));
-                }}
-              />
-            </div>
-          </>
-        )}
-
-        {additionals.map(
-          add =>
-            add.items?.length > 0 && (
-              <div key={add.id} className="border-base-200 mb-4 border-b border-dashed pb-3">
-                <p className="mb-2 text-base font-semibold uppercase">
-                  {add.name}{' '}
-                  {add?.type === 'quantity' ? (
-                    <span className="text-base-content text-sm !font-thin !capitalize">
-                      (set quantity for each option)
-                    </span>
-                  ) : add?.type === 'options' ? (
-                    <span className="text-base-content text-sm !font-thin !capitalize">
-                      (choose one)
-                    </span>
-                  ) : add?.type === 'checkbox' ? (
-                    <span className="text-base-content text-sm !font-thin !capitalize">
-                      (choose one or more)
-                    </span>
-                  ) : null}
-                </p>
-
-                {add.items.map(child => (
-                  <div key={child.id} className="mb-2 flex items-center justify-between text-sm">
-                    <span>{child.name}</span>
-                    <div className="flex items-center">
-                      <span className="text-primary me-3 text-sm">
-                        {child.unit_nett ? `@ ${currencyFormat(child.unit_nett)}` : 'Free'}
-                      </span>
-                      {type === 'bill' ? (
-                        add.type === 'quantity' && (
-                          <span className="bg-base-content rounded-lg px-3 py-1 text-white">
-                            {child?.quantity}
-                          </span>
-                        )
-                      ) : add.type === 'quantity' ? (
-                        <QuantityStepper
-                          small
-                          value={child.quantity || 0}
-                          onChange={val => updateQuantity(add.id, child.id, val)}
-                        />
-                      ) : add.type === 'options' ? (
-                        <input
-                          type="checkbox"
-                          name={`options-${add.id}`}
-                          checked={child.selected}
-                          onChange={() => selectOption(add.id, child.id)}
-                          className="radio radio-primary h-5 w-5"
-                        />
-                      ) : (
-                        <input
-                          type="checkbox"
-                          checked={child.selected}
-                          onChange={e => toggleCheckbox(add.id, child.id, e.target.checked)}
-                          className="checkbox checkbox-primary h-5 w-5"
-                        />
-                      )}
-                    </div>
-                  </div>
-                ))}
+          {catalogDetail?.is_custom === true && (
+            <>
+              <div className="mb-3">
+                <Input
+                  label="Catalog Name"
+                  value={catalogData?.name || ''}
+                  onChange={e => setCatalogData(prev => ({ ...prev, name: e.target.value }))}
+                />
               </div>
-            )
-        )}
+              <div className="mb-3">
+                <Input
+                  label="Catalog Price"
+                  value={currencyFormat(catalogData?.unit_nett)}
+                  onChange={e => {
+                    const raw = e.target.value.replace(/[^0-9]/g, '');
+                    setCatalogData(prev => ({ ...prev, unit_nett: Number(raw) }));
+                  }}
+                />
+              </div>
+            </>
+          )}
 
-        <QuantityStepper
-          value={quantity}
-          onChange={setQuantity}
-          disableIncrement={type === 'bill' && quantity >= initialQuantity}
-        />
+          {additionals.map(
+            add =>
+              add.items?.length > 0 && (
+                <div key={add.id} className="border-base-200 mb-4 border-b border-dashed pb-3">
+                  <p className="mb-2 text-base font-semibold uppercase">
+                    {add.name}{' '}
+                    {add?.type === 'quantity' ? (
+                      <span className="text-base-content text-sm !font-thin !capitalize">
+                        (set quantity for each option)
+                      </span>
+                    ) : add?.type === 'options' ? (
+                      <span className="text-base-content text-sm !font-thin !capitalize">
+                        (choose one)
+                      </span>
+                    ) : add?.type === 'checkbox' ? (
+                      <span className="text-base-content text-sm !font-thin !capitalize">
+                        (choose one or more)
+                      </span>
+                    ) : null}
+                  </p>
 
-        <button className="btn btn-primary btn-block btn-lg mt-4" onClick={addToCart}>
-          {quantity > 0
-            ? `Add (${currencyFormat(calculateSubtotal(), undefined, 'Free')})`
-            : mode === 'edit'
-              ? 'Remove & Back'
-              : 'Back'}
-        </button>
-      </div>
+                  {add.items.map(child => (
+                    <div key={child.id} className="mb-2 flex items-center justify-between text-sm">
+                      <span>{child.name}</span>
+                      <div className="flex items-center">
+                        <span className="text-primary me-3 text-sm">
+                          {child.unit_nett ? `@ ${currencyFormat(child.unit_nett)}` : 'Free'}
+                        </span>
+                        {type === 'bill' ? (
+                          add.type === 'quantity' && (
+                            <span className="bg-base-content rounded-lg px-3 py-1 text-white">
+                              {child?.quantity}
+                            </span>
+                          )
+                        ) : add.type === 'quantity' ? (
+                          <QuantityStepper
+                            small
+                            value={child.quantity || 0}
+                            onChange={val => updateQuantity(add.id, child.id, val)}
+                          />
+                        ) : add.type === 'options' ? (
+                          <input
+                            type="checkbox"
+                            name={`options-${add.id}`}
+                            checked={child.selected}
+                            onChange={() => selectOption(add.id, child.id)}
+                            className="radio radio-primary h-5 w-5"
+                          />
+                        ) : (
+                          <input
+                            type="checkbox"
+                            checked={child.selected}
+                            onChange={e => toggleCheckbox(add.id, child.id, e.target.checked)}
+                            className="checkbox checkbox-primary h-5 w-5"
+                          />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+          )}
+
+          <QuantityStepper
+            value={quantity}
+            onChange={setQuantity}
+            disableIncrement={type === 'bill' && quantity >= initialQuantity}
+          />
+
+          <button className="btn btn-primary btn-block btn-lg mt-4" onClick={addToCart}>
+            {quantity > 0
+              ? `Add (${currencyFormat(calculateSubtotal(), undefined, 'Free')})`
+              : mode === 'edit'
+                ? 'Remove & Back'
+                : 'Back'}
+          </button>
+        </div>
+      )}
     </Modal.Body>
   );
 };
