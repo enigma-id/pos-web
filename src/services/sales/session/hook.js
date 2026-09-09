@@ -56,10 +56,16 @@ const useSession = () => {
 
         return;
       } catch (err) {
-        dispatch(resetSummary());
-
         if (import.meta.env.DEV) {
           console.error('[SESSION HOOK] summary error:', err);
+        }
+
+        // Fetch error — jangan langsung reset. Kalau masih ada session aktif yang
+        // tersimpan (redux-persist dari localStorage), pertahankan; reset cuma
+        // bikin UI balik ke open session padahal session-nya mungkin masih jalan.
+        const persisted = store.getState()?.SalesSession;
+        if (!persisted?.hasSession || !persisted?.sessionSummary) {
+          dispatch(resetSummary());
         }
         // fetch error
       }

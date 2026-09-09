@@ -24,6 +24,7 @@ const CatalogScreen = () => {
 
   const isOnline = useSelector(state => state?.Offline?.isOnline);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+  const sessionSummary = useSelector(state => state?.SalesSession?.sessionSummary);
 
   const isOffline = !isOnline || apiReachable === false;
 
@@ -38,6 +39,7 @@ const CatalogScreen = () => {
   } = useCatalog();
 
   const { mode } = useSidebar();
+
   const { channels, selectChannel } = useSalesChannel();
   const [isOpen, setIsOpen] = React.useState(false);
   const [isOpens, setIsOpens] = React.useState(false);
