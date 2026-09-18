@@ -145,8 +145,12 @@ const useSession = () => {
         updatedSummary.summary.payment_methods = [];
       }
 
+      // POINT bukan row payment_method — server mecah barisnya pakai name 'POINT'.
+      // Samakan label lokal biar summary offline identik dengan hasil recompute server.
+      const paymentName = data?.is_point || data?.order?.is_point ? 'POINT' : data?.payment_method?.name;
+
       const pmIdx = updatedSummary.summary.payment_methods.findIndex(
-        p => p.name === data?.payment_method?.name
+        p => p.name === paymentName
       );
 
       // Gunakan >= 0 karena indeks ke-0 itu valid!
@@ -172,7 +176,7 @@ const useSession = () => {
         updatedSummary.summary.payment_methods.push({
           total_paid: data.total_charges,
           count: 1,
-          name: data?.payment_method?.name,
+          name: paymentName,
         });
       }
 

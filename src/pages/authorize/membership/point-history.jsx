@@ -5,7 +5,14 @@ import { useSelector } from 'react-redux';
 import useMembership from '../../../services/membership/hook';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 
-const HistorySection = ({ id, membership }) => {
+const POINT_TYPE_LABEL = {
+  earn: 'Earn',
+  redeem: 'Redeem',
+  revert: 'Revert',
+  revert_earn: 'Revert Earn',
+};
+
+const PointHistorySection = ({ id, membership }) => {
   const isOnline = useSelector(state => state?.Offline?.isOnline);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
 
@@ -17,13 +24,14 @@ const HistorySection = ({ id, membership }) => {
 
   const observerRef = React.useRef(null);
   const loadMoreRef = React.useRef(null);
+  const containerRef = React.useRef(null);
   const isLoadingRef = React.useRef(false);
   const logsLengthRef = React.useRef(0);
   const isTriggeringRef = React.useRef(false);
   const processedIdsRef = React.useRef(new Set());
   const hasMoreRef = React.useRef(true);
 
-  const { saldoLog, saldoLogResult } = useMembership();
+  const { pointLog, pointLogResult } = useMembership();
 
   const LIMIT = 25;
 
@@ -34,73 +42,58 @@ const HistorySection = ({ id, membership }) => {
     processedIdsRef.current.clear();
   }, [id]);
 
-  // Fetch history
   React.useEffect(() => {
     if (id) {
-      const params = {
-        page,
-        limit: LIMIT,
-      };
-
-      saldoLog({ id, params });
+      pointLog({ id, params: { page, limit: LIMIT } });
     }
   }, [id, page]);
 
   React.useEffect(() => {
-    if (saldoLogResult?.isSuccess) {
-      const res = saldoLogResult?.data || {};
+    if (pointLogResult?.isSuccess) {
+      const res = pointLogResult?.data || {};
       const newData = res?.data || [];
 
-      // Filter data yang belum pernah diproses berdasarkan ID
       const filteredData = newData.filter(item => {
-        const id = item?.id;
-        if (!id) return true;
-        const isDuplicate = processedIdsRef.current.has(id);
+        const logId = item?.id;
+        if (!logId) return true;
+        const isDuplicate = processedIdsRef.current.has(logId);
         if (!isDuplicate) {
-          processedIdsRef.current.add(id);
+          processedIdsRef.current.add(logId);
         }
         return !isDuplicate;
       });
 
-      // Skip jika tidak ada data baru
       if (filteredData.length === 0) return;
 
       setLogs(prev => [...prev, ...filteredData]);
 
       if (res?.meta) {
         setHasMore(res.meta.has_next);
-      } else {
-        if (newData.length < LIMIT) {
-          setHasMore(false);
-        }
+      } else if (newData.length < LIMIT) {
+        setHasMore(false);
       }
 
-      // Reset isTriggeringRef setelah data berhasil ditambahkan
       isTriggeringRef.current = false;
     }
-  }, [saldoLogResult, page]);
+  }, [pointLogResult, page]);
 
-  // Sync refs
   React.useEffect(() => {
     const wasLoading = isLoadingRef.current;
-    const isLoading = saldoLogResult?.isLoading || false;
+    const isLoading = pointLogResult?.isLoading || false;
     isLoadingRef.current = isLoading;
 
     if (!isLoading && wasLoading) {
       isTriggeringRef.current = false;
     }
-  }, [saldoLogResult?.isLoading]);
+  }, [pointLogResult?.isLoading]);
 
   React.useEffect(() => {
     hasMoreRef.current = hasMore;
   }, [hasMore]);
 
-  const prevLogsLengthRef = React.useRef(0);
-
   React.useEffect(() => {
     logsLengthRef.current = logs.length;
 
-    // Reconnect observer setelah data baru masuk (untuk trigger intersection check)
     if (logs.length > 0 && observerRef.current) {
       const target = loadMoreRef.current;
       if (target) {
@@ -108,18 +101,13 @@ const HistorySection = ({ id, membership }) => {
         observerRef.current.observe(target);
       }
     }
-    prevLogsLengthRef.current = logs.length;
   }, [logs.length]);
-
-  // Infinite scroll observer
-  const containerRef = React.useRef(null);
 
   React.useEffect(() => {
     const target = loadMoreRef.current;
     const container = containerRef.current;
     if (!target || !container) return;
 
-    // Cleanup observer lama jika ada
     if (observerRef.current) {
       observerRef.current.disconnect();
     }
@@ -151,7 +139,7 @@ const HistorySection = ({ id, membership }) => {
 
   useEffect(() => {
     if (isOffline) {
-      setLogs(membership?.saldo_logs || []);
+      setLogs(membership?.point_logs || []);
     }
   }, [isOffline, membership?.card_id]);
 
@@ -159,40 +147,28 @@ const HistorySection = ({ id, membership }) => {
     <div ref={containerRef} className="flex-1 space-y-4 overflow-y-auto px-2">
       {logs.map((item, index) => (
         <div key={index} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-          {/* Title & Amount */}
           <div className="mb-1 flex items-start justify-between">
             <h3 className="font-semibold text-gray-900 capitalize">
-              {item?.reference_type === 'bonus'
-                ? 'Bonus'
-                : item?.reference_type === 'top-up'
-                  ? 'Topup'
-                  : `${item?.reference_type}`}
+              {POINT_TYPE_LABEL[item?.reference_type] || item?.reference_type}
             </h3>
             <span
               className={`font-semibold ${item?.nominal < 0 ? 'text-red-600' : 'text-green-600'}`}
             >
-              {currencyFormat(item?.nominal)}
+              {currencyFormat(item?.nominal, false)}
             </span>
           </div>
 
-          {/* Payment Type */}
-          <p className="text-sm leading-snug text-gray-600 capitalize">
-            {item?.payment_type ? `${item?.payment_type} - ` : ''} {item?.reference_code}
-          </p>
+          <p className="text-sm leading-snug text-gray-600">{item?.reference_code}</p>
 
-          {/* Date */}
           <p className="mt-1 text-xs text-gray-400">{dateFormat(item?.created_at)}</p>
         </div>
       ))}
 
-      {/* Loader */}
-      {saldoLogResult?.isLoading && (
+      {pointLogResult?.isLoading && (
         <div className="py-4 text-center text-sm text-gray-400">Memuat data...</div>
       )}
-      {/* Sentinel */}
       {hasMore && <div ref={loadMoreRef} className="h-4" />}
 
-      {/* End */}
       {!hasMore && (
         <div className="py-3 text-center text-xs text-gray-400">Semua riwayat ditampilkan</div>
       )}
@@ -200,4 +176,4 @@ const HistorySection = ({ id, membership }) => {
   );
 };
 
-export default HistorySection;
+export default PointHistorySection;

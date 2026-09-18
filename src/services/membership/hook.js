@@ -8,6 +8,7 @@ import {
   useLazyShowQuery,
   useLazyCheckSaldoQuery,
   useLazyGetSaldoLogQuery,
+  useLazyGetPointLogQuery,
   useTopupMutation,
   useCancelTopupMutation,
   useLazyGetQuery,
@@ -28,6 +29,7 @@ const useMembership = id => {
   const [triggerShow, showResult] = useLazyShowQuery();
   const [triggerCheck, checkResult] = useLazyCheckSaldoQuery();
   const [triggerSaldoLog, saldoLogResult] = useLazyGetSaldoLogQuery();
+  const [triggerPointLog, pointLogResult] = useLazyGetPointLogQuery();
   const [topupBalance, topupResult] = useTopupMutation();
   const [cancelBalanceTopup, cancelTopupResult] = useCancelTopupMutation();
   const [mergedMembershipData, setMergedMembershipData] = useState(null);
@@ -118,6 +120,14 @@ const useMembership = id => {
     }
   };
 
+  const pointLog = async ({ id, params }) => {
+    try {
+      await triggerPointLog({ id, params }).unwrap();
+    } catch (err) {
+      dispatch($failure(err));
+    }
+  };
+
   const cancelTopup = async ({ id, payload }) => {
     try {
       await cancelBalanceTopup({ id, payload }).unwrap();
@@ -143,6 +153,8 @@ const useMembership = id => {
     topupResult,
     saldoLog,
     saldoLogResult,
+    pointLog,
+    pointLogResult,
     cancelTopup,
     cancelTopupResult,
     membershipData: mergedMembershipData,

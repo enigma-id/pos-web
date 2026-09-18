@@ -4,9 +4,10 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import DetailScreen from './detail';
+import MemberPayment from './memberPayment';
 import BillModal from './saveBill';
 import SuccessModal from './success';
-import { Input, Modal, NFCField } from '../../../components/ui';
+import { Input, Modal } from '../../../components/ui';
 import { resetCart } from '../../../services/cart/slice';
 import {
   BackIcon,
@@ -20,7 +21,6 @@ import {
 import Keypad from '../../../components/ui/keypad';
 import useModal from '../../../components/ui/modal/hook';
 import useCart from '../../../services/cart/hook';
-import useMembership from '../../../services/membership/hook';
 import { setWarning } from '../../../services/offline';
 import {
   createOrderBill,
@@ -41,7 +41,6 @@ import {
   perbaharuiMembership,
   saveOpenBills,
   saveOrderHistory,
-  showMembership,
   updateOpenBills,
 } from '../../../utils/cache';
 import useOrder from '../../../services/sales/order/hook';
@@ -90,7 +89,6 @@ const CheckoutScreen = () => {
 
   // const { getServiceCharge } = useOutlet();
 
-  const { checkSaldo, checkResult } = useMembership();
   const { openModal, closeModal } = useModal();
 
   const [isOpen, setIsOpen] = React.useState(false);
@@ -542,7 +540,7 @@ const CheckoutScreen = () => {
   };
 
   // Pay Offline — Cache and IDB
-  const onPayOffline = async card => {
+  const onPayOffline = async (card, pointPay) => {
     let required = true;
 
     if (!selectedMethod) {
@@ -614,6 +612,7 @@ const CheckoutScreen = () => {
         payment_ref: paymentRef,
         status: 'completed',
         is_offline_mode: true,
+        is_point: !!pointPay,
         total_payment:
           selectedMethod?.provider === 'cash'
             ? Number(pay) || 0
@@ -728,14 +727,31 @@ const CheckoutScreen = () => {
       if (selectedMethod?.is_member_payment) {
         const cloneMembership = JSON.parse(JSON.stringify(payload?.membership));
 
-        cloneMembership.saldo -= dataOfflineToOnline?.total_charges;
-        cloneMembership.saldo_logs.unshift({
-          nominal: -1 * dataOfflineToOnline?.total_charges,
-          membership_id: payload?.membership?.id,
-          reference_type: 'Sales',
-          reference_code: dataOfflineToOnline?.code,
-          created_at: new Date(),
-        });
+        if (pointPay) {
+          // Point global (1 point = Rp 1) — ledger lokal mirror point_log 'redeem' biar tab
+          // Point tetap ada isinya sebelum sync; server menulis ledger aslinya saat sync.
+          cloneMembership.point = (cloneMembership.point || 0) - dataOfflineToOnline?.total_charges;
+          cloneMembership.point_logs = cloneMembership.point_logs || [];
+          cloneMembership.point_logs.unshift({
+            id: uuidv4(),
+            nominal: -1 * dataOfflineToOnline?.total_charges,
+            membership_id: payload?.membership?.id,
+            reference_id: dataOfflineToOnline?.id || dataOfflineToOnline?.sync_id,
+            reference_type: 'redeem',
+            reference_code: dataOfflineToOnline?.code,
+            created_at: new Date(),
+          });
+        } else {
+          cloneMembership.saldo -= dataOfflineToOnline?.total_charges;
+          cloneMembership.saldo_logs = cloneMembership.point_logs || [];
+          cloneMembership.saldo_logs.unshift({
+            nominal: -1 * dataOfflineToOnline?.total_charges,
+            membership_id: payload?.membership?.id,
+            reference_type: 'Sales',
+            reference_code: dataOfflineToOnline?.code,
+            created_at: new Date(),
+          });
+        }
 
         try {
           perbaharuiMembership(cloneMembership);
@@ -888,7 +904,7 @@ const CheckoutScreen = () => {
   };
 
   // Pay Online — API
-  const onPayOnline = async card => {
+  const onPayOnline = async (card, pointPay) => {
     const discount_categories = CartState?.discount?.category
       ?.filter(
         cat =>
@@ -934,6 +950,7 @@ const CheckoutScreen = () => {
       payment_method_id: selectedMethod?.id,
       payment_ref: paymentRef,
       status: 'completed',
+      is_point: !!pointPay,
       total_payment:
         selectedMethod?.provider === 'cash' ? Number(pay) || 0 : CartState?.meta?.grand_total || 0,
       items,
@@ -974,11 +991,11 @@ const CheckoutScreen = () => {
     }
   };
 
-  const onPay = async card => {
+  const onPay = async (card, pointPay) => {
     if (isOffline) {
-      onPayOffline(card);
+      onPayOffline(card, pointPay);
     } else {
-      onPayOnline(card);
+      onPayOnline(card, pointPay);
     }
   };
 
@@ -1047,59 +1064,18 @@ const CheckoutScreen = () => {
     openModal(<SuccessModal data={data} backToMenu />, 'w-md');
   };
 
-  const openScan = result => {
+  const openNFC = () => {
     openModal(
-      <NFCField onRead={handleRead} isOpen={true} onClose={closeModal} result={result} />,
+      <MemberPayment
+        total={CartState?.meta?.grand_total}
+        allowPoint={selectedMethod?.is_member_payment}
+        onConfirm={({ card, isPointPay }) => onPay(card, isPointPay)}
+        onClose={closeModal}
+        isLoading={checkoutResult?.isLoading}
+      />,
       'w-md'
     );
   };
-
-  const handleRead = uid => {
-    if (isOffline) {
-      // No connection → skip checkSaldo, ambil dari cache kalo ada
-      const membership = showMembership(uid);
-
-      let readyCard = false;
-      if (membership) {
-        if (membership?.saldo >= CartState?.meta?.grand_total) {
-          readyCard = true;
-        }
-      }
-
-      if (readyCard) {
-        onPay(membership || { card_id: uid });
-      } else {
-        // Re-open modal → NFCField reconcile (bukan remount), result isError → status 'failed'
-        openScan({ isError: true, message: 'Saldo anda kurang, silahkan topup terlebih dahulu' });
-      }
-
-      return;
-    }
-
-    const params = {
-      is_checkout: true,
-      nominal: CartState?.meta?.grand_total,
-      card_id: uid,
-    };
-
-    checkSaldo(params);
-  };
-
-  const openNFC = () => {
-    openScan(checkResult);
-  };
-
-  React.useEffect(() => {
-    if (checkResult?.isSuccess) {
-      // openSuccess()
-      const card = checkResult?.data?.data;
-      onPay(card);
-    } else if (checkResult?.isError) {
-      // Tanpa re-open, modal via openScan() menampilkan result yang dibekukan (stale)
-      // → error scan tidak pernah terlihat.
-      openScan(checkResult);
-    }
-  }, [checkResult]);
 
   React.useEffect(() => {
     if (checkoutResult?.isError || updateResult?.isError || closeBillResult?.isError) {

@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { LuStar } from 'react-icons/lu';
+import { useSelector } from 'react-redux';
 
 import CardContent from './card.content';
 import DrawerCreate from './drawer.create';
@@ -16,17 +17,15 @@ import {
 import useModal from '../../../components/ui/modal/hook';
 import useMembership from '../../../services/membership/hook';
 import { showMembership } from '../../../utils/cache';
-import useDrawer from '../../../utils/drawer';
-import { useSelector } from 'react-redux';
 import { currencyFormat } from '../../../utils/common';
+import useDrawer from '../../../utils/drawer';
 
 const MembershipScreen = () => {
-  const navigate = useNavigate();
   const isOnline = useSelector(state => state?.Offline?.isOnline);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
   const lastSyncTime = useSelector(state => state?.Offline?.lastSyncTime);
 
-  const [currentPage, setCurrentPage] = React.useState(1);
+  const currentPage = 1;
   const itemsPerPage = 200;
 
   const isOffline = !isOnline || apiReachable === false;
@@ -212,6 +211,11 @@ const MembershipScreen = () => {
                       <div className="text-primary mt-2 flex place-items-center gap-2 text-[16px] font-semibold tracking-wide">
                         <WalletIcon />
                         {currencyFormat(item?.saldo)}
+                      </div>
+                      <div className="text-amber-500 mt-1 flex place-items-center gap-2 text-[16px] font-semibold tracking-wide">
+                        <LuStar className="h-5 w-5" />
+                        {currencyFormat(item?.point, false)}
+                        <span className="text-base-300 text-sm font-normal">Point</span>
                       </div>
                       <div
                         className="btn btn-block btn-soft btn-primary mt-4"
