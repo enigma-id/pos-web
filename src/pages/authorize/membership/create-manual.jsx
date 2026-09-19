@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { redirect, useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 
 import { Input } from '../../../components/ui';
@@ -38,7 +38,7 @@ const CreateManual = () => {
 
     try {
       await createMembership(payload, sessionAuth?.user?.id);
-    } catch (err) {
+    } catch {
       // ignore
     }
 
@@ -46,7 +46,7 @@ const CreateManual = () => {
 
     try {
       saveMembership(payload);
-    } catch (err) {
+    } catch {
       // ignore
     }
 

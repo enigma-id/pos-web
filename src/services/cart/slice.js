@@ -490,6 +490,7 @@ const cartSlice = createSlice({
           };
         });
       } else {
+        /* noop */
       }
 
       state.discount.category = extractUniqueCategories(allItems);

@@ -1,16 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { FiRefreshCw } from 'react-icons/fi';
 import { useSelector } from 'react-redux';
 
 import { syncNow } from '../../../services/offline';
 import { ensureDB, STORES } from '../../../services/offline/queue';
-import { FiRefreshCw } from 'react-icons/fi';
 import { currencyFormat, dateFormat } from '../../../utils/common';
-
-const statusConfig = {
-  failed: { badge: 'badge-error', icon: '✕' },
-  syncing: { badge: 'badge-warning', icon: '↻' },
-  pending: { badge: 'badge-info', icon: '◷' },
-};
 
 const PendingDrawer = ({ open, onClose, onOpenBill, onRemove }) => {
   const sessionUserId = useSelector(state => state?.Auth?.session?.user?.id);

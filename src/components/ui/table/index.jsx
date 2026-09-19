@@ -121,11 +121,6 @@ const useTable = (name, config) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config]);
 
-  const refetch = () => {
-    if (!tableState) return;
-    fetchData(tableState);
-  };
-
   const updateAndFetch = updates => {
     const newState = { ...tableState, ...updates };
     fetchData(newState);

@@ -19,6 +19,7 @@ import { OfflineBanner, PendingDrawer, SyncIndicator } from './offline';
 import useSidebar from './sidebar/hook';
 import useCart from '../../services/cart/hook';
 import { deleteOrderBill, deleteOrderPayment, deleteTopup, syncNow } from '../../services/offline';
+import { revertMembershipOrder } from '../../services/offline/membershipMirror';
 import { setNetworkState } from '../../services/offline/slice';
 import useNetworkStatus from '../../services/offline/useNetworkStatus';
 import usePendingQueueCount, {
@@ -133,6 +134,15 @@ const Layout = ({ children }) => {
       try {
         await deleteOrderHistory(queueItem);
       } catch (err) {}
+
+      // Revert mirror membership lokal (F1) — pasangan dari mirror di checkout offline.
+      try {
+        revertMembershipOrder(queueItem);
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.error('[REMOVE OFFLINE] revert membership error:', err);
+        }
+      }
 
       let outstandingBillPayment = 0;
 
@@ -307,6 +317,15 @@ const Navbar = () => {
       try {
         await deleteOrderHistory(queueItem);
       } catch (err) {}
+
+      // Revert mirror membership lokal (F1) — pasangan dari mirror di checkout offline.
+      try {
+        revertMembershipOrder(queueItem);
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.error('[REMOVE OFFLINE] revert membership error:', err);
+        }
+      }
 
       let outstandingBillPayment = 0;
 

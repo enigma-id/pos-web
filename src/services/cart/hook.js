@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { useCheckoutMutation, useLazyGetBillQuery, useCloseBillMutation } from './action';
-import { useUpdateMutation } from '../sales/order/action';
 import {
   customer,
   removeItem,
@@ -24,11 +23,11 @@ import {
   getCatalogCacheValue,
   getCatalogItemFromPricingCache,
 } from '../../utils/cache';
+import { getCache, setCache } from '../../utils/cache';
 import { useLazyGetCatalogDetailQuery } from '../catalog/action';
 import { $failure } from '../form/action';
 import { useLazyShowQuery } from '../sales/order/action';
-import { getCache, setCache } from '../../utils/cache';
-import { rest } from 'underscore';
+import { useUpdateMutation } from '../sales/order/action';
 
 const BILLS_CACHE_KEY = 'cache_openbills';
 
@@ -47,7 +46,6 @@ const useCart = catalog_id => {
   const [showOrder] = useLazyShowQuery();
   const [offlineCatalogDetail, setOfflineCatalogDetail] = useState(null);
   const [mergedBillData, setMergedBillData] = useState(null);
-  const queueItemsMapRef = useRef({});
 
   // All cart items
   const cartItems = useSelector(state => state?.Cart?.items?.list || []);
@@ -232,7 +230,7 @@ const useCart = catalog_id => {
         }
         setMergedBillData(serverData);
         return;
-      } catch (error) {
+      } catch {
         // fetch error
       }
     }
@@ -325,7 +323,7 @@ const useCart = catalog_id => {
   useEffect(() => {
     if (sessionOutlet?.service_charges == null) return;
     dispatch(changeServiceCharge(sessionOutlet.service_charges));
-  }, [sessionOutlet?.service_charges]);
+  }, [sessionOutlet?.service_charges, dispatch]);
 
   return {
     catalogDetail: offlineCatalogDetail || catalogDetailResult?.data?.data,

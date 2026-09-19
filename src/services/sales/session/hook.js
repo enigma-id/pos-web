@@ -1,4 +1,5 @@
 // services/sales/session/hook.js
+import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
 import {
@@ -9,9 +10,8 @@ import {
   useLazyShowSessionQuery,
 } from './action';
 import { resetSummary, setSummary, updateSummary } from './slice';
+import { getCache, setCache, showShifts, updateShifts } from '../../../utils/cache';
 import { $failure } from '../../form/action';
-import { getCache, setCache, updateShifts } from '../../../utils/cache';
-import { useState } from 'react';
 import { store } from '../../store';
 
 const SHIFTS_CACHE_KEY = 'cache_shifts';
@@ -19,7 +19,6 @@ const SHIFTS_CACHE_KEY = 'cache_shifts';
 const useSession = () => {
   const dispatch = useDispatch();
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
-  const sessionSummary = useSelector(state => state?.SalesSession?.sessionSummary);
 
   const [startMutation, startResult] = useStartMutation();
   const [endMutation, endResult] = useEndMutation();
@@ -60,13 +59,8 @@ const useSession = () => {
           console.error('[SESSION HOOK] summary error:', err);
         }
 
-        // Fetch error — jangan langsung reset. Kalau masih ada session aktif yang
-        // tersimpan (redux-persist dari localStorage), pertahankan; reset cuma
-        // bikin UI balik ke open session padahal session-nya mungkin masih jalan.
-        const persisted = store.getState()?.SalesSession;
-        if (!persisted?.hasSession || !persisted?.sessionSummary) {
-          dispatch(resetSummary());
-        }
+        dispatch(resetSummary());
+
         // fetch error
       }
     }
@@ -90,7 +84,7 @@ const useSession = () => {
         }
         setMergedSessionData(serverData);
         return;
-      } catch (error) {
+      } catch {
         // fetch error
       }
     }
@@ -147,11 +141,10 @@ const useSession = () => {
 
       // POINT bukan row payment_method — server mecah barisnya pakai name 'POINT'.
       // Samakan label lokal biar summary offline identik dengan hasil recompute server.
-      const paymentName = data?.is_point || data?.order?.is_point ? 'POINT' : data?.payment_method?.name;
+      const paymentName =
+        data?.is_point || data?.order?.is_point ? 'POINT' : data?.payment_method?.name;
 
-      const pmIdx = updatedSummary.summary.payment_methods.findIndex(
-        p => p.name === paymentName
-      );
+      const pmIdx = updatedSummary.summary.payment_methods.findIndex(p => p.name === paymentName);
 
       // Gunakan >= 0 karena indeks ke-0 itu valid!
       if (pmIdx >= 0) {
@@ -252,7 +245,10 @@ const useSession = () => {
 
     if (data.type === 'update') {
       if (!(data.id === updatedSummary.id || data.sync_id === updatedSummary.sync_id)) {
-        let existing = showShifts(data);
+        const existing = showShifts(data);
+
+        // Session tidak ada di cache_shifts → tidak ada yang bisa dikoreksi.
+        if (!existing) return;
 
         existing.summary.sales.outstanding_bill += data.outstanding_bill;
 

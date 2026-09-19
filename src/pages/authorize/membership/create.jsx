@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { v4 as uuidv4 } from 'uuid';
 
 import { Input, NFCField } from '../../../components/ui';
@@ -54,7 +54,7 @@ const CreateSection = ({ onClose }) => {
 
     try {
       await createMembership(payload, sessionAuth?.user?.id);
-    } catch (err) {
+    } catch {
       // ignore
     }
 
@@ -62,7 +62,7 @@ const CreateSection = ({ onClose }) => {
 
     try {
       saveMembership(payload);
-    } catch (err) {
+    } catch {
       // ignore
     }
 

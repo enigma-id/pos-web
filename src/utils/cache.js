@@ -60,11 +60,15 @@ const setItemQuotaSafe = (key, value) => {
       for (const evictKey of [...evictable, key]) {
         try {
           localStorage.removeItem(evictKey);
-        } catch {}
+        } catch {
+          /* eviction best-effort */
+        }
         try {
           localStorage.setItem(key, value);
           return;
-        } catch {}
+        } catch {
+          /* masih penuh — coba key berikutnya */
+        }
       }
     }
     console.error('Error setting cache', err);
@@ -396,26 +400,41 @@ export const showShifts = data => {
 };
 
 const MEMBERSHIP_CACHE_KEY = 'cache_membership';
+const MEMBERSHIP_SEARCH_CACHE_KEY = 'cache_membership_search';
 // Membership payloads are large (card + saldo + nested saldo_logs per member).
 // Cap by count AND strip saldo_logs (only the detail/history view needs it), so
 // a single list write can't blow the shared localStorage quota (~5 MB).
 const MEMBERSHIP_CACHE_MAX = 200;
 const MEMBERSHIP_VALUE_BUDGET_BYTES = 1.5 * 1024 * 1024;
+// point_logs tetap disimpan (dipakai tab Point saat offline), tapi dibatasi jumlah
+// entrinya biar mirror lokal tidak menumbuhkan cache tanpa batas (F6).
+const MEMBERSHIP_POINT_LOG_MAX = 50;
 
 const stripSaldoLogs = m => {
   if (m && typeof m === 'object' && 'saldo_logs' in m) {
-    const { saldo_logs, ...rest } = m;
+    const rest = { ...m };
+    delete rest.saldo_logs;
     return rest;
   }
   return m;
 };
+
+const boundPointLogs = m => {
+  if (m && typeof m === 'object' && Array.isArray(m.point_logs)) {
+    if (m.point_logs.length <= MEMBERSHIP_POINT_LOG_MAX) return m;
+    return { ...m, point_logs: m.point_logs.slice(0, MEMBERSHIP_POINT_LOG_MAX) };
+  }
+  return m;
+};
+
+const boundMembership = m => boundPointLogs(stripSaldoLogs(m));
 
 const boundMembershipList = data => {
   if (!Array.isArray(data)) return data;
   let out = [];
   let bytes = 0;
   for (const m of data) {
-    const slim = stripSaldoLogs(m);
+    const slim = boundMembership(m);
     bytes += JSON.stringify(slim).length;
     if (out.length >= MEMBERSHIP_CACHE_MAX || bytes > MEMBERSHIP_VALUE_BUDGET_BYTES) break;
     out.push(slim);
@@ -429,12 +448,17 @@ export const saveMembershipList = (key, data) => {
   return bounded;
 };
 
-export const getMembersipCacheRaw = () => {
+// key opsional: 'cache_membership_search' dipakai jalur search online (F5).
+// Selalu balikin objek dengan `data` array biar caller tidak throw saat cache kosong (F4).
+export const getMembersipCacheRaw = (key = MEMBERSHIP_CACHE_KEY) => {
   try {
-    const raw = localStorage.getItem(MEMBERSHIP_CACHE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const raw = localStorage.getItem(key);
+    if (!raw) return { data: [] };
+
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : { data: [] };
   } catch {
-    return [];
+    return { data: [] };
   }
 };
 
@@ -463,21 +487,42 @@ export const saveMembership = data => {
   return data;
 };
 
+// Match by id (server) atau card_id (member offline) — tanpa self-match ke `undefined`.
+const isSameMember = (item, data) => {
+  if (data?.id != null && item?.id === data.id) return true;
+  if (data?.card_id != null && item?.card_id === data.card_id) return true;
+  return false;
+};
+
 export const perbaharuiMembership = data => {
   const existing = getMembersipCacheRaw();
 
-  const index = existing.data.findIndex(
-    item => item.id === data.id || item.card_id === data.card_id
-  );
+  const index = existing.data.findIndex(item => isSameMember(item, data));
 
-  if (index === -1) return null;
+  if (index >= 0) {
+    existing.data[index] = {
+      ...existing.data[index],
+      ...data,
+    };
 
-  existing.data[index] = {
-    ...existing.data[index],
+    setItemQuotaSafe(MEMBERSHIP_CACHE_KEY, JSON.stringify(existing));
+
+    return existing.data[index];
+  }
+
+  // F5: member yang cuma ada di cache hasil search online sebelumnya jadi no-op senyap.
+  const search = getMembersipCacheRaw(MEMBERSHIP_SEARCH_CACHE_KEY);
+  const searchData = Array.isArray(search?.data) ? search.data : [];
+  const searchIndex = searchData.findIndex(item => isSameMember(item, data));
+
+  if (searchIndex === -1) return null;
+
+  searchData[searchIndex] = {
+    ...searchData[searchIndex],
     ...data,
   };
 
-  setItemQuotaSafe(MEMBERSHIP_CACHE_KEY, JSON.stringify(existing));
+  setItemQuotaSafe(MEMBERSHIP_SEARCH_CACHE_KEY, JSON.stringify({ data: searchData }));
 
-  return existing.data[index];
+  return searchData[searchIndex];
 };

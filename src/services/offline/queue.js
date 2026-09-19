@@ -1,5 +1,4 @@
 import { openDB, deleteDB } from 'idb';
-import { v4 as uuidv4 } from 'uuid';
 
 const DB_VERSION = 5;
 
@@ -15,7 +14,6 @@ export const STORES = {
 const dbInstances = new Map();
 
 const getNow = () => Date.now();
-const getISO = () => new Date().toISOString();
 
 const getDBName = userId => `pos-offline-queue-${userId}`;
 
@@ -25,7 +23,7 @@ export const ensureDB = async userId => {
 
   const open = async () => {
     const db = await openDB(getDBName(userId), DB_VERSION, {
-      upgrade(db, oldVersion, newVersion) {
+      upgrade(db) {
         // Hapus semua store lama dari v3
         if (db.objectStoreNames.contains('offlineSessions')) {
           db.deleteObjectStore('offlineSessions');

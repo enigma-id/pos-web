@@ -209,7 +209,7 @@ export const syncPendingSessions = async () => {
           }
 
           await sleep(BASE_DELAY * 2 ** attempt);
-        } catch (err) {
+        } catch {
           // error non-retryable → gagal
           hadSyncFailure = true;
           await sleep(BASE_DELAY * 2 ** attempt);
@@ -338,7 +338,7 @@ export const syncPendingSessions = async () => {
           }
 
           await sleep(BASE_DELAY * 2 ** attempt);
-        } catch (err) {
+        } catch {
           await sleep(BASE_DELAY * 2 ** attempt);
         }
       }

@@ -29,7 +29,6 @@ const BillScreen = () => {
   const sessionAuth = useSelector(state => state?.Auth?.session);
 
   const [currentPage, setCurrentPage] = React.useState(1);
-  const itemsPerPage = 25;
 
   const { show: showOrder, showResult: showOrderResult } = useOrder();
   const { bill, billResult, billData } = useCart();
@@ -139,8 +138,8 @@ const BillScreen = () => {
         detail={detail}
         orders={data}
         onClose={closeModal}
-        onSuccess={result => {
-          order({ status: 'pending', search, page: currentPage, limit: itemsPerPage });
+        onSuccess={() => {
+          bill({ limit: 200, page: 1 });
           closeModal();
         }}
       />,

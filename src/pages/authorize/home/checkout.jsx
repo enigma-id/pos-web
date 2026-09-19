@@ -2,13 +2,13 @@
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { v4 as uuidv4 } from 'uuid';
 
 import DetailScreen from './detail';
 import MemberPayment from './memberPayment';
 import BillModal from './saveBill';
 import SuccessModal from './success';
 import { Input, Modal } from '../../../components/ui';
-import { resetCart } from '../../../services/cart/slice';
 import {
   BackIcon,
   CardIcon,
@@ -21,33 +21,33 @@ import {
 import Keypad from '../../../components/ui/keypad';
 import useModal from '../../../components/ui/modal/hook';
 import useCart from '../../../services/cart/hook';
+import { resetCart } from '../../../services/cart/slice';
+import { $failure } from '../../../services/form/action';
+import useMaster from '../../../services/master/hook';
 import { setWarning } from '../../../services/offline';
+import { checkPartialPaid } from '../../../services/offline/helper';
+import { mirrorMembershipOrder } from '../../../services/offline/membershipMirror';
 import {
   createOrderBill,
   createOrderPayment,
   deleteOrderBill,
   updateOrderBill,
 } from '../../../services/offline/queue';
-import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
-import { $failure } from '../../../services/form/action';
-import { v4 as uuidv4 } from 'uuid';
 import {
   makePendingBill,
   makeCompletedOrder,
   makeUpdatePendingBillFromSplitBill,
 } from '../../../services/offline/shapes';
+import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
+import useOrder from '../../../services/sales/order/hook';
+import useSession from '../../../services/sales/session/hook';
 import {
   deleteOpenBills,
-  perbaharuiMembership,
   saveOpenBills,
   saveOrderHistory,
   updateOpenBills,
 } from '../../../utils/cache';
-import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
-import useSession from '../../../services/sales/session/hook';
-import { checkPartialPaid } from '../../../services/offline/helper';
-import useMaster from '../../../services/master/hook';
 
 const CheckoutScreen = () => {
   const location = useLocation();
@@ -242,7 +242,7 @@ const CheckoutScreen = () => {
     // Push ke localStorage bills cache
     try {
       saveOpenBills(dataOfflineToOnline);
-    } catch (e) {
+    } catch {
       handleModalError();
     }
 
@@ -433,7 +433,7 @@ const CheckoutScreen = () => {
     // Push ke localStorage bills cache
     try {
       updateOpenBills(dataOfflineToOnline);
-    } catch (err) {
+    } catch {
       handleModalError();
     }
 
@@ -590,6 +590,7 @@ const CheckoutScreen = () => {
           discount_percentage: item.discount_percentage,
           discount_value: item.discount_value,
           unit_discount: item.unit_discount,
+          point_percentage: item.point_percentage || 0,
         };
 
         if (item?.is_custom) {
@@ -691,16 +692,18 @@ const CheckoutScreen = () => {
 
       const dataOfflineToOnline = makeCompletedOrder(payload);
 
-      if (CartState?.bill) {
-        let { itemsPending, isPending } = checkPartialPaid(payload.items, CartState?.bill?.items);
+      // Helper persist dipanggil tanpa await — urutan updateSessionSummary di bawah tidak boleh berubah.
+      // Mirror membership + resetCart ditahan sampai persist selesai & sukses (F2).
+      let persist;
 
-        if (!isPending) {
-          onPayOfflinePayAndDeleteBill(dataOfflineToOnline);
-        } else {
-          onPayOfflineSplit(dataOfflineToOnline, itemsPending);
-        }
+      if (CartState?.bill) {
+        const { itemsPending, isPending } = checkPartialPaid(payload.items, CartState?.bill?.items);
+
+        persist = isPending
+          ? onPayOfflineSplit(dataOfflineToOnline, itemsPending)
+          : onPayOfflinePayAndDeleteBill(dataOfflineToOnline);
       } else {
-        onPayOfflineDirectPay(dataOfflineToOnline);
+        persist = onPayOfflineDirectPay(dataOfflineToOnline);
       }
 
       try {
@@ -720,52 +723,30 @@ const CheckoutScreen = () => {
           total_charges: dataOfflineToOnline?.total_charges,
           outstanding_bill_payment: outstandingBillPayment,
         });
-      } catch (err) {
+      } catch {
         return;
       }
 
-      if (selectedMethod?.is_member_payment) {
-        const cloneMembership = JSON.parse(JSON.stringify(payload?.membership));
-
-        if (pointPay) {
-          // Point global (1 point = Rp 1) — ledger lokal mirror point_log 'redeem' biar tab
-          // Point tetap ada isinya sebelum sync; server menulis ledger aslinya saat sync.
-          cloneMembership.point = (cloneMembership.point || 0) - dataOfflineToOnline?.total_charges;
-          cloneMembership.point_logs = cloneMembership.point_logs || [];
-          cloneMembership.point_logs.unshift({
-            id: uuidv4(),
-            nominal: -1 * dataOfflineToOnline?.total_charges,
-            membership_id: payload?.membership?.id,
-            reference_id: dataOfflineToOnline?.id || dataOfflineToOnline?.sync_id,
-            reference_type: 'redeem',
-            reference_code: dataOfflineToOnline?.code,
-            created_at: new Date(),
-          });
-        } else {
-          cloneMembership.saldo -= dataOfflineToOnline?.total_charges;
-          cloneMembership.saldo_logs = cloneMembership.point_logs || [];
-          cloneMembership.saldo_logs.unshift({
-            nominal: -1 * dataOfflineToOnline?.total_charges,
-            membership_id: payload?.membership?.id,
-            reference_type: 'Sales',
-            reference_code: dataOfflineToOnline?.code,
-            created_at: new Date(),
-          });
-        }
-
-        try {
-          perbaharuiMembership(cloneMembership);
-        } catch (err) {
-          // ignore
-        }
-      }
-
       handleModalPrint(dataOfflineToOnline);
-      dispatch(resetCart());
-      setDiscountInputs([]);
-      setPaymentRef('');
-      setPay(0);
-      setBillName('');
+
+      Promise.resolve(persist).then(isSaved => {
+        if (!isSaved) return;
+
+        // Mirror earn/redeem/saldo — hanya member payment (Q1), dan hanya kalau order masuk queue.
+        try {
+          mirrorMembershipOrder(dataOfflineToOnline);
+        } catch (err) {
+          if (import.meta.env.DEV) {
+            console.error('[ON PAY OFFLINE] mirror membership error:', err);
+          }
+        }
+
+        dispatch(resetCart());
+        setDiscountInputs([]);
+        setPaymentRef('');
+        setPay(0);
+        setBillName('');
+      });
     }
   };
 
@@ -775,7 +756,7 @@ const CheckoutScreen = () => {
     } catch (err) {
       handleModalError();
       dispatch($failure(err));
-      return;
+      return false;
     }
     triggerQueueRefresh();
 
@@ -786,6 +767,8 @@ const CheckoutScreen = () => {
       handleModalError();
       console.error('[SAVE ON PAY] cache error:', err);
     }
+
+    return true;
   };
 
   const onPayOfflinePayAndDeleteBill = async dataOfflineToOnline => {
@@ -796,7 +779,7 @@ const CheckoutScreen = () => {
       dispatch($failure(err));
       console.error('[SAVE ON PAY AND Delete Bill] create order payment error:', err);
 
-      return;
+      return false;
     }
 
     try {
@@ -807,7 +790,8 @@ const CheckoutScreen = () => {
       dispatch($failure(err));
       console.error('[SAVE ON PAY AND Delete Bill] delete order bills error:', err);
 
-      return;
+      // Order payment sudah masuk queue → mirror tetap dijalankan.
+      return true;
     }
 
     // Push ke localStorage order history cache
@@ -841,6 +825,8 @@ const CheckoutScreen = () => {
       sync_id: CartState?.bill?.session?.sync_id,
       outstanding_bill: -1 * kurangiBill,
     });
+
+    return true;
   };
 
   const onPayOfflineSplit = async (dataOfflineToOnline, itemsPending) => {
@@ -856,7 +842,7 @@ const CheckoutScreen = () => {
       handleModalError();
       dispatch($failure(err));
       console.error('[SAVE ON PAY AND Split Bill] create order payment error:', err);
-      return;
+      return false;
     }
 
     // Push ke localStorage order history cache
@@ -880,7 +866,8 @@ const CheckoutScreen = () => {
 
       console.error('[SAVE ON PAY AND Split Bill] update order bill error:', err);
 
-      return;
+      // Order payment sudah masuk queue → mirror tetap dijalankan.
+      return true;
     }
 
     triggerQueueRefresh();
@@ -901,6 +888,8 @@ const CheckoutScreen = () => {
       outstanding_bill:
         -1 * (CartState?.bill?.total_charges - dataOfflineToOnlineUpdated?.total_charges || 0),
     });
+
+    return true;
   };
 
   // Pay Online — API

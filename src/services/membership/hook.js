@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
 import {
@@ -13,12 +13,12 @@ import {
   useCancelTopupMutation,
   useLazyGetQuery,
 } from './action';
-import { $failure } from '../form/action';
 import { getCache, saveMembershipList } from '../../utils/cache';
+import { $failure } from '../form/action';
 
 const MEMBERSHIP_CACHE_KEY = 'cache_membership';
 
-const useMembership = id => {
+const useMembership = () => {
   const dispatch = useDispatch();
 
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
@@ -52,7 +52,7 @@ const useMembership = id => {
         }
         setMergedMembershipData(serverData);
         return;
-      } catch (err) {
+      } catch {
         // fetch error
       }
     }

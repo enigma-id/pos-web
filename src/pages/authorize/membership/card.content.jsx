@@ -6,14 +6,14 @@ import { v4 as uuidv4 } from 'uuid';
 import CardMockup from '../../../assets/card-mockup.jpg';
 import { PaypassIcon } from '../../../components/ui/icon';
 import TopupReceipt from '../../../components/ui/topup-receipt';
+import useMaster from '../../../services/master/hook';
 import useMembership from '../../../services/membership/hook';
 import { createTopup } from '../../../services/offline/queue';
 import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
+import useSession from '../../../services/sales/session/hook';
 import { perbaharuiMembership } from '../../../utils/cache';
 import { currencyFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
-import useMaster from '../../../services/master/hook';
-import useSession from '../../../services/sales/session/hook';
 
 const CardContent = ({ data, onClose, onRefresh }) => {
   const hasSession = useSelector(state => state?.SalesSession?.hasSession);
@@ -71,7 +71,7 @@ const CardContent = ({ data, onClose, onRefresh }) => {
       membership.saldo += payload.nominal;
       membership.saldo_logs.push(payload);
       dataPrint.topup = payload;
-    } catch (err) {
+    } catch {
       // ignore
     }
 
@@ -94,7 +94,7 @@ const CardContent = ({ data, onClose, onRefresh }) => {
         membership.saldo += payloadBonus.nominal;
         membership.saldo_logs.push(payloadBonus);
         dataPrint.bonus = payloadBonus;
-      } catch (err) {
+      } catch {
         // ignore
       }
     }
@@ -103,7 +103,7 @@ const CardContent = ({ data, onClose, onRefresh }) => {
 
     try {
       perbaharuiMembership(membership);
-    } catch (err) {
+    } catch {
       // ignore
     }
 

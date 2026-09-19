@@ -26,7 +26,7 @@ const useMaster = () => {
         setCache(SCHEMA_BONUS_CACHE_KEY, serverData);
         setMergedSchemaBonusData(serverData);
         return;
-      } catch (error) {
+      } catch {
         // fetch error
       }
     }
@@ -49,7 +49,7 @@ const useMaster = () => {
         setMergedPaymentMethodData(serverData);
 
         return serverData;
-      } catch (err) {
+      } catch {
         // fetch error
       }
     }

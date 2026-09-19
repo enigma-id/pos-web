@@ -89,3 +89,39 @@ export const checkPartialPaid = (reqItems, oldItems) => {
 
   return { itemsPending, isPending };
 };
+
+/**
+ * Mirror MembershipUsecase.Earned (server): per item root, floor(unit_bill * qty * rate/100),
+ * lalu dijumlahkan. Addon TIDAK dapat point (server: additional_id IS NULL).
+ *
+ * Rate diambil dari item.point_percentage (dari /catalog), fallback ke rateByCategory
+ * (cache `categories`) untuk item lama yang belum punya field-nya.
+ *
+ * @param {Array}  items           item order offline: { point_percentage, category_id, unit_nett, unit_discount, quantity }
+ * @param {Object} rateByCategory  map category_id -> point_percentage (fallback)
+ * @returns {number} total point earned (integer, floor per item)
+ */
+export function computeEarnedPoint(items, rateByCategory = {}) {
+  let total = 0;
+
+  for (const item of items || []) {
+    const rate = Number(item?.point_percentage ?? rateByCategory[item?.category_id] ?? 0);
+    if (rate <= 0) continue;
+
+    const unitBill = Math.max(0, Number(item?.unit_nett || 0) - Number(item?.unit_discount || 0));
+    const qty = Number(item?.quantity || 0);
+
+    // floor per item — sama seperti SQL server (floor(unit_bill * quantity * point_percentage / 100))
+    total += Math.floor((unitBill * qty * rate) / 100);
+  }
+
+  return total;
+}
+
+/** Fallback: map category_id -> point_percentage dari cache `categories`. */
+export function buildPointRateMap(categories = []) {
+  return (categories || []).reduce((acc, cat) => {
+    if (cat?.id != null) acc[cat.id] = Number(cat?.point_percentage || 0);
+    return acc;
+  }, {});
+}

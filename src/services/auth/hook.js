@@ -2,19 +2,14 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import { useLoginMutation, useUpdateMutation, useLazyGetUserQuery } from './action';
 import { login, logout, session } from './slice';
-import {
-  clearCatalogCache,
-  clearSalesCache,
-  getSalesCacheValue,
-  setSalesCacheValue,
-} from '../../utils/cache';
+import { clearCatalogCache, clearSalesCache } from '../../utils/cache';
 import { resetCart } from '../cart/slice';
 import { $failure } from '../form/action';
 import { ensureDB, STORES, deleteUserDB } from '../offline/queue';
 import { syncPendingSessions } from '../offline/syncManager';
 import { clearSelectedChannel } from '../sales/channel/slice';
-import { $reset } from '../table/action';
 import { resetSummary, setSummary } from '../sales/session/slice';
+import { $reset } from '../table/action';
 
 const useAuth = () => {
   const dispatch = useDispatch();
