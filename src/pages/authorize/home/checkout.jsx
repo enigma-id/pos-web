@@ -727,19 +727,25 @@ const CheckoutScreen = () => {
         return;
       }
 
-      handleModalPrint(dataOfflineToOnline);
-
       Promise.resolve(persist).then(isSaved => {
         if (!isSaved) return;
 
         // Mirror earn/redeem/saldo — hanya member payment (Q1), dan hanya kalau order masuk queue.
+        // Hasilnya dipasang balik ke order biar Receipt menampilkan saldo/point terbaru.
+        // dataOfflineToOnline sudah di-push ke Redux oleh updateSessionSummary → dibekukan Immer.
+        // Jangan mutasi objeknya; pakai salinan untuk Receipt.
+        let printData = dataOfflineToOnline;
+
         try {
-          mirrorMembershipOrder(dataOfflineToOnline);
+          const updated = mirrorMembershipOrder(dataOfflineToOnline);
+          if (updated) printData = { ...dataOfflineToOnline, membership: updated };
         } catch (err) {
           if (import.meta.env.DEV) {
             console.error('[ON PAY OFFLINE] mirror membership error:', err);
           }
         }
+
+        handleModalPrint(printData);
 
         dispatch(resetCart());
         setDiscountInputs([]);

@@ -400,41 +400,30 @@ export const showShifts = data => {
 };
 
 const MEMBERSHIP_CACHE_KEY = 'cache_membership';
-const MEMBERSHIP_SEARCH_CACHE_KEY = 'cache_membership_search';
-// Membership payloads are large (card + saldo + nested saldo_logs per member).
-// Cap by count AND strip saldo_logs (only the detail/history view needs it), so
+// Membership payloads are large (card + saldo + nested logs per member).
+// Cap by count AND strip the logs (only the detail/history view needs them), so
 // a single list write can't blow the shared localStorage quota (~5 MB).
+// saldo_logs & point_logs di-strip dua-duanya biar konsisten: ledger offline kosong,
+// angka saldo/point saja yang dibawa (ditimpa data server saat refetch).
 const MEMBERSHIP_CACHE_MAX = 200;
 const MEMBERSHIP_VALUE_BUDGET_BYTES = 1.5 * 1024 * 1024;
-// point_logs tetap disimpan (dipakai tab Point saat offline), tapi dibatasi jumlah
-// entrinya biar mirror lokal tidak menumbuhkan cache tanpa batas (F6).
-const MEMBERSHIP_POINT_LOG_MAX = 50;
 
-const stripSaldoLogs = m => {
-  if (m && typeof m === 'object' && 'saldo_logs' in m) {
+const stripLogs = m => {
+  if (m && typeof m === 'object' && ('saldo_logs' in m || 'point_logs' in m)) {
     const rest = { ...m };
     delete rest.saldo_logs;
+    delete rest.point_logs;
     return rest;
   }
   return m;
 };
-
-const boundPointLogs = m => {
-  if (m && typeof m === 'object' && Array.isArray(m.point_logs)) {
-    if (m.point_logs.length <= MEMBERSHIP_POINT_LOG_MAX) return m;
-    return { ...m, point_logs: m.point_logs.slice(0, MEMBERSHIP_POINT_LOG_MAX) };
-  }
-  return m;
-};
-
-const boundMembership = m => boundPointLogs(stripSaldoLogs(m));
 
 const boundMembershipList = data => {
   if (!Array.isArray(data)) return data;
   let out = [];
   let bytes = 0;
   for (const m of data) {
-    const slim = boundMembership(m);
+    const slim = stripLogs(m);
     bytes += JSON.stringify(slim).length;
     if (out.length >= MEMBERSHIP_CACHE_MAX || bytes > MEMBERSHIP_VALUE_BUDGET_BYTES) break;
     out.push(slim);
@@ -448,11 +437,10 @@ export const saveMembershipList = (key, data) => {
   return bounded;
 };
 
-// key opsional: 'cache_membership_search' dipakai jalur search online (F5).
 // Selalu balikin objek dengan `data` array biar caller tidak throw saat cache kosong (F4).
-export const getMembersipCacheRaw = (key = MEMBERSHIP_CACHE_KEY) => {
+export const getMembersipCacheRaw = () => {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = localStorage.getItem(MEMBERSHIP_CACHE_KEY);
     if (!raw) return { data: [] };
 
     const parsed = JSON.parse(raw);
@@ -499,30 +487,14 @@ export const perbaharuiMembership = data => {
 
   const index = existing.data.findIndex(item => isSameMember(item, data));
 
-  if (index >= 0) {
-    existing.data[index] = {
-      ...existing.data[index],
-      ...data,
-    };
+  if (index === -1) return null;
 
-    setItemQuotaSafe(MEMBERSHIP_CACHE_KEY, JSON.stringify(existing));
-
-    return existing.data[index];
-  }
-
-  // F5: member yang cuma ada di cache hasil search online sebelumnya jadi no-op senyap.
-  const search = getMembersipCacheRaw(MEMBERSHIP_SEARCH_CACHE_KEY);
-  const searchData = Array.isArray(search?.data) ? search.data : [];
-  const searchIndex = searchData.findIndex(item => isSameMember(item, data));
-
-  if (searchIndex === -1) return null;
-
-  searchData[searchIndex] = {
-    ...searchData[searchIndex],
+  existing.data[index] = {
+    ...existing.data[index],
     ...data,
   };
 
-  setItemQuotaSafe(MEMBERSHIP_SEARCH_CACHE_KEY, JSON.stringify({ data: searchData }));
+  setItemQuotaSafe(MEMBERSHIP_CACHE_KEY, JSON.stringify(existing));
 
-  return searchData[searchIndex];
+  return existing.data[index];
 };
