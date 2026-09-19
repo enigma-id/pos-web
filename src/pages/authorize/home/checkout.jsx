@@ -178,6 +178,7 @@ const CheckoutScreen = () => {
         discount_percentage: item.discount_percentage,
         discount_value: item.discount_value,
         unit_discount: item.unit_discount,
+        point_percentage: item.point_percentage || 0,
       };
 
       if (item?.is_custom) {
@@ -370,6 +371,7 @@ const CheckoutScreen = () => {
         discount_percentage: item.discount_percentage,
         discount_value: item.discount_value,
         unit_discount: item.unit_discount,
+        point_percentage: item.point_percentage || 0,
       };
 
       if (item?.is_custom) {

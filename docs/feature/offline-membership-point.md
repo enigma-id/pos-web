@@ -245,12 +245,23 @@ export function revertMembershipOrder(order) {
 
 `point_percentage` otomatis nempel di cart item yang di-add dari katalog (`cart/hook.js` spread
 `...catalog` → `cart/slice.js`). Tapi mapping item offline **membangun object baru**, jadi field-nya
-ditambah eksplisit di **5 tempat**:
+ditambah eksplisit di **6 tempat**:
 
-- `checkout.jsx` → mapping item di `onPayOffline`
-- `cart.jsx` → mapping **create-bill** (sekaligus menambah `unit_discount` yang hilang — F7)
-- `cart.jsx` → mapping **update-bill**
-- (`makeCompletedOrder` / `makePendingBill` men-spread item, jadi field-nya ikut ke IndexedDB & cache)
+| # | Lokasi | Dipakai oleh |
+|---|---|---|
+| 1 | `checkout.jsx` `onPayOffline` | checkout offline (pay) |
+| 2 | `checkout.jsx` `onCreateBillOffline` | save bill dari checkout |
+| 3 | `checkout.jsx` `onUpdateBillOffline` | update bill dari checkout |
+| 4 | `cart.jsx` `onCreateBillOffline` | save bill dari cart (+ `unit_discount` yang hilang — F7) |
+| 5 | `cart.jsx` `onUpdateBillOffline` | update bill dari cart |
+| 6 | `cart/slice.js` `convertApiOrderToCartItem` | **open bill** → `setBillItems` → `CartState.items.bill` |
+
+Nomor 6 adalah yang paling gampang kelewat: bill yang dibuka masuk ke cart lewat mapper ini, dan
+sebelum diperbaiki `point_percentage`-nya hilang — jadi bill yang dibayar offline tidak dapat point.
+
+`makeCompletedOrder` / `makePendingBill` men-spread item, jadi begitu field-nya ada di mapping, nilainya
+ikut tersimpan ke IndexedDB & cache. Payload `/sales/sync` juga mengirim `point_percentage` per item
+(`syncManager.js` `mapItemsToSync`).
 
 ### 6.4 Revert saat order di-remove — `src/components/ui/layout.jsx`
 
@@ -408,10 +419,11 @@ yang dipakai.
 |---|---|---|
 | 1 | `src/services/offline/helper.js` | + `computeEarnedPoint()` (rate murni dari `item.point_percentage`) |
 | 2 | `src/services/offline/membershipMirror.js` **(baru)** | `mirrorMembershipOrder()` (koreksi angka + entri log lokal) / `revertMembershipOrder()` (kembalikan angka + buang entri log order itu) |
-| 3 | `src/pages/authorize/home/checkout.jsx` | Item mapping `+ point_percentage`; mirror lama (yang bug `saldo_logs = point_logs`) diganti panggilan helper; gate P2 |
+| 3 | `src/pages/authorize/home/checkout.jsx` | Item mapping `onPayOffline` / `onCreateBillOffline` / `onUpdateBillOffline` `+ point_percentage`; mirror lama (yang bug `saldo_logs = point_logs`) diganti panggilan helper; gate P2; `printData` (salinan) untuk receipt |
 | 4 | `src/pages/authorize/home/cart.jsx` | Item mapping create-bill & update-bill `+ point_percentage` (+ `unit_discount` yang hilang — F7) |
-| 5 | `src/components/ui/layout.jsx` | Revert di `handleRemoveOffline` `type='payment'` — **dua** handler — F1 |
-| 6 | `src/utils/cache.js` | `getMembersipCacheRaw` → `{ data: [] }`; `isSameMember` di `perbaharuiMembership` (match `id`/`card_id`, tanpa fallback search); `stripLogs` (saldo+point) |
+| 5 | `src/services/cart/slice.js` | `convertApiOrderToCartItem` (open bill) `+ point_percentage` |
+| 6 | `src/components/ui/layout.jsx` | Revert di `handleRemoveOffline` `type='payment'` — **dua** handler — F1 |
+| 7 | `src/utils/cache.js` | `getMembersipCacheRaw` → `{ data: [] }`; `isSameMember` di `perbaharuiMembership` (match `id`/`card_id`, tanpa fallback search); `stripLogs` (saldo+point) |
 
 **Tidak berubah:** `point-history.jsx`, `drawer.detail.jsx`, `queue.js`, `syncManager.js`,
 `entity/pricing.go` & `Catalog.Get`/`Show` (sudah dikerjakan user).

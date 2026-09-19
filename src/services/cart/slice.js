@@ -255,6 +255,7 @@ function convertApiOrderToCartItem(item) {
     additionals_flat: additionalsFlat,
     unit_discount: item.discount_value || 0,
     discount_percentage: item.discount_percentage || 0,
+    point_percentage: item.point_percentage || 0,
     final_total: item.unit_bill ? item.unit_bill * item.quantity : subtotal,
     from_bill: true,
     is_discount_percentage: !!item.is_discount_percentage,
