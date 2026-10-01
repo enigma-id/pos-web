@@ -69,6 +69,7 @@ const mapOrderToSync = order => ({
   ref_sync_id: order?.status === 'completed' ? order?.ref_sync_id : '',
   payment_method_id: order?.status === 'completed' ? order?.payment_method_id : '',
   payment_ref: order?.status === 'completed' ? order?.payment_ref : '',
+  is_point: order?.status === 'completed' ? !!order?.is_point : false,
   total_payment: order?.status === 'completed' ? order?.total_payment : null,
   paid_at: order?.status === 'completed' ? order?.paid_at : null,
 });
@@ -81,6 +82,7 @@ const mapItemsToSync = order => {
     category_name: item.category_name || '',
     quantity: item.quantity || 0,
     unit_nett: item.unit_nett || 0,
+    point_percentage: item.point_percentage || 0,
     addons: (item.addons || []).map(a => ({
       addon_group_id: a.addon_group_id,
       addon_item_id: a.addon_item_id ?? a.catalog_id,
@@ -208,7 +210,7 @@ export const syncPendingSessions = async () => {
           }
 
           await sleep(BASE_DELAY * 2 ** attempt);
-        } catch (err) {
+        } catch {
           // error non-retryable → gagal
           hadSyncFailure = true;
           await sleep(BASE_DELAY * 2 ** attempt);
@@ -337,7 +339,7 @@ export const syncPendingSessions = async () => {
           }
 
           await sleep(BASE_DELAY * 2 ** attempt);
-        } catch (err) {
+        } catch {
           await sleep(BASE_DELAY * 2 ** attempt);
         }
       }

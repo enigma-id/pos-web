@@ -1,6 +1,6 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-import React from 'react';
+ 
 import moment from 'moment';
+import React from 'react';
 
 const DatePicker = ({
   mode = 'single',
@@ -86,7 +86,6 @@ const DatePicker = ({
   }));
 
   const currentYear = moment().year();
-  const currentMonth = moment().month() + 1;
 
   const years = [];
   for (let y = currentYear - 50; y <= currentYear + 20; y++) {

@@ -147,7 +147,7 @@ const OrderDetails = ({ data }) => {
         </div>
         {data?.total_payment > 0 && (
           <div className="flex place-content-between place-items-center text-base">
-            <div className="capitalize">{data?.payment_method?.name || 'Cash'} </div>
+            <div className="capitalize">{data?.is_point ? 'POINT' : data?.payment_method?.name || 'Cash'} </div>
             <div>{currencyFormat(data?.total_payment)}</div>
           </div>
         )}

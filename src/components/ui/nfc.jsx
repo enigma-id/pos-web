@@ -113,6 +113,8 @@ const NFCField = ({ onRead, isOpen, onClose, result }) => {
             onBlur={handleBlur}
             className="pointer-events-none absolute top-0 left-0 h-0 w-0 cursor-default caret-transparent opacity-0 focus:outline-none"
           />
+          Manual disini coba bro
+          <input type="text" className="border" onInput={handleInput} />
         </div>
       </Modal.Body>
     </>

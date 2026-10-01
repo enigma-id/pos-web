@@ -10,8 +10,8 @@ import useModal from '../../../components/ui/modal/hook';
 import useMembership from '../../../services/membership/hook';
 import { updateMembership } from '../../../services/offline/queue';
 import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
-import { currencyFormat } from '../../../utils/common';
 import { perbaharuiMembership } from '../../../utils/cache';
+import { currencyFormat } from '../../../utils/common';
 
 const UpdateSession = ({ id, onClose, isOpen, onRefresh, membership }) => {
   const FormState = useSelector(state => state?.Form);
@@ -73,7 +73,7 @@ const UpdateSession = ({ id, onClose, isOpen, onRefresh, membership }) => {
 
     try {
       await updateMembership(payload, sessionAuth?.user?.id);
-    } catch (err) {
+    } catch {
       // ignore
     }
 
@@ -81,7 +81,7 @@ const UpdateSession = ({ id, onClose, isOpen, onRefresh, membership }) => {
 
     try {
       perbaharuiMembership(payload);
-    } catch (err) {
+    } catch {
       // ignore
     }
 
@@ -91,7 +91,7 @@ const UpdateSession = ({ id, onClose, isOpen, onRefresh, membership }) => {
   };
 
   // Online — API
-  const onUpdateOnline = async uid => {
+  const onUpdateOnline = async () => {
     const payload = {
       name,
       reff_code: phone,
@@ -107,7 +107,7 @@ const UpdateSession = ({ id, onClose, isOpen, onRefresh, membership }) => {
         id={id}
         onClose={() => {
           closeModal();
-          reboot?.();
+          onRefresh?.();
           onClose?.();
         }}
       />,

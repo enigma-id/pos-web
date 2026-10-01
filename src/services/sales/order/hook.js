@@ -8,8 +8,8 @@ import {
   useLazyHistoryQuery,
   useCopyMutation,
 } from './action';
-import { $failure } from '../../form/action';
 import { getCache, setCache } from '../../../utils/cache';
+import { $failure } from '../../form/action';
 
 const HISTORY_CACHE_KEY = 'cache_order_history';
 
@@ -51,7 +51,7 @@ const useOrder = id => {
         }
         setMergedHistoryData(serverData);
         return;
-      } catch (error) {
+      } catch {
         // fetch error
       }
     }

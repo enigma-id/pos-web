@@ -1,21 +1,20 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { store } from '../../../services/store';
 
 import { Input, Modal, Summary } from '../../../components/ui';
 import { BackIcon } from '../../../components/ui/icon';
 import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useAuth from '../../../services/auth/hook';
-import useSession from '../../../services/sales/session/hook';
+import { closeSession } from '../../../services/offline';
+import { makeEndSession } from '../../../services/offline/shapes';
 import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
+import useSession from '../../../services/sales/session/hook';
+import { resetSummary } from '../../../services/sales/session/slice';
+import { updateShifts } from '../../../utils/cache';
 import { currencyFormat, dateFormat } from '../../../utils/common';
 import { usePrintWindow } from '../../../utils/print';
-import { resetSummary } from '../../../services/sales/session/slice';
-import { makeEndSession } from '../../../services/offline/shapes';
-import { closeSession } from '../../../services/offline';
-import { updateShifts } from '../../../utils/cache';
 
 const CloseSection = () => {
   const dispatch = useDispatch();
@@ -59,7 +58,7 @@ const CloseSection = () => {
 
     try {
       await closeSession(dataOfflineToOnline, session?.user?.id);
-    } catch (err) {
+    } catch {
       handleModalError();
     }
 
@@ -67,7 +66,7 @@ const CloseSection = () => {
 
     try {
       updateShifts(dataOfflineToOnline);
-    } catch (err) {
+    } catch {
       handleModalError();
     }
 

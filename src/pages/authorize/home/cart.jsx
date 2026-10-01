@@ -2,6 +2,7 @@
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
+import { v4 as uuidv4 } from 'uuid';
 
 import BillModal from './saveBill';
 import SuccessModal from './success';
@@ -11,16 +12,15 @@ import { AddUserIcon, EditIcon, TrashIcon, UserIcon } from '../../../components/
 import useModal from '../../../components/ui/modal/hook';
 import useSidebar from '../../../components/ui/sidebar/hook';
 import useCart from '../../../services/cart/hook';
-import { createOrderBill, updateOrderBill } from '../../../services/offline/queue';
-import { setWarning } from '../../../services/offline';
-import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
 import { resetCart } from '../../../services/cart/slice';
-import { v4 as uuidv4 } from 'uuid';
-import { makePendingBill } from '../../../services/offline/shapes';
 import { $failure } from '../../../services/form/action';
+import { setWarning } from '../../../services/offline';
+import { createOrderBill, updateOrderBill } from '../../../services/offline/queue';
+import { makePendingBill } from '../../../services/offline/shapes';
+import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
+import useSession from '../../../services/sales/session/hook';
 import { saveOpenBills, updateOpenBills } from '../../../utils/cache';
 import { currencyFormat } from '../../../utils/common';
-import useSession from '../../../services/sales/session/hook';
 
 const Cart = ({ onUpdate }) => {
   const navigate = useNavigate();
@@ -104,6 +104,8 @@ const Cart = ({ onUpdate }) => {
         is_discount_percentage: item.is_discount_percentage,
         discount_percentage: item.discount_percentage,
         discount_value: item.discount_value,
+        unit_discount: item.unit_discount,
+        point_percentage: item.point_percentage || 0,
       };
 
       if (item?.is_custom) {
@@ -167,7 +169,7 @@ const Cart = ({ onUpdate }) => {
     // Push ke localStorage bills cache
     try {
       saveOpenBills(dataOfflineToOnline);
-    } catch (e) {
+    } catch {
       handleModalError();
     }
 
@@ -310,6 +312,7 @@ const Cart = ({ onUpdate }) => {
         discount_percentage: item.discount_percentage,
         discount_value: item.discount_value,
         unit_discount: item.unit_discount,
+        point_percentage: item.point_percentage || 0,
       };
 
       if (item?.is_custom) {
@@ -373,7 +376,7 @@ const Cart = ({ onUpdate }) => {
     // Push ke localStorage bills cache
     try {
       updateOpenBills(dataOfflineToOnline);
-    } catch (err) {
+    } catch {
       handleModalError();
     }
 

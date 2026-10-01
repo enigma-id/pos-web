@@ -2,12 +2,13 @@
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { v4 as uuidv4 } from 'uuid';
 
 import DetailScreen from './detail';
+import MemberPayment from './memberPayment';
 import BillModal from './saveBill';
 import SuccessModal from './success';
-import { Input, Modal, NFCField } from '../../../components/ui';
-import { resetCart } from '../../../services/cart/slice';
+import { Input, Modal } from '../../../components/ui';
 import {
   BackIcon,
   CardIcon,
@@ -20,35 +21,33 @@ import {
 import Keypad from '../../../components/ui/keypad';
 import useModal from '../../../components/ui/modal/hook';
 import useCart from '../../../services/cart/hook';
-import useMembership from '../../../services/membership/hook';
+import { resetCart } from '../../../services/cart/slice';
+import { $failure } from '../../../services/form/action';
+import useMaster from '../../../services/master/hook';
 import { setWarning } from '../../../services/offline';
+import { checkPartialPaid } from '../../../services/offline/helper';
+import { mirrorMembershipOrder } from '../../../services/offline/membershipMirror';
 import {
   createOrderBill,
   createOrderPayment,
   deleteOrderBill,
   updateOrderBill,
 } from '../../../services/offline/queue';
-import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
-import { $failure } from '../../../services/form/action';
-import { v4 as uuidv4 } from 'uuid';
 import {
   makePendingBill,
   makeCompletedOrder,
   makeUpdatePendingBillFromSplitBill,
 } from '../../../services/offline/shapes';
+import { triggerQueueRefresh } from '../../../services/offline/usePendingQueueCount';
+import useOrder from '../../../services/sales/order/hook';
+import useSession from '../../../services/sales/session/hook';
 import {
   deleteOpenBills,
-  perbaharuiMembership,
   saveOpenBills,
   saveOrderHistory,
-  showMembership,
   updateOpenBills,
 } from '../../../utils/cache';
-import useOrder from '../../../services/sales/order/hook';
 import { currencyFormat, isActive } from '../../../utils/common';
-import useSession from '../../../services/sales/session/hook';
-import { checkPartialPaid } from '../../../services/offline/helper';
-import useMaster from '../../../services/master/hook';
 
 const CheckoutScreen = () => {
   const location = useLocation();
@@ -90,7 +89,6 @@ const CheckoutScreen = () => {
 
   // const { getServiceCharge } = useOutlet();
 
-  const { checkSaldo, checkResult } = useMembership();
   const { openModal, closeModal } = useModal();
 
   const [isOpen, setIsOpen] = React.useState(false);
@@ -180,6 +178,7 @@ const CheckoutScreen = () => {
         discount_percentage: item.discount_percentage,
         discount_value: item.discount_value,
         unit_discount: item.unit_discount,
+        point_percentage: item.point_percentage || 0,
       };
 
       if (item?.is_custom) {
@@ -244,7 +243,7 @@ const CheckoutScreen = () => {
     // Push ke localStorage bills cache
     try {
       saveOpenBills(dataOfflineToOnline);
-    } catch (e) {
+    } catch {
       handleModalError();
     }
 
@@ -372,6 +371,7 @@ const CheckoutScreen = () => {
         discount_percentage: item.discount_percentage,
         discount_value: item.discount_value,
         unit_discount: item.unit_discount,
+        point_percentage: item.point_percentage || 0,
       };
 
       if (item?.is_custom) {
@@ -435,7 +435,7 @@ const CheckoutScreen = () => {
     // Push ke localStorage bills cache
     try {
       updateOpenBills(dataOfflineToOnline);
-    } catch (err) {
+    } catch {
       handleModalError();
     }
 
@@ -542,7 +542,7 @@ const CheckoutScreen = () => {
   };
 
   // Pay Offline — Cache and IDB
-  const onPayOffline = async card => {
+  const onPayOffline = async (card, pointPay) => {
     let required = true;
 
     if (!selectedMethod) {
@@ -592,6 +592,7 @@ const CheckoutScreen = () => {
           discount_percentage: item.discount_percentage,
           discount_value: item.discount_value,
           unit_discount: item.unit_discount,
+          point_percentage: item.point_percentage || 0,
         };
 
         if (item?.is_custom) {
@@ -614,6 +615,7 @@ const CheckoutScreen = () => {
         payment_ref: paymentRef,
         status: 'completed',
         is_offline_mode: true,
+        is_point: !!pointPay,
         total_payment:
           selectedMethod?.provider === 'cash'
             ? Number(pay) || 0
@@ -692,16 +694,18 @@ const CheckoutScreen = () => {
 
       const dataOfflineToOnline = makeCompletedOrder(payload);
 
-      if (CartState?.bill) {
-        let { itemsPending, isPending } = checkPartialPaid(payload.items, CartState?.bill?.items);
+      // Helper persist dipanggil tanpa await — urutan updateSessionSummary di bawah tidak boleh berubah.
+      // Mirror membership + resetCart ditahan sampai persist selesai & sukses (F2).
+      let persist;
 
-        if (!isPending) {
-          onPayOfflinePayAndDeleteBill(dataOfflineToOnline);
-        } else {
-          onPayOfflineSplit(dataOfflineToOnline, itemsPending);
-        }
+      if (CartState?.bill) {
+        const { itemsPending, isPending } = checkPartialPaid(payload.items, CartState?.bill?.items);
+
+        persist = isPending
+          ? onPayOfflineSplit(dataOfflineToOnline, itemsPending)
+          : onPayOfflinePayAndDeleteBill(dataOfflineToOnline);
       } else {
-        onPayOfflineDirectPay(dataOfflineToOnline);
+        persist = onPayOfflineDirectPay(dataOfflineToOnline);
       }
 
       try {
@@ -721,35 +725,36 @@ const CheckoutScreen = () => {
           total_charges: dataOfflineToOnline?.total_charges,
           outstanding_bill_payment: outstandingBillPayment,
         });
-      } catch (err) {
+      } catch {
         return;
       }
 
-      if (selectedMethod?.is_member_payment) {
-        const cloneMembership = JSON.parse(JSON.stringify(payload?.membership));
+      Promise.resolve(persist).then(isSaved => {
+        if (!isSaved) return;
 
-        cloneMembership.saldo -= dataOfflineToOnline?.total_charges;
-        cloneMembership.saldo_logs.unshift({
-          nominal: -1 * dataOfflineToOnline?.total_charges,
-          membership_id: payload?.membership?.id,
-          reference_type: 'Sales',
-          reference_code: dataOfflineToOnline?.code,
-          created_at: new Date(),
-        });
+        // Mirror earn/redeem/saldo — hanya member payment (Q1), dan hanya kalau order masuk queue.
+        // Hasilnya dipasang balik ke order biar Receipt menampilkan saldo/point terbaru.
+        // dataOfflineToOnline sudah di-push ke Redux oleh updateSessionSummary → dibekukan Immer.
+        // Jangan mutasi objeknya; pakai salinan untuk Receipt.
+        let printData = dataOfflineToOnline;
 
         try {
-          perbaharuiMembership(cloneMembership);
+          const updated = mirrorMembershipOrder(dataOfflineToOnline);
+          if (updated) printData = { ...dataOfflineToOnline, membership: updated };
         } catch (err) {
-          // ignore
+          if (import.meta.env.DEV) {
+            console.error('[ON PAY OFFLINE] mirror membership error:', err);
+          }
         }
-      }
 
-      handleModalPrint(dataOfflineToOnline);
-      dispatch(resetCart());
-      setDiscountInputs([]);
-      setPaymentRef('');
-      setPay(0);
-      setBillName('');
+        handleModalPrint(printData);
+
+        dispatch(resetCart());
+        setDiscountInputs([]);
+        setPaymentRef('');
+        setPay(0);
+        setBillName('');
+      });
     }
   };
 
@@ -759,7 +764,7 @@ const CheckoutScreen = () => {
     } catch (err) {
       handleModalError();
       dispatch($failure(err));
-      return;
+      return false;
     }
     triggerQueueRefresh();
 
@@ -770,6 +775,8 @@ const CheckoutScreen = () => {
       handleModalError();
       console.error('[SAVE ON PAY] cache error:', err);
     }
+
+    return true;
   };
 
   const onPayOfflinePayAndDeleteBill = async dataOfflineToOnline => {
@@ -780,7 +787,7 @@ const CheckoutScreen = () => {
       dispatch($failure(err));
       console.error('[SAVE ON PAY AND Delete Bill] create order payment error:', err);
 
-      return;
+      return false;
     }
 
     try {
@@ -791,7 +798,8 @@ const CheckoutScreen = () => {
       dispatch($failure(err));
       console.error('[SAVE ON PAY AND Delete Bill] delete order bills error:', err);
 
-      return;
+      // Order payment sudah masuk queue → mirror tetap dijalankan.
+      return true;
     }
 
     // Push ke localStorage order history cache
@@ -825,6 +833,8 @@ const CheckoutScreen = () => {
       sync_id: CartState?.bill?.session?.sync_id,
       outstanding_bill: -1 * kurangiBill,
     });
+
+    return true;
   };
 
   const onPayOfflineSplit = async (dataOfflineToOnline, itemsPending) => {
@@ -840,7 +850,7 @@ const CheckoutScreen = () => {
       handleModalError();
       dispatch($failure(err));
       console.error('[SAVE ON PAY AND Split Bill] create order payment error:', err);
-      return;
+      return false;
     }
 
     // Push ke localStorage order history cache
@@ -864,7 +874,8 @@ const CheckoutScreen = () => {
 
       console.error('[SAVE ON PAY AND Split Bill] update order bill error:', err);
 
-      return;
+      // Order payment sudah masuk queue → mirror tetap dijalankan.
+      return true;
     }
 
     triggerQueueRefresh();
@@ -885,10 +896,12 @@ const CheckoutScreen = () => {
       outstanding_bill:
         -1 * (CartState?.bill?.total_charges - dataOfflineToOnlineUpdated?.total_charges || 0),
     });
+
+    return true;
   };
 
   // Pay Online — API
-  const onPayOnline = async card => {
+  const onPayOnline = async (card, pointPay) => {
     const discount_categories = CartState?.discount?.category
       ?.filter(
         cat =>
@@ -934,6 +947,7 @@ const CheckoutScreen = () => {
       payment_method_id: selectedMethod?.id,
       payment_ref: paymentRef,
       status: 'completed',
+      is_point: !!pointPay,
       total_payment:
         selectedMethod?.provider === 'cash' ? Number(pay) || 0 : CartState?.meta?.grand_total || 0,
       items,
@@ -974,11 +988,11 @@ const CheckoutScreen = () => {
     }
   };
 
-  const onPay = async card => {
+  const onPay = async (card, pointPay) => {
     if (isOffline) {
-      onPayOffline(card);
+      onPayOffline(card, pointPay);
     } else {
-      onPayOnline(card);
+      onPayOnline(card, pointPay);
     }
   };
 
@@ -1047,59 +1061,18 @@ const CheckoutScreen = () => {
     openModal(<SuccessModal data={data} backToMenu />, 'w-md');
   };
 
-  const openScan = result => {
+  const openNFC = () => {
     openModal(
-      <NFCField onRead={handleRead} isOpen={true} onClose={closeModal} result={result} />,
+      <MemberPayment
+        total={CartState?.meta?.grand_total}
+        allowPoint={selectedMethod?.is_member_payment}
+        onConfirm={({ card, isPointPay }) => onPay(card, isPointPay)}
+        onClose={closeModal}
+        isLoading={checkoutResult?.isLoading}
+      />,
       'w-md'
     );
   };
-
-  const handleRead = uid => {
-    if (isOffline) {
-      // No connection → skip checkSaldo, ambil dari cache kalo ada
-      const membership = showMembership(uid);
-
-      let readyCard = false;
-      if (membership) {
-        if (membership?.saldo >= CartState?.meta?.grand_total) {
-          readyCard = true;
-        }
-      }
-
-      if (readyCard) {
-        onPay(membership || { card_id: uid });
-      } else {
-        // Re-open modal → NFCField reconcile (bukan remount), result isError → status 'failed'
-        openScan({ isError: true, message: 'Saldo anda kurang, silahkan topup terlebih dahulu' });
-      }
-
-      return;
-    }
-
-    const params = {
-      is_checkout: true,
-      nominal: CartState?.meta?.grand_total,
-      card_id: uid,
-    };
-
-    checkSaldo(params);
-  };
-
-  const openNFC = () => {
-    openScan(checkResult);
-  };
-
-  React.useEffect(() => {
-    if (checkResult?.isSuccess) {
-      // openSuccess()
-      const card = checkResult?.data?.data;
-      onPay(card);
-    } else if (checkResult?.isError) {
-      // Tanpa re-open, modal via openScan() menampilkan result yang dibekukan (stale)
-      // → error scan tidak pernah terlihat.
-      openScan(checkResult);
-    }
-  }, [checkResult]);
 
   React.useEffect(() => {
     if (checkoutResult?.isError || updateResult?.isError || closeBillResult?.isError) {

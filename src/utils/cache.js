@@ -60,11 +60,15 @@ const setItemQuotaSafe = (key, value) => {
       for (const evictKey of [...evictable, key]) {
         try {
           localStorage.removeItem(evictKey);
-        } catch {}
+        } catch {
+          /* eviction best-effort */
+        }
         try {
           localStorage.setItem(key, value);
           return;
-        } catch {}
+        } catch {
+          /* masih penuh — coba key berikutnya */
+        }
       }
     }
     console.error('Error setting cache', err);
@@ -396,15 +400,19 @@ export const showShifts = data => {
 };
 
 const MEMBERSHIP_CACHE_KEY = 'cache_membership';
-// Membership payloads are large (card + saldo + nested saldo_logs per member).
-// Cap by count AND strip saldo_logs (only the detail/history view needs it), so
+// Membership payloads are large (card + saldo + nested logs per member).
+// Cap by count AND strip the logs (only the detail/history view needs them), so
 // a single list write can't blow the shared localStorage quota (~5 MB).
+// saldo_logs & point_logs di-strip dua-duanya biar konsisten: ledger offline kosong,
+// angka saldo/point saja yang dibawa (ditimpa data server saat refetch).
 const MEMBERSHIP_CACHE_MAX = 200;
 const MEMBERSHIP_VALUE_BUDGET_BYTES = 1.5 * 1024 * 1024;
 
-const stripSaldoLogs = m => {
-  if (m && typeof m === 'object' && 'saldo_logs' in m) {
-    const { saldo_logs, ...rest } = m;
+const stripLogs = m => {
+  if (m && typeof m === 'object' && ('saldo_logs' in m || 'point_logs' in m)) {
+    const rest = { ...m };
+    delete rest.saldo_logs;
+    delete rest.point_logs;
     return rest;
   }
   return m;
@@ -415,7 +423,7 @@ const boundMembershipList = data => {
   let out = [];
   let bytes = 0;
   for (const m of data) {
-    const slim = stripSaldoLogs(m);
+    const slim = stripLogs(m);
     bytes += JSON.stringify(slim).length;
     if (out.length >= MEMBERSHIP_CACHE_MAX || bytes > MEMBERSHIP_VALUE_BUDGET_BYTES) break;
     out.push(slim);
@@ -429,12 +437,16 @@ export const saveMembershipList = (key, data) => {
   return bounded;
 };
 
+// Selalu balikin objek dengan `data` array biar caller tidak throw saat cache kosong (F4).
 export const getMembersipCacheRaw = () => {
   try {
     const raw = localStorage.getItem(MEMBERSHIP_CACHE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return { data: [] };
+
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : { data: [] };
   } catch {
-    return [];
+    return { data: [] };
   }
 };
 
@@ -463,12 +475,17 @@ export const saveMembership = data => {
   return data;
 };
 
+// Match by id (server) atau card_id (member offline) — tanpa self-match ke `undefined`.
+const isSameMember = (item, data) => {
+  if (data?.id != null && item?.id === data.id) return true;
+  if (data?.card_id != null && item?.card_id === data.card_id) return true;
+  return false;
+};
+
 export const perbaharuiMembership = data => {
   const existing = getMembersipCacheRaw();
 
-  const index = existing.data.findIndex(
-    item => item.id === data.id || item.card_id === data.card_id
-  );
+  const index = existing.data.findIndex(item => isSameMember(item, data));
 
   if (index === -1) return null;
 

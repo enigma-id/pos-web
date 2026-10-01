@@ -1,8 +1,4 @@
 import { recalculateDiscountCategory } from './helper';
-import { v4 as uuidv4 } from 'uuid';
-
-// ── Numbers ──
-const toNum = v => (v && !Number.isNaN(Number(v)) ? Number(v) : 0);
 
 // ── Builders ──
 

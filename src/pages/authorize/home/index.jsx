@@ -24,7 +24,6 @@ const CatalogScreen = () => {
 
   const isOnline = useSelector(state => state?.Offline?.isOnline);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
-  const sessionSummary = useSelector(state => state?.SalesSession?.sessionSummary);
 
   const isOffline = !isOnline || apiReachable === false;
 

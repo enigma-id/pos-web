@@ -166,7 +166,9 @@ const Receipt = ({ data, outlet }) => {
         </div>
         {data?.total_payment > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>{data?.payment_method?.name || 'Cash'}</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>
+              {data?.is_point ? 'POINT' : data?.payment_method?.name || 'Cash'}
+            </p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>{currencyFormat(data?.total_payment)}</p>
           </div>
         )}
@@ -186,9 +188,11 @@ const Receipt = ({ data, outlet }) => {
         )}
         {data?.status === 'completed' && data?.payment_method?.is_member_payment && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <p style={{ marginBlock: 2, fontSize: 11 }}>Saldo Member</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
-              {currencyFormat(data?.membership?.saldo, false)}
+              {data?.is_point ? 'Point Member' : 'Saldo Member'}
+            </p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>
+              {currencyFormat(data?.is_point ? data?.membership?.point : data?.membership?.saldo, false)}
             </p>
           </div>
         )}

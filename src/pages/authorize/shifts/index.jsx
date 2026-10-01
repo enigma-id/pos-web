@@ -1,7 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from 'react';
 import { useSelector } from 'react-redux';
-import { getCache, setCache } from '../../../utils/cache';
 
 import {
   Drawer,

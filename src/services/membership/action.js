@@ -61,6 +61,13 @@ export const memberApi = createApi({
         params,
       }),
     }),
+    getPointLog: builder.query({
+      query: ({ id, params }) => ({
+        url: `/balance/${id}/point_log`,
+        method: 'GET',
+        params,
+      }),
+    }),
     cancelTopup: builder.mutation({
       query: ({ id, payload }) => ({
         url: `/balance/topup/${id}/cancel`,
@@ -79,6 +86,7 @@ export const {
   useLazyShowQuery,
   useLazyCheckSaldoQuery,
   useLazyGetSaldoLogQuery,
+  useLazyGetPointLogQuery,
   useTopupMutation,
   useCancelTopupMutation,
 } = memberApi;
