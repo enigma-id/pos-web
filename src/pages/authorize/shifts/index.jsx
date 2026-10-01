@@ -62,7 +62,7 @@ const ShiftScreen = () => {
   const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
 
   const handleOpenPrint = () => {
-    open(<Receipt data={orderDetail} />);
+    open(<Receipt data={orderDetail} outlet={sessionAuth?.outlet} />);
   };
 
   const handleOpenPrintKitchen = () => {

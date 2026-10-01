@@ -12,6 +12,7 @@ import { useSelector } from 'react-redux';
 const SuccessModal = ({ data, backToMenu }) => {
   const isOnline = useSelector(state => state?.Offline?.isOnline);
   const apiReachable = useSelector(state => state?.Offline?.apiReachable);
+  const sessionAuth = useSelector(state => state?.Auth?.session);
 
   const isOffline = !isOnline || apiReachable === false;
 
@@ -25,7 +26,7 @@ const SuccessModal = ({ data, backToMenu }) => {
   //   const [data, setData] = React.useState(null);
 
   const handleOpenPrint = () => {
-    openPrint(<Receipt data={data} />);
+    openPrint(<Receipt data={data} outlet={sessionAuth?.outlet} />);
   };
 
   const handleOpenPrintKitchen = () => {
