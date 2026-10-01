@@ -1,8 +1,9 @@
 import React from 'react';
 
 import { currencyFormat, dateFormat } from '../../utils/common';
+import { resolveReceiptLogo } from '../../utils/receipt';
 
-const Receipt = ({ data }) => {
+const Receipt = ({ data, outlet }) => {
   if (!data) return;
 
   return (
@@ -15,7 +16,7 @@ const Receipt = ({ data }) => {
           marginBottom: 20,
         }}
       >
-        <img src="/logo.png" style={{ height: 50, width: 'auto' }} />
+        <img src={resolveReceiptLogo(outlet)} style={{ height: 50, width: 'auto' }} />
       </div>
 
       <div style={{ paddingBottom: 5, marginBottom: 5 }}>

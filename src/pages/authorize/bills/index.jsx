@@ -45,7 +45,7 @@ const BillScreen = () => {
   const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
 
   const handleOpenPrintReceipt = () => {
-    open(<Receipt data={detail} />);
+    open(<Receipt data={detail} outlet={sessionAuth?.outlet} />);
   };
 
   const handleOpenPrintKitchen = () => {

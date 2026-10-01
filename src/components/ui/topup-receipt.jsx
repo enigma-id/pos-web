@@ -1,6 +1,7 @@
 import { currencyFormat, dateFormat } from '../../utils/common';
+import { resolveReceiptLogo } from '../../utils/receipt';
 
-const TopupReceipt = ({ data }) => {
+const TopupReceipt = ({ data, outlet }) => {
   const finalSaldo =
     Number(data?.membership?.saldo || 0) +
     Number(data?.topup?.nominal || 0) +
@@ -16,7 +17,7 @@ const TopupReceipt = ({ data }) => {
           marginBottom: 20,
         }}
       >
-        <img src="/logo.png" style={{ height: 50, width: 'auto' }} />
+        <img src={resolveReceiptLogo(outlet)} style={{ height: 50, width: 'auto' }} />
       </div>
 
       <div style={{ textAlign: 'center', marginBottom: 15 }}>

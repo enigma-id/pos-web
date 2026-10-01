@@ -140,7 +140,7 @@ const CardContent = ({ data, onClose, onRefresh }) => {
   };
 
   const handleModalPrint = data => {
-    openPrint(<TopupReceipt data={data} />);
+    openPrint(<TopupReceipt data={data} outlet={sessionAuth?.outlet} />);
   };
 
   // Jika sukses: update cache lokal, print receipt, then close modal

@@ -40,7 +40,7 @@ const HistoryScreen = () => {
   const { open } = usePrintWindow({ title: 'Print Preview', autoClose: true });
 
   const handleOpenPrint = () => {
-    open(<Receipt data={detail} />);
+    open(<Receipt data={detail} outlet={sessionAuth?.outlet} />);
   };
   const handleOpenPrintKitchen = () => {
     open(<Kitchen data={detail} />);
