@@ -185,6 +185,8 @@ const useSession = () => {
             p => p.category_name === item.category_name
           );
 
+          const itemNett = item.quantity * (item.unit_nett || 0);
+
           // Gunakan >= 0
           if (categoryIdx >= 0) {
             const itemCharges = item.quantity * (item.unit_nett - item.unit_discount);
@@ -196,6 +198,9 @@ const useSession = () => {
             const newTotalQty =
               (updatedSummary.summary.category_solds[categoryIdx].total_qty || 0) +
               item.quantity * qtyMultiplier;
+            const newTotalNett =
+              (updatedSummary.summary.category_solds[categoryIdx].total_nett || 0) +
+              itemNett * qtyMultiplier;
 
             // Jika quantity atau total charges habis (<= 0), hapus dari array category_solds
             if (newTotalQty <= 0 || newTotalCharges <= 0) {
@@ -206,17 +211,28 @@ const useSession = () => {
                 ...updatedSummary.summary.category_solds[categoryIdx],
                 total_charges: newTotalCharges,
                 total_qty: newTotalQty,
+                total_nett: newTotalNett,
               };
             }
           } else {
             updatedSummary.summary.category_solds.push({
               category_name: item.category_name,
+              is_bagi_hasil: !!item.is_bagi_hasil,
               total_qty: item.quantity,
               total_charges: item.quantity * (item.unit_nett - item.unit_discount),
+              total_nett: itemNett,
             });
           }
         });
       }
+
+      // --- SUBTOTAL NETT NON-BAGI-HASIL ---
+      // Samakan dengan recompute server: Σ total_nett category_solds yang bukan bagi hasil.
+      updatedSummary.summary.sales.subtotal_nett_non_bagi_hasil = (
+        updatedSummary.summary.category_solds || []
+      )
+        .filter(row => !row.is_bagi_hasil)
+        .reduce((total, row) => total + (row.total_nett || 0), 0);
 
       // --- ORDERS ---
       // Perbaikan: Inisialisasi jika belum ada (jangan pakai if (updatedSummary.orders))

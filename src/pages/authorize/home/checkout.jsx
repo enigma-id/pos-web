@@ -179,6 +179,7 @@ const CheckoutScreen = () => {
         discount_value: item.discount_value,
         unit_discount: item.unit_discount,
         point_percentage: item.point_percentage || 0,
+        is_bagi_hasil: !!item.is_bagi_hasil,
       };
 
       if (item?.is_custom) {
@@ -372,6 +373,7 @@ const CheckoutScreen = () => {
         discount_value: item.discount_value,
         unit_discount: item.unit_discount,
         point_percentage: item.point_percentage || 0,
+        is_bagi_hasil: !!item.is_bagi_hasil,
       };
 
       if (item?.is_custom) {
@@ -593,6 +595,7 @@ const CheckoutScreen = () => {
           discount_value: item.discount_value,
           unit_discount: item.unit_discount,
           point_percentage: item.point_percentage || 0,
+          is_bagi_hasil: !!item.is_bagi_hasil,
         };
 
         if (item?.is_custom) {
