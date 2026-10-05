@@ -227,12 +227,15 @@ const useSession = () => {
       }
 
       // --- SUBTOTAL NETT NON-BAGI-HASIL ---
-      // Samakan dengan recompute server: Σ total_nett category_solds yang bukan bagi hasil.
-      updatedSummary.summary.sales.subtotal_nett_non_bagi_hasil = (
-        updatedSummary.summary.category_solds || []
-      )
-        .filter(row => !row.is_bagi_hasil)
-        .reduce((total, row) => total + (row.total_nett || 0), 0);
+      // Samakan dengan recompute server: hanya dihitung kalau brand outlet bagi hasil;
+      // brand non-bagi-hasil → 0. Σ total_nett category_solds yang bukan bagi hasil.
+      const brandIsBagiHasil = updatedSummary?.outlet?.brand?.is_bagi_hasil !== false;
+
+      updatedSummary.summary.sales.subtotal_nett_non_bagi_hasil = brandIsBagiHasil
+        ? (updatedSummary.summary.category_solds || [])
+            .filter(row => !row.is_bagi_hasil)
+            .reduce((total, row) => total + (row.total_nett || 0), 0)
+        : 0;
 
       // --- ORDERS ---
       // Perbaikan: Inisialisasi jika belum ada (jangan pakai if (updatedSummary.orders))
