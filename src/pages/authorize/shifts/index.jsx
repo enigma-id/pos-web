@@ -387,7 +387,7 @@ const ShiftScreen = () => {
                       <span className="text-sm">Subtotal Nett Sales</span>
                     </div>
                     <span className="text-sm">
-                      {currencyFormat(detail?.summary?.sales?.subtotal_nett_non_bagi_hasil)}
+                      {currencyFormat(detail?.summary?.sales?.subtotal_nett_bagi_hasil)}
                     </span>
                   </div>
                 </div>

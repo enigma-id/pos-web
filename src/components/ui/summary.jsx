@@ -245,7 +245,7 @@ const Summary = ({ data }) => {
           >
             <p style={{ marginBlock: 2, fontSize: 11 }}>Subtotal Nett Sales</p>
             <p style={{ marginBlock: 2, fontSize: 11 }}>
-              {currencyFormat(data?.summary?.sales?.subtotal_nett_non_bagi_hasil, false)}
+              {currencyFormat(data?.summary?.sales?.subtotal_nett_bagi_hasil, false)}
             </p>
           </div>
         </div>

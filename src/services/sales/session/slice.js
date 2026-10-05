@@ -5,7 +5,7 @@ const defineInitialState = () => ({
   sessionSummary: {
     summary: {
       sales: {
-        subtotal_nett_non_bagi_hasil: 0,
+        subtotal_nett_bagi_hasil: 0,
         outstanding_bill: 0,
       },
     },

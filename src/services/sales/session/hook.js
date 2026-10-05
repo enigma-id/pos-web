@@ -217,7 +217,7 @@ const useSession = () => {
           } else {
             updatedSummary.summary.category_solds.push({
               category_name: item.category_name,
-              is_bagi_hasil: !!item.is_bagi_hasil,
+              is_non_bagi_hasil: !!item.is_non_bagi_hasil,
               total_qty: item.quantity,
               total_charges: item.quantity * (item.unit_nett - item.unit_discount),
               total_nett: itemNett,
@@ -226,14 +226,14 @@ const useSession = () => {
         });
       }
 
-      // --- SUBTOTAL NETT NON-BAGI-HASIL ---
+      // --- SUBTOTAL NETT BAGI-HASIL ---
       // Samakan dengan recompute server: hanya dihitung kalau brand outlet bagi hasil;
-      // brand non-bagi-hasil → 0. Σ total_nett category_solds yang bukan bagi hasil.
+      // brand non-bagi-hasil → 0. Σ total_nett category_solds yang BAGI HASIL (is_non_bagi_hasil = false).
       const brandIsBagiHasil = updatedSummary?.outlet?.brand?.is_bagi_hasil !== false;
 
-      updatedSummary.summary.sales.subtotal_nett_non_bagi_hasil = brandIsBagiHasil
+      updatedSummary.summary.sales.subtotal_nett_bagi_hasil = brandIsBagiHasil
         ? (updatedSummary.summary.category_solds || [])
-            .filter(row => !row.is_bagi_hasil)
+            .filter(row => !row.is_non_bagi_hasil)
             .reduce((total, row) => total + (row.total_nett || 0), 0)
         : 0;
 

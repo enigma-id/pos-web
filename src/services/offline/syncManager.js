@@ -83,7 +83,7 @@ const mapItemsToSync = order => {
     quantity: item.quantity || 0,
     unit_nett: item.unit_nett || 0,
     point_percentage: item.point_percentage || 0,
-    is_bagi_hasil: !!item.is_bagi_hasil,
+    is_non_bagi_hasil: !!item.is_non_bagi_hasil,
     addons: (item.addons || []).map(a => ({
       addon_group_id: a.addon_group_id,
       addon_item_id: a.addon_item_id ?? a.catalog_id,

@@ -236,7 +236,7 @@ const CloseSection = () => {
         <List title="Grand Total" value={currencyFormat(data?.summary?.sales?.grand_total || 0)} />
         <List
           title="Subtotal Nett Sales"
-          value={currencyFormat(data?.summary?.sales?.subtotal_nett_non_bagi_hasil || 0)}
+          value={currencyFormat(data?.summary?.sales?.subtotal_nett_bagi_hasil || 0)}
         />
 
         {data?.summary?.topups?.length > 0 && (
