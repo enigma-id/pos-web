@@ -12,6 +12,7 @@ export function makeStartSession(payload) {
     summary: {
       sales: {
         total_sales: 0,
+        subtotal_nett_non_bagi_hasil: 0,
         total_discount: 0,
         total_after_discount: 0,
         total_service: 0,

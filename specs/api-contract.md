@@ -324,6 +324,7 @@ Returns current active session with full summary data.
   "summary": {
     "sales": {
       "total_sales": 0.0,
+      "subtotal_nett_non_bagi_hasil": 0.0,
       "total_discount": 0.0,
       "total_after_discount": 0.0,
       "total_service": 0.0,
@@ -340,8 +341,10 @@ Returns current active session with full summary data.
     "category_sold": [
       {
         "category_name": "string",
+        "is_bagi_hasil": false,
         "total_qty": 0.0,
-        "total_charges": 0.0
+        "total_charges": 0.0,
+        "total_nett": 0.0
       }
     ],
     "topup": [

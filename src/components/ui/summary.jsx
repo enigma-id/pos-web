@@ -235,6 +235,19 @@ const Summary = ({ data }) => {
               {currencyFormat(data?.summary?.sales?.grand_total, false)}
             </p>
           </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 5,
+            }}
+          >
+            <p style={{ marginBlock: 2, fontSize: 11 }}>Subtotal Nett Sales</p>
+            <p style={{ marginBlock: 2, fontSize: 11 }}>
+              {currencyFormat(data?.summary?.sales?.subtotal_nett_non_bagi_hasil, false)}
+            </p>
+          </div>
         </div>
       </div>
 

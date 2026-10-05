@@ -382,6 +382,14 @@ const ShiftScreen = () => {
                       {currencyFormat(detail?.summary?.sales?.grand_total)}
                     </span>
                   </div>
+                  <div className="flex place-content-between place-items-center py-2">
+                    <div>
+                      <span className="text-sm">Subtotal Nett Sales</span>
+                    </div>
+                    <span className="text-sm">
+                      {currencyFormat(detail?.summary?.sales?.subtotal_nett_non_bagi_hasil)}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="border-base-200 border-b pt-4 pb-2">
