@@ -253,8 +253,28 @@ const CloseSection = () => {
 
         {data?.summary?.payment_methods?.length > 0 && (
           <div className="bg-accent mb-3 rounded-md p-3">
+            <div className="mb-2 text-sm font-semibold">Payments :</div>
             {data?.summary?.payment_methods?.map((pm, i) => (
               <List key={i} title={pm?.name} value={currencyFormat(pm?.total_paid || 0)} />
+            ))}
+          </div>
+        )}
+
+        {data?.summary?.category_solds?.length > 0 && (
+          <div className="bg-accent mb-3 rounded-md p-3">
+            <div className="mb-2 text-sm font-semibold">Category Sold :</div>
+            {data?.summary?.category_solds?.map((item, i) => (
+              <div key={i} className="mb-3 flex place-content-between place-items-center">
+                <div className="flex place-items-center">
+                  <span className="bg-base-content rounded-lg px-3 py-1 text-sm text-white">
+                    {item?.total_qty}
+                  </span>
+                  <span className="ps-2 text-sm">{item?.category_name || '-'}</span>
+                </div>
+                <span className="text-sm font-semibold">
+                  {currencyFormat(item?.total_charges || 0)}
+                </span>
+              </div>
             ))}
           </div>
         )}
