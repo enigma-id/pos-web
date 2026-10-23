@@ -1,15 +1,7 @@
-import logoKunjungan from '../assets/logo-kunjungan.png';
+import logoSukabread from '../assets/logo.png';
 
-// Outlet yang punya branding sendiri waktu cetak struk.
-// Key = outlet.name (lowercase). Fallback ke logo default kalo ga ketemu.
-const OUTLET_LOGOS = {
-  kunjungan: logoKunjungan,
-};
-
-const DEFAULT_LOGO = '/logo.png';
+const DEFAULT_LOGO = logoSukabread;
 
 export const resolveReceiptLogo = outlet => {
-  const key = outlet?.name?.trim()?.toLowerCase();
-
-  return OUTLET_LOGOS[key] || DEFAULT_LOGO;
+  return outlet?.brand?.logo_url || DEFAULT_LOGO;
 };

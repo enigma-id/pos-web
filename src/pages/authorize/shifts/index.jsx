@@ -69,7 +69,7 @@ const ShiftScreen = () => {
   };
 
   const handleOpenPrintSummary = () => {
-    open(<Summary data={detail} />);
+    open(<Summary data={detail} session={sessionAuth} />);
   };
 
   const openOrder = async v => {

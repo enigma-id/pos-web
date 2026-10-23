@@ -43,7 +43,7 @@ const CloseSection = () => {
   const [diff, setDiff] = React.useState(0);
 
   const handleOpenPrintSummary = v => {
-    open(<Summary data={v} />);
+    open(<Summary data={v} session={session} />);
   };
 
   const onCloseOffline = async () => {

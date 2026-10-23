@@ -17,7 +17,7 @@ const TopupReceipt = ({ data, outlet }) => {
           marginBottom: 20,
         }}
       >
-        <img src={resolveReceiptLogo(outlet)} style={{ height: 50, width: 'auto' }} />
+        <img src={resolveReceiptLogo(outlet)} style={{ height: 70, width: 'auto' }} />
       </div>
 
       <div style={{ textAlign: 'center', marginBottom: 15 }}>

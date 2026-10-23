@@ -1,8 +1,9 @@
 import React from 'react';
 
 import { currencyFormat, dateFormat } from '../../utils/common';
+import { resolveReceiptLogo } from '../../utils/receipt';
 
-const Summary = ({ data }) => {
+const Summary = ({ data, session }) => {
   if (!data) return;
 
   const formatFinishedAt = dateString => {
@@ -22,6 +23,19 @@ const Summary = ({ data }) => {
 
   return (
     <div className="sheet page-break" style={{ padding: '10px' }}>
+      {session && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 10,
+          }}
+        >
+          <img src={resolveReceiptLogo(session?.outlet)} style={{ height: 70, width: 'auto' }} />
+        </div>
+      )}
+
       <div
         style={{
           borderBottom: 1,
